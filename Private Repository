@@ -1,0 +1,7 @@
+echo "# Hot-Truck-Map" >> README.md
+git init
+git add README.md
+git commit -m "first commit"
+git branch -M main
+git remote add origin https://github.com/Hot-Truck-Mapp/Hot-Truck-Map.git
+git push -u origin main
