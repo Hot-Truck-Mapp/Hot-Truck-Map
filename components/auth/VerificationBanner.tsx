@@ -1,66 +1,53 @@
-'use client'
+"use client";
 
-import { useEffect, useState } from 'react'
-import { supabase } from '../../lib/supabase/client'
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 export default function VerificationBanner() {
-  const [verified, setVerified] = useState(true)
-  const [resent, setResent] = useState(false)
+  const [verified, setVerified] = useState(true);
+  const [resent, setResent] = useState(false);
 
   useEffect(() => {
     const checkVerification = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      setVerified(!!user.email_confirmed_at)
-    }
-    checkVerification()
-  }, [])
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      setVerified(!!user.email_confirmed_at);
+    };
+    checkVerification();
+  }, []);
 
   const resendEmail = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user?.email) return
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user?.email) return;
 
     await supabase.auth.resend({
-      type: 'signup',
-      email: user.email
-    })
-    setResent(true)
-  }
+      type: "signup",
+      email: user.email,
+    });
+    setResent(true);
+  };
 
-  if (verified) return null
+  if (verified) return null;
 
   return (
-    <div style={{
-      backgroundColor: '#FFF3CD',
-      border: '1px solid #FF6B35',
-      borderRadius: '8px',
-      padding: '16px',
-      margin: '16px',
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center'
-    }}>
+    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 m-4 flex items-center justify-between gap-3">
       <div>
-        <strong>⚠️ Verify your email</strong>
-        <p style={{ margin: '4px 0 0', color: '#666', fontSize: '14px' }}>
-          Your truck won't appear on the map until you verify your email
+        <p className="text-sm font-semibold text-amber-800">
+          Verify your email
+        </p>
+        <p className="text-xs text-amber-600 mt-0.5">
+          Your truck won't appear on the map until you verify
         </p>
       </div>
       <button
         onClick={resendEmail}
         disabled={resent}
-        style={{
-          backgroundColor: resent ? '#ccc' : '#FF6B35',
-          color: 'white',
-          border: 'none',
-          borderRadius: '8px',
-          padding: '8px 16px',
-          cursor: resent ? 'not-allowed' : 'pointer',
-          whiteSpace: 'nowrap'
-        }}
+        className="flex-shrink-0 px-3 py-1.5 bg-brand-red text-white text-xs font-semibold rounded-full disabled:opacity-40"
       >
-        {resent ? 'Email Sent ✅' : 'Resend Email'}
+        {resent ? "Sent ✓" : "Resend"}
       </button>
     </div>
-  )
+  );
 }
