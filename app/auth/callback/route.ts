@@ -69,6 +69,18 @@ export async function GET(request: Request) {
       .single();
 
     if (profile?.role === "operator") {
+      // Check if they have already completed onboarding (truck row with a name)
+      const { data: truck } = await supabase
+        .from("trucks")
+        .select("id, name")
+        .eq("owner_id", user.id)
+        .single();
+
+      if (!truck?.name) {
+        // First time — send to onboarding flow
+        return NextResponse.redirect(origin + "/onboarding");
+      }
+
       return NextResponse.redirect(origin + "/dashboard/go-live");
     }
   }
