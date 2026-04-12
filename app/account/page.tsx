@@ -11,10 +11,11 @@ export default function AccountPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"trucks" | "orders" | "settings">("trucks");
   const [notifications, setNotifications] = useState({
-    newLocation: true,
-    orderReady: true,
-    weeklyDigest: false,
+    go_live_alerts: true,
+    moved_alerts: true,
+    weekly_digest: false,
   });
+  const [notifUserId, setNotifUserId] = useState<string | null>(null);
 
   useEffect(() => {
     loadAccount();
@@ -28,6 +29,22 @@ export default function AccountPage() {
       return;
     }
     setUser(user);
+    setNotifUserId(user.id);
+
+    // Load persisted notification preferences (if row doesn't exist yet, defaults are fine)
+    const { data: prefs } = await supabase
+      .from("notification_preferences")
+      .select("go_live_alerts, moved_alerts, weekly_digest")
+      .eq("user_id", user.id)
+      .single();
+
+    if (prefs) {
+      setNotifications({
+        go_live_alerts: prefs.go_live_alerts,
+        moved_alerts: prefs.moved_alerts,
+        weekly_digest: prefs.weekly_digest,
+      });
+    }
 
     const { data: follows } = await supabase
       .from("follows")
@@ -54,6 +71,20 @@ export default function AccountPage() {
       .eq("truck_id", truckId)
       .eq("user_id", user.id);
     setFollowed(followed.filter((f) => f.truck_id !== truckId));
+  }
+
+  async function saveNotifPref(
+    key: keyof typeof notifications,
+    value: boolean
+  ) {
+    const next = { ...notifications, [key]: value };
+    setNotifications(next);
+    if (!notifUserId) return;
+    const supabase = createClient();
+    await supabase.from("notification_preferences").upsert(
+      { user_id: notifUserId, ...next, updated_at: new Date().toISOString() },
+      { onConflict: "user_id" }
+    );
   }
 
   async function signOut() {
@@ -123,7 +154,6 @@ export default function AccountPage() {
           <div className="flex flex-col gap-3">
             {followed.length === 0 ? (
               <div className="text-center py-16">
-                <p className="text-4xl mb-3">🚚</p>
                 <p className="text-neutral-500 font-medium">
                   No followed trucks yet
                 </p>
@@ -153,8 +183,13 @@ export default function AccountPage() {
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-xl">
-                          🚚
+                        <div className="w-full h-full flex items-center justify-center bg-neutral-200">
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2" strokeLinecap="round">
+                            <path d="M1 3h15v13H1z"/>
+                            <path d="M16 8h4l3 3v5h-7V8z"/>
+                            <circle cx="5.5" cy="18.5" r="2.5"/>
+                            <circle cx="18.5" cy="18.5" r="2.5"/>
+                          </svg>
                         </div>
                       )}
                     </div>
@@ -197,7 +232,6 @@ export default function AccountPage() {
           <div className="flex flex-col gap-3">
             {orders.length === 0 ? (
               <div className="text-center py-16">
-                <p className="text-4xl mb-3">🛍️</p>
                 <p className="text-neutral-500 font-medium">No orders yet</p>
                 <p className="text-neutral-400 text-sm mt-1">
                   Your order history will appear here
@@ -257,29 +291,26 @@ export default function AccountPage() {
               </p>
               <div className="flex flex-col gap-4">
                 <NotificationRow
-                  label="New location alerts"
-                  description="When a followed truck goes live"
-                  value={notifications.newLocation}
-                  onChange={(v) =>
-                    setNotifications({ ...notifications, newLocation: v })
-                  }
+                  label="Go-live alerts"
+                  description="When a followed truck opens near you"
+                  value={notifications.go_live_alerts}
+                  onChange={(v) => saveNotifPref("go_live_alerts", v)}
                 />
                 <NotificationRow
-                  label="Order ready"
-                  description="When your order is ready for pickup"
-                  value={notifications.orderReady}
-                  onChange={(v) =>
-                    setNotifications({ ...notifications, orderReady: v })
-                  }
+                  label="Location updates"
+                  description="When a followed truck moves to a new spot"
+                  value={notifications.moved_alerts}
+                  onChange={(v) => saveNotifPref("moved_alerts", v)}
                 />
                 <NotificationRow
                   label="Weekly digest"
-                  description="New trucks and updates in your area"
-                  value={notifications.weeklyDigest}
-                  onChange={(v) =>
-                    setNotifications({ ...notifications, weeklyDigest: v })
-                  }
+                  description="Sunday roundup of your followed trucks"
+                  value={notifications.weekly_digest}
+                  onChange={(v) => saveNotifPref("weekly_digest", v)}
                 />
+                <p className="text-xs text-neutral-400 pt-1">
+                  You can turn off all alerts at any time. We'll never spam you.
+                </p>
               </div>
             </div>
 

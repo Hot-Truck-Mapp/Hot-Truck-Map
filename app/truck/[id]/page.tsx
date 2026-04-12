@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, use, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import { useFollow } from "@/lib/hooks/useFollow";
 
 export default function TruckPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -10,11 +11,16 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
   const [location, setLocation] = useState<any>(null);
   const [menuItems, setMenuItems] = useState<any[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
-  const [following, setFollowing] = useState(false);
+  const [initialFollowing, setInitialFollowing] = useState(false);
   const [followerCount, setFollowerCount] = useState(0);
   const [activeTab, setActiveTab] = useState<"menu" | "reviews" | "info">("menu");
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
+
+  const onCountChange = useCallback((delta: 1 | -1) => {
+    setFollowerCount((c) => c + delta);
+  }, []);
+
+  const { following, toggleFollow } = useFollow(id, initialFollowing, onCountChange);
 
   useEffect(() => {
     loadTruck();
@@ -23,7 +29,6 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
   async function loadTruck() {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    setUserId(user?.id ?? null);
 
     const { data: truckData } = await supabase
       .from("trucks")
@@ -80,32 +85,8 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
     setMenuItems(menu ?? []);
     setReviews(reviewData ?? []);
     setFollowerCount(followers ?? 0);
-    setFollowing(isFollowing);
+    setInitialFollowing(isFollowing);
     setLoading(false);
-  }
-
-  async function toggleFollow() {
-    if (!userId) {
-      window.location.href = "/login";
-      return;
-    }
-    const supabase = createClient();
-    if (following) {
-      await supabase
-        .from("follows")
-        .delete()
-        .eq("truck_id", id)
-        .eq("user_id", userId);
-      setFollowing(false);
-      setFollowerCount((c) => c - 1);
-    } else {
-      await supabase.from("follows").insert({
-        truck_id: id,
-        user_id: userId,
-      });
-      setFollowing(true);
-      setFollowerCount((c) => c + 1);
-    }
   }
 
   if (loading) {

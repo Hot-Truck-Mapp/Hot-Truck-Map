@@ -9,7 +9,6 @@ const MapboxMap = dynamic(() => import("@/components/map/MapboxMap"), {
   loading: () => (
     <div className="flex-1 bg-neutral-100 animate-pulse flex items-center justify-center">
       <div className="text-center">
-        <p className="text-4xl mb-2">🚚</p>
         <p className="text-neutral-400 text-sm">Loading map...</p>
       </div>
     </div>
@@ -39,7 +38,6 @@ export default function HomePage() {
 
           {/* Logo */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="text-2xl">🚚</span>
             <span className="font-bold text-neutral-800 text-lg hidden sm:block">
               HotTruckMap
             </span>
@@ -47,16 +45,13 @@ export default function HomePage() {
 
           {/* Search */}
           <div className="flex-1 relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">
-              🔍
-            </span>
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onFocus={() => setSearchFocused(true)}
               onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
               placeholder="Search trucks or cuisine..."
-              className="w-full pl-9 pr-4 py-2.5 rounded-full bg-neutral-100 text-sm focus:outline-none focus:bg-white transition-all"
+              className="w-full px-4 py-2.5 rounded-full bg-neutral-100 text-sm focus:outline-none focus:bg-white transition-all"
             />
             {search && (
               <button
@@ -130,7 +125,6 @@ export default function HomePage() {
         {trucks.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="bg-white rounded-3xl shadow-xl p-6 max-w-xs text-center pointer-events-auto mx-4">
-              <p className="text-4xl mb-3">🚚</p>
               <p className="font-bold text-neutral-800 mb-1">
                 {search
                   ? "No trucks match your search"

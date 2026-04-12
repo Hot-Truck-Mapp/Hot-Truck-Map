@@ -23,6 +23,7 @@ export default function SignupPage() {
       password,
       options: {
         data: { role },
+        emailRedirectTo: window.location.origin + "/auth/callback",
       },
     });
 
@@ -39,7 +40,6 @@ export default function SignupPage() {
   if (done) {
     return (
       <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center p-6 text-center">
-        <p className="text-5xl mb-4">📧</p>
         <h2 className="text-xl font-bold text-neutral-800 mb-2">
           Check your email!
         </h2>
@@ -61,7 +61,6 @@ export default function SignupPage() {
 
       {/* Logo */}
       <div className="mb-10 text-center">
-        <p className="text-5xl mb-3">🚚</p>
         <h1 className="text-2xl font-bold text-neutral-800">Join HotTruckMap</h1>
         <p className="text-neutral-400 text-sm mt-1">
           Find trucks or list yours
@@ -84,7 +83,6 @@ export default function SignupPage() {
                   : "border-neutral-100 bg-neutral-50"
               }`}
             >
-              <p className="text-2xl mb-1">🗺️</p>
               <p className="text-xs font-semibold text-neutral-700">
                 Find Trucks
               </p>
@@ -100,7 +98,6 @@ export default function SignupPage() {
                   : "border-neutral-100 bg-neutral-50"
               }`}
             >
-              <p className="text-2xl mb-1">🚚</p>
               <p className="text-xs font-semibold text-neutral-700">
                 List My Truck
               </p>

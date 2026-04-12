@@ -155,8 +155,13 @@ export default function ProfilePage() {
                 className="w-full h-full object-cover"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-4xl">
-                🚚
+              <div className="w-full h-full flex items-center justify-center bg-neutral-200">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round">
+                  <path d="M1 3h15v13H1z"/>
+                  <path d="M16 8h4l3 3v5h-7V8z"/>
+                  <circle cx="5.5" cy="18.5" r="2.5"/>
+                  <circle cx="18.5" cy="18.5" r="2.5"/>
+                </svg>
               </div>
             )}
             {/* Overlay */}
@@ -234,8 +239,10 @@ export default function ProfilePage() {
             Phone Number
           </label>
           <div className="relative mt-1">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 text-sm">
-              📞
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6.29 6.29l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+              </svg>
             </span>
             <input
               value={form.phone}
@@ -282,8 +289,13 @@ export default function ProfilePage() {
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-2xl">
-                  🚚
+                <div className="w-full h-full flex items-center justify-center bg-neutral-200">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round">
+                    <path d="M1 3h15v13H1z"/>
+                    <path d="M16 8h4l3 3v5h-7V8z"/>
+                    <circle cx="5.5" cy="18.5" r="2.5"/>
+                    <circle cx="18.5" cy="18.5" r="2.5"/>
+                  </svg>
                 </div>
               )}
             </div>
@@ -299,7 +311,7 @@ export default function ProfilePage() {
               </p>
               <div className="flex gap-3 mt-2">
                 {form.phone && (
-                  <span className="text-xs text-neutral-400">📞 {form.phone}</span>
+                  <span className="text-xs text-neutral-400">{form.phone}</span>
                 )}
                 {form.instagram && (
                   <span className="text-xs text-neutral-400">@ {form.instagram}</span>
