@@ -327,17 +327,17 @@ export default function HomePage() {
         </button>
       </div>
 
-      {/* Truck List — bottom sheet */}
+      {/* Truck List — bottom sheet (mobile) / side panel (tablet+) */}
       {showList && (
-        <div className="absolute bottom-16 left-0 right-0 z-20" style={{ top: "0px" }}>
-          {/* Tap backdrop to close */}
+        <div className="absolute inset-0 bottom-16 z-20">
+          {/* Tap backdrop to close (mobile only) */}
           <div
-            className="absolute inset-0"
+            className="absolute inset-0 md:hidden"
             onClick={() => setShowList(false)}
           />
 
-          {/* Sheet */}
-          <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl overflow-hidden flex flex-col" style={{ maxHeight: "75vh" }}>
+          {/* Mobile: bottom sheet */}
+          <div className="md:hidden absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl overflow-hidden flex flex-col" style={{ maxHeight: "75vh" }}>
 
             {/* Sheet handle + header */}
             <div className="flex-shrink-0 pt-3 pb-2 px-4 border-b border-neutral-100">
@@ -449,6 +449,102 @@ export default function HomePage() {
               ))}
 
               <div className="h-6" />
+            </div>
+          </div>
+
+          {/* Tablet/Desktop: side panel */}
+          <div className="hidden md:flex absolute top-0 left-0 bottom-0 w-80 lg:w-96 bg-white shadow-2xl flex-col z-10">
+            {/* Panel header */}
+            <div className="flex-shrink-0 px-4 py-4 border-b border-neutral-100 flex items-center justify-between">
+              <p className="text-sm font-bold text-neutral-800">
+                {filtered.length} truck{filtered.length !== 1 ? "s" : ""}
+                {openNow ? " open now" : ""}
+                {cuisine !== "All" ? ` · ${cuisine}` : ""}
+              </p>
+              <button
+                onClick={() => setShowList(false)}
+                className="w-8 h-8 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center transition-colors"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M18 6 6 18M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+
+            {/* Scrollable list */}
+            <div className="flex-1 overflow-y-auto">
+              {loading && (
+                <div className="flex items-center justify-center py-16">
+                  <p className="text-neutral-400 text-sm">Loading trucks...</p>
+                </div>
+              )}
+
+              {!loading && filtered.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+                  <div className="w-12 h-12 bg-neutral-100 rounded-2xl flex items-center justify-center mb-3">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
+                      <path d="M1 3h15v13H1z"/>
+                      <path d="M16 8h4l3 3v5h-7V8z"/>
+                      <circle cx="5.5" cy="18.5" r="2.5"/>
+                      <circle cx="18.5" cy="18.5" r="2.5"/>
+                    </svg>
+                  </div>
+                  <p className="font-semibold text-neutral-700 mb-1">No trucks found</p>
+                  <p className="text-sm text-neutral-400">
+                    {openNow ? "Turn off Open Now to see all trucks" : "Try clearing your filters"}
+                  </p>
+                  {openNow && (
+                    <button
+                      onClick={() => setOpenNow(false)}
+                      className="mt-3 px-4 py-2 bg-brand-red text-white rounded-lg text-sm font-semibold"
+                    >
+                      Show All Trucks
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {filtered.map((truck) => (
+                <Link
+                  key={truck.id}
+                  href={"/truck/" + truck.id}
+                  className="flex gap-3 px-4 py-3 border-b border-neutral-100 hover:bg-neutral-50 transition-colors"
+                >
+                  <div className="w-14 h-14 rounded-xl bg-neutral-100 flex-shrink-0 overflow-hidden">
+                    {truck.profile_photo ? (
+                      <img src={truck.profile_photo} alt={truck.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-neutral-200">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
+                          <path d="M1 3h15v13H1z"/>
+                          <path d="M16 8h4l3 3v5h-7V8z"/>
+                          <circle cx="5.5" cy="18.5" r="2.5"/>
+                          <circle cx="18.5" cy="18.5" r="2.5"/>
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-black text-neutral-900 text-sm uppercase tracking-wide leading-tight">{truck.name}</p>
+                      {truck.is_live && (
+                        <span className="flex-shrink-0 flex items-center gap-1 text-[10px] font-black px-2 py-0.5 bg-brand-red text-white rounded tracking-wider">
+                          <span className="relative flex h-1.5 w-1.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-300 opacity-75" />
+                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white" />
+                          </span>
+                          OPEN
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-brand-red font-semibold mt-0.5">{truck.cuisine ?? "Food Truck"}</p>
+                    {truck.locations?.[0]?.address && (
+                      <p className="text-xs text-neutral-400 mt-0.5 truncate">{truck.locations[0].address}</p>
+                    )}
+                  </div>
+                </Link>
+              ))}
+              <div className="h-4" />
             </div>
           </div>
         </div>

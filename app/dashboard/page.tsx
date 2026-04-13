@@ -180,22 +180,27 @@ export default function OperatorDashboard() {
     <div className="min-h-screen bg-neutral-50">
 
       {/* Header */}
-      <div className="bg-white border-b border-neutral-100 px-4 py-4 flex items-center justify-between">
+      <div className="bg-white border-b border-neutral-100 px-4 md:px-8 py-4 flex items-center justify-between">
         <div>
           <h1 className="text-lg font-bold text-neutral-800">
             {truckName || "Operator Dashboard"}
           </h1>
           <p className="text-sm text-neutral-400">Operator Dashboard</p>
         </div>
-        <Link
-          href="/dashboard/profile"
-          className="text-sm text-brand-red font-semibold"
-        >
-          Edit Profile
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link href="/" className="text-sm text-neutral-400 hover:text-neutral-600 transition-colors hidden sm:block">
+            View Map
+          </Link>
+          <Link
+            href="/dashboard/profile"
+            className="text-sm text-brand-red font-semibold"
+          >
+            Edit Profile
+          </Link>
+        </div>
       </div>
 
-      <div className="p-4 flex flex-col gap-4 max-w-lg mx-auto">
+      <div className="p-4 md:p-8 flex flex-col gap-4 max-w-3xl mx-auto w-full">
 
         {/* Stats Row */}
         <div className="grid grid-cols-3 gap-3">
@@ -321,7 +326,7 @@ export default function OperatorDashboard() {
         </div>
 
         {/* Nav Grid */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <NavCard href="/dashboard/menu" title="Menu Manager" subtitle="Items, photos, prices" />
           <NavCard href="/dashboard/schedule" title="Schedule" subtitle="Plan your week" />
           <NavCard href="/dashboard/profile" title="Truck Profile" subtitle="Name, cuisine, photos" />
