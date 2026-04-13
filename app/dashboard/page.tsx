@@ -25,7 +25,10 @@ export default function OperatorDashboard() {
   async function loadDashboard() {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) {
+      window.location.href = "/login";
+      return;
+    }
 
     const { data: truck } = await supabase
       .from("trucks")
@@ -89,6 +92,20 @@ export default function OperatorDashboard() {
     setStatus("live");
   }
 
+  async function reverseGeocode(lat: number, lng: number): Promise<string> {
+    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+    if (!token) return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    try {
+      const res = await fetch(
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${token}`
+      );
+      const data = await res.json();
+      return data.features?.[0]?.place_name ?? `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    } catch {
+      return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    }
+  }
+
   async function goLiveGPS() {
     setStatus("locating");
     setLocationError(null);
@@ -97,11 +114,7 @@ export default function OperatorDashboard() {
       async (position) => {
         const { latitude: lat, longitude: lng } = position.coords;
         try {
-          const geo = await fetch(
-            `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`
-          );
-          const geoData = await geo.json();
-          const place = geoData.features?.[0]?.place_name ?? "Unknown location";
+          const place = await reverseGeocode(lat, lng);
           await broadcastLocation(lat, lng, place);
         } catch (err: any) {
           setLocationError(err.message ?? "Something went wrong");
@@ -122,10 +135,16 @@ export default function OperatorDashboard() {
     setStatus("locating");
     setLocationError(null);
 
+    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+    if (!token) {
+      setLocationError("Map service not configured. Please use GPS instead.");
+      setStatus("idle");
+      return;
+    }
+
     try {
-      const query = encodeURIComponent(manualAddress);
       const geo = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(manualAddress)}.json?access_token=${token}`
       );
       const geoData = await geo.json();
       const feature = geoData.features?.[0];

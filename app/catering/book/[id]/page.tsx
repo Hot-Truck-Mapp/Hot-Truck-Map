@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 
@@ -9,7 +9,8 @@ const EVENT_TYPES = [
   "Festival", "Private Party", "Graduation", "Other"
 ];
 
-export default function BookCateringPage({ params }: { params: { id: string } }) {
+export default function BookCateringPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const [truck, setTruck] = useState<any>(null);
   const [packages, setPackages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,13 +44,13 @@ export default function BookCateringPage({ params }: { params: { id: string } })
     const { data: truckData } = await supabase
       .from("trucks")
       .select("*")
-      .eq("id", params.id)
+      .eq("id", id)
       .single();
 
     const { data: pkgData } = await supabase
       .from("catering_packages")
       .select("*")
-      .eq("truck_id", params.id)
+      .eq("truck_id", id)
       .eq("is_active", true);
 
     setTruck(truckData);
@@ -82,7 +83,7 @@ export default function BookCateringPage({ params }: { params: { id: string } })
     const { error } = await supabase
       .from("catering_requests")
       .insert({
-        truck_id: params.id,
+        truck_id: id,
         customer_id: user?.id ?? null,
         customer_name: form.customer_name,
         customer_email: form.customer_email,

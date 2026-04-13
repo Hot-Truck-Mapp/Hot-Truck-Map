@@ -1,12 +1,13 @@
-import { createClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 
 type Props = {
-  params: { city: string };
+  params: Promise<{ city: string }>;
 };
 
 export async function generateMetadata({ params }: Props) {
-  const city = params.city
+  const { city: citySlug } = await params;
+  const city = citySlug
     .split("-")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
@@ -21,12 +22,13 @@ export async function generateMetadata({ params }: Props) {
 }
 
 export default async function CityPage({ params }: Props) {
-  const city = params.city
+  const { city: citySlug } = await params;
+  const city = citySlug
     .split("-")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: trucks } = await supabase
     .from("trucks")
@@ -78,10 +80,10 @@ export default async function CityPage({ params }: Props) {
               Check back later or browse all trucks
             </p>
             <Link
-              href="/trucks"
+              href="/"
               className="inline-block mt-4 px-4 py-2 bg-brand-red text-white rounded-full text-sm font-semibold"
             >
-              Browse All Trucks
+              Back to Map
             </Link>
           </div>
         ) : (
