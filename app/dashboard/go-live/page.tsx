@@ -131,7 +131,6 @@ export default function GoLivePage() {
 
       {/* Header */}
       <div className="mb-12 text-center">
-        <p className="text-4xl mb-2">🚚</p>
         <h1 className="text-2xl font-bold text-neutral-800">HotTruckMap</h1>
         <p className="text-neutral-500 text-sm mt-1">Operator Dashboard</p>
       </div>
@@ -144,7 +143,6 @@ export default function GoLivePage() {
             className="w-64 h-64 rounded-full bg-brand-red text-white flex flex-col items-center justify-center gap-3 active:scale-95 transition-transform shadow-2xl"
             style={{ boxShadow: "0 8px 40px rgba(217,79,61,0.4)" }}
           >
-            <span className="text-5xl">📍</span>
             <span className="text-2xl font-bold">Go Live</span>
             <span className="text-sm opacity-80">at my location</span>
           </button>
@@ -153,7 +151,7 @@ export default function GoLivePage() {
             onClick={() => setShowManual(!showManual)}
             className="text-sm text-neutral-400 hover:text-neutral-600"
           >
-            {showManual ? "Hide manual entry ↑" : "GPS not working? Enter address ↓"}
+            {showManual ? "Hide manual entry" : "GPS not working? Enter address"}
           </button>
 
           {showManual && (
@@ -185,7 +183,6 @@ export default function GoLivePage() {
       {/* LOCATING STATE */}
       {status === "locating" && (
         <div className="w-64 h-64 rounded-full bg-neutral-200 flex flex-col items-center justify-center gap-3 animate-pulse">
-          <span className="text-5xl">📡</span>
           <span className="text-xl font-bold text-neutral-600">Finding you...</span>
         </div>
       )}
@@ -216,9 +213,8 @@ export default function GoLivePage() {
       {/* ERROR STATE */}
       {status === "error" && (
         <div className="flex flex-col items-center gap-6">
-          <div className="w-64 h-64 rounded-full bg-neutral-100 border-2 border-red-200 flex flex-col items-center justify-center gap-3">
-            <span className="text-5xl">⚠️</span>
-            <span className="text-sm text-center text-neutral-500 px-6">{error}</span>
+          <div className="w-64 h-64 rounded-full bg-neutral-100 border-2 border-red-200 flex flex-col items-center justify-center gap-3 text-center px-8">
+            <span className="text-sm text-neutral-500">{error}</span>
           </div>
           <button
             onClick={() => setStatus("idle")}

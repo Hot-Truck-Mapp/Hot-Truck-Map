@@ -155,8 +155,13 @@ export default function ProfilePage() {
                 className="w-full h-full object-cover"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-4xl">
-                🚚
+              <div className="w-full h-full flex items-center justify-center bg-neutral-200">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="1.5" strokeLinecap="round">
+                  <path d="M1 3h15v13H1z"/>
+                  <path d="M16 8h4l3 3v5h-7V8z"/>
+                  <circle cx="5.5" cy="18.5" r="2.5"/>
+                  <circle cx="18.5" cy="18.5" r="2.5"/>
+                </svg>
               </div>
             )}
             {/* Overlay */}
@@ -234,8 +239,8 @@ export default function ProfilePage() {
             Phone Number
           </label>
           <div className="relative mt-1">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 text-sm">
-              📞
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 text-sm font-medium">
+              +
             </span>
             <input
               value={form.phone}
@@ -282,8 +287,13 @@ export default function ProfilePage() {
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-2xl">
-                  🚚
+                <div className="w-full h-full flex items-center justify-center bg-neutral-100">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
+                    <path d="M1 3h15v13H1z"/>
+                    <path d="M16 8h4l3 3v5h-7V8z"/>
+                    <circle cx="5.5" cy="18.5" r="2.5"/>
+                    <circle cx="18.5" cy="18.5" r="2.5"/>
+                  </svg>
                 </div>
               )}
             </div>
@@ -299,7 +309,7 @@ export default function ProfilePage() {
               </p>
               <div className="flex gap-3 mt-2">
                 {form.phone && (
-                  <span className="text-xs text-neutral-400">📞 {form.phone}</span>
+                  <span className="text-xs text-neutral-400">{form.phone}</span>
                 )}
                 {form.instagram && (
                   <span className="text-xs text-neutral-400">@ {form.instagram}</span>

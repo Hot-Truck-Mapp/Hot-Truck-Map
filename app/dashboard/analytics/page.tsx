@@ -53,34 +53,29 @@ export default function AnalyticsPage() {
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
 
-    // Followers
     const { count: followers } = await supabase
       .from("follows")
       .select("*", { count: "exact", head: true })
       .eq("truck_id", truck.id);
 
-    // Orders today
     const { data: todayOrders } = await supabase
       .from("orders")
       .select("total")
       .eq("truck_id", truck.id)
       .gte("created_at", today.toISOString());
 
-    // Orders this week
     const { data: weekOrders } = await supabase
       .from("orders")
       .select("total")
       .eq("truck_id", truck.id)
       .gte("created_at", weekAgo.toISOString());
 
-    // Views this week
     const { count: weekViews } = await supabase
       .from("truck_views")
       .select("*", { count: "exact", head: true })
       .eq("truck_id", truck.id)
       .gte("created_at", weekAgo.toISOString());
 
-    // Rating
     const { data: reviews } = await supabase
       .from("reviews")
       .select("rating")
@@ -123,34 +118,17 @@ export default function AnalyticsPage() {
 
       <div className="p-4 flex flex-col gap-4 max-w-lg mx-auto">
 
-        {/* Top 3 big stat cards */}
+        {/* Top 3 stat cards */}
         <div className="grid grid-cols-3 gap-3">
-          <StatCard
-            icon="👥"
-            label="Followers"
-            value={stats.totalFollowers}
-            color="bg-red-50"
-          />
-          <StatCard
-            icon="🛍️"
-            label="Orders Today"
-            value={stats.ordersToday}
-            color="bg-orange-50"
-          />
-          <StatCard
-            icon="👁️"
-            label="Views This Week"
-            value={stats.viewsThisWeek}
-            color="bg-amber-50"
-          />
+          <StatCard label="Followers" value={stats.totalFollowers} color="bg-red-50" />
+          <StatCard label="Orders Today" value={stats.ordersToday} color="bg-orange-50" />
+          <StatCard label="Views This Week" value={stats.viewsThisWeek} color="bg-amber-50" />
         </div>
 
         {/* Revenue cards */}
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-white rounded-2xl shadow-sm p-4">
-            <p className="text-xs text-neutral-400 font-medium mb-1">
-              Revenue Today
-            </p>
+            <p className="text-xs text-neutral-400 font-medium mb-1">Revenue Today</p>
             <p className="text-2xl font-bold text-neutral-800">
               ${stats.revenueToday.toFixed(2)}
             </p>
@@ -159,9 +137,7 @@ export default function AnalyticsPage() {
             </p>
           </div>
           <div className="bg-white rounded-2xl shadow-sm p-4">
-            <p className="text-xs text-neutral-400 font-medium mb-1">
-              Revenue This Week
-            </p>
+            <p className="text-xs text-neutral-400 font-medium mb-1">Revenue This Week</p>
             <p className="text-2xl font-bold text-neutral-800">
               ${stats.revenueThisWeek.toFixed(2)}
             </p>
@@ -174,15 +150,12 @@ export default function AnalyticsPage() {
         {/* Rating */}
         <div className="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-4">
           <div className="w-16 h-16 rounded-2xl bg-yellow-50 flex items-center justify-center flex-shrink-0">
-            <span className="text-3xl">⭐</span>
+            <span className="text-2xl font-bold text-yellow-500">
+              {stats.rating > 0 ? stats.rating.toFixed(1) : "—"}
+            </span>
           </div>
           <div>
-            <p className="text-xs text-neutral-400 font-medium">
-              Average Rating
-            </p>
-            <p className="text-3xl font-bold text-neutral-800">
-              {stats.rating > 0 ? stats.rating.toFixed(1) : "—"}
-            </p>
+            <p className="text-xs text-neutral-400 font-medium">Average Rating</p>
             <div className="flex gap-0.5 mt-1">
               {[1, 2, 3, 4, 5].map((star) => (
                 <span
@@ -202,27 +175,12 @@ export default function AnalyticsPage() {
 
         {/* Quick insights */}
         <div className="bg-white rounded-2xl shadow-sm p-4">
-          <p className="text-sm font-bold text-neutral-800 mb-3">
-            Quick Insights
-          </p>
+          <p className="text-sm font-bold text-neutral-800 mb-3">Quick Insights</p>
           <div className="flex flex-col gap-3">
+            <InsightRow label="Orders this week" value={String(stats.ordersThisWeek)} />
+            <InsightRow label="Total followers" value={String(stats.totalFollowers)} />
+            <InsightRow label="Profile views this week" value={String(stats.viewsThisWeek)} />
             <InsightRow
-              icon="📈"
-              label="Orders this week"
-              value={String(stats.ordersThisWeek)}
-            />
-            <InsightRow
-              icon="👥"
-              label="Total followers"
-              value={String(stats.totalFollowers)}
-            />
-            <InsightRow
-              icon="👁️"
-              label="Profile views this week"
-              value={String(stats.viewsThisWeek)}
-            />
-            <InsightRow
-              icon="⭐"
               label="Average rating"
               value={stats.rating > 0 ? `${stats.rating}/5` : "No reviews yet"}
             />
@@ -231,7 +189,6 @@ export default function AnalyticsPage() {
 
         {/* Coming soon */}
         <div className="bg-neutral-100 rounded-2xl p-4 text-center">
-          <p className="text-2xl mb-2">📊</p>
           <p className="text-sm font-semibold text-neutral-600">
             Detailed charts coming in Phase 5
           </p>
@@ -246,44 +203,26 @@ export default function AnalyticsPage() {
 }
 
 function StatCard({
-  icon,
   label,
   value,
   color,
 }: {
-  icon: string;
   label: string;
   value: number;
   color: string;
 }) {
   return (
     <div className={`${color} rounded-2xl p-3 flex flex-col items-center text-center`}>
-      <span className="text-2xl mb-1">{icon}</span>
-      <p className="text-xl font-bold text-neutral-800">
-        {value.toLocaleString()}
-      </p>
-      <p className="text-[10px] text-neutral-500 font-medium leading-tight mt-0.5">
-        {label}
-      </p>
+      <p className="text-xl font-bold text-neutral-800">{value.toLocaleString()}</p>
+      <p className="text-[10px] text-neutral-500 font-medium leading-tight mt-0.5">{label}</p>
     </div>
   );
 }
 
-function InsightRow({
-  icon,
-  label,
-  value,
-}: {
-  icon: string;
-  label: string;
-  value: string;
-}) {
+function InsightRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        <span className="text-base">{icon}</span>
-        <p className="text-sm text-neutral-600">{label}</p>
-      </div>
+      <p className="text-sm text-neutral-600">{label}</p>
       <p className="text-sm font-bold text-neutral-800">{value}</p>
     </div>
   );
