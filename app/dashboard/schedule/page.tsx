@@ -178,7 +178,6 @@ export default function SchedulePage() {
         {/* Entries for selected day */}
         {todayEntries.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-4xl mb-3">📅</p>
             <p className="text-neutral-500 font-medium">
               No stops planned for {DAYS[selectedDay]}
             </p>
@@ -195,7 +194,6 @@ export default function SchedulePage() {
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-lg">📍</span>
                     <p className="font-semibold text-neutral-800">
                       {entry.location}
                     </p>
@@ -265,7 +263,7 @@ export default function SchedulePage() {
                   ) : (
                     entries.map((e) => (
                       <p key={e.id} className="text-sm text-neutral-700">
-                        📍 {e.location}
+                        {e.location}
                         <span className="text-neutral-400 ml-2 text-xs">
                           {e.open_time} – {e.close_time}
                         </span>

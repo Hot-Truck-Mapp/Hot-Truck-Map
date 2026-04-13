@@ -45,7 +45,6 @@ export default function LoginPage() {
 
       {/* Logo */}
       <div className="mb-10 text-center">
-        <p className="text-5xl mb-3">🚚</p>
         <h1 className="text-2xl font-bold text-neutral-800">HotTruckMap</h1>
         <p className="text-neutral-400 text-sm mt-1">
           Find the food truck. Skip the guesswork.
@@ -59,7 +58,6 @@ export default function LoginPage() {
           onClick={handleGoogle}
           className="w-full py-3.5 bg-white border border-neutral-200 rounded-2xl font-semibold text-neutral-700 flex items-center justify-center gap-3 shadow-sm"
         >
-          <span className="text-xl">🔵</span>
           Continue with Google
         </button>
 
