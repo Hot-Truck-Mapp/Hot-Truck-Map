@@ -125,158 +125,190 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Search + Filter bar */}
-        <div className="bg-white shadow-md">
+        {/* Search card — floats over the map */}
+        <div className="px-3 md:px-4 pt-2 pb-1">
+          <div
+            className="bg-white rounded-2xl overflow-visible"
+            style={{ boxShadow: "0 4px 24px rgba(0,0,0,0.13), 0 1px 4px rgba(0,0,0,0.07)" }}
+          >
 
-          {/* Search row */}
-          <div className="flex items-center gap-2 px-3 pt-3 pb-2">
-            <div className="relative flex-1">
+            {/* Search input row */}
+            <div className="flex items-center gap-0 px-4 py-1">
+              {/* Search icon */}
               <svg
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400"
-                width="15" height="15" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+                className="text-neutral-400 flex-shrink-0"
+                width="17" height="17" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"
               >
                 <circle cx="11" cy="11" r="8"/>
                 <path d="m21 21-4.35-4.35"/>
               </svg>
+
+              {/* Input */}
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onFocus={() => setSearchFocused(true)}
                 onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
-                placeholder="Search trucks or cuisine..."
+                placeholder="Search by name or cuisine..."
                 suppressHydrationWarning
-                className="w-full pl-9 pr-8 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-brand-red bg-neutral-50 transition-colors"
+                className="flex-1 px-3 py-3 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none bg-transparent"
               />
-              {search && (
+
+              {/* Clear button */}
+              {search ? (
                 <button
                   onClick={() => setSearch("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400"
+                  className="w-6 h-6 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center flex-shrink-0 transition-colors"
                 >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
                     <path d="M18 6 6 18M6 6l12 12"/>
                   </svg>
                 </button>
-              )}
-
-              {/* Search dropdown */}
-              {searchFocused && search && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-lg border border-neutral-100 overflow-hidden z-50">
-                  {filtered.length === 0 ? (
-                    <div className="px-4 py-3 text-sm text-neutral-400">
-                      No trucks found for "{search}"
-                    </div>
-                  ) : (
-                    filtered.slice(0, 5).map((truck) => (
-                      <Link
-                        key={truck.id}
-                        href={"/truck/" + truck.id}
-                        className="flex items-center gap-3 px-4 py-3 hover:bg-neutral-50 border-b border-neutral-50 last:border-0"
-                      >
-                        <div className="w-8 h-8 rounded-lg bg-neutral-100 overflow-hidden flex-shrink-0">
-                          {truck.profile_photo ? (
-                            <img src={truck.profile_photo} alt={truck.name} className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-neutral-200">
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2" strokeLinecap="round">
-                                <path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7V8z"/>
-                                <circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
-                              </svg>
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-neutral-800 truncate">{truck.name}</p>
-                          <p className="text-xs text-neutral-400">{truck.cuisine}</p>
-                        </div>
-                        {truck.is_live && (
-                          <span className="text-[10px] font-bold px-2 py-0.5 bg-red-50 text-brand-red rounded-md flex-shrink-0">LIVE</span>
-                        )}
-                      </Link>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={() => setShowFilter(!showFilter)}
-              className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-xs font-bold transition-colors ${
-                showFilter || activeFilterCount > 0
-                  ? "border-brand-red text-brand-red bg-red-50"
-                  : "border-neutral-200 text-neutral-600 bg-white"
-              }`}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                <path d="M22 3H2l8 9.46V19l4 2v-8.54z"/>
-              </svg>
-              {activeFilterCount > 0 ? activeFilterCount : "Filter"}
-            </button>
-          </div>
-
-          {/* Quick filter pills */}
-          <div className="flex gap-2 px-3 pb-3 overflow-x-auto scrollbar-none">
-            <button
-              onClick={() => setOpenNow(!openNow)}
-              className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black tracking-wide transition-colors ${
-                openNow ? "bg-brand-red text-white" : "border border-neutral-200 text-neutral-600 bg-white"
-              }`}
-            >
-              {openNow && (
-                <span className="relative flex h-1.5 w-1.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-300 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white" />
-                </span>
-              )}
-              OPEN NOW
-            </button>
-
-            {CUISINES.filter((c) => c !== "All").map((c) => (
-              <button
-                key={c}
-                onClick={() => setCuisine(cuisine === c ? "All" : c)}
-                className={`flex-shrink-0 px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors ${
-                  cuisine === c
-                    ? "bg-brand-red text-white border-brand-red"
-                    : "border-neutral-200 text-neutral-600 bg-white"
-                }`}
-              >
-                {c}
-              </button>
-            ))}
-          </div>
-
-          {/* Expanded filter panel */}
-          {showFilter && (
-            <div className="border-t border-neutral-100 px-3 py-3 flex flex-col gap-3">
-              <div>
-                <p className="text-xs font-black text-neutral-400 uppercase tracking-wider mb-2">Dietary</p>
-                <div className="flex flex-wrap gap-2">
-                  {DIETARY.map((d) => (
-                    <button
-                      key={d}
-                      onClick={() => toggleDietary(d)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
-                        dietary.includes(d)
-                          ? "bg-brand-red text-white border-brand-red"
-                          : "bg-white border-neutral-200 text-neutral-600"
-                      }`}
-                    >
-                      {d}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {activeFilterCount > 0 && (
+              ) : (
+                /* Filter button */
                 <button
-                  onClick={() => { setDietary([]); setCuisine("All"); }}
-                  className="text-xs text-brand-red font-bold text-left"
+                  onClick={() => setShowFilter(!showFilter)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all flex-shrink-0 ${
+                    showFilter || activeFilterCount > 0
+                      ? "bg-brand-red text-white"
+                      : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+                  }`}
                 >
-                  Clear all filters
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <path d="M22 3H2l8 9.46V19l4 2v-8.54z"/>
+                  </svg>
+                  {activeFilterCount > 0 ? activeFilterCount + " Filter" + (activeFilterCount > 1 ? "s" : "") : "Filter"}
                 </button>
               )}
             </div>
-          )}
+
+            {/* Divider */}
+            <div className="h-px bg-neutral-100 mx-4" />
+
+            {/* Quick filter pills */}
+            <div className="flex gap-2 px-4 py-2.5 overflow-x-auto scrollbar-none">
+              {/* Open Now pill */}
+              <button
+                onClick={() => setOpenNow(!openNow)}
+                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold tracking-wide transition-all ${
+                  openNow
+                    ? "bg-brand-red text-white shadow-sm"
+                    : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+                }`}
+              >
+                {openNow ? (
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-300 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white" />
+                  </span>
+                ) : (
+                  <span className="w-1.5 h-1.5 rounded-full bg-neutral-400" />
+                )}
+                Open Now
+              </button>
+
+              {/* Cuisine pills */}
+              {CUISINES.filter((c) => c !== "All").map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCuisine(cuisine === c ? "All" : c)}
+                  className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                    cuisine === c
+                      ? "bg-neutral-900 text-white shadow-sm"
+                      : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+                  }`}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+
+            {/* Expanded dietary filters */}
+            {showFilter && (
+              <div className="border-t border-neutral-100 px-4 py-3 flex flex-col gap-3">
+                <div>
+                  <p className="text-xs font-black text-neutral-400 uppercase tracking-widest mb-2">Dietary</p>
+                  <div className="flex flex-wrap gap-2">
+                    {DIETARY.map((d) => (
+                      <button
+                        key={d}
+                        onClick={() => toggleDietary(d)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                          dietary.includes(d)
+                            ? "bg-brand-red text-white shadow-sm"
+                            : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+                        }`}
+                      >
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {activeFilterCount > 0 && (
+                  <button
+                    onClick={() => { setDietary([]); setCuisine("All"); }}
+                    className="text-xs text-brand-red font-bold text-left hover:underline"
+                  >
+                    Clear all filters
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Search dropdown results */}
+            {searchFocused && search && (
+              <div className="border-t border-neutral-100 overflow-hidden rounded-b-2xl">
+                {filtered.length === 0 ? (
+                  <div className="px-4 py-4 flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center flex-shrink-0">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="2" strokeLinecap="round">
+                        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                      </svg>
+                    </div>
+                    <p className="text-sm text-neutral-400">No trucks found for "<span className="text-neutral-600 font-medium">{search}</span>"</p>
+                  </div>
+                ) : (
+                  filtered.slice(0, 5).map((truck, i) => (
+                    <Link
+                      key={truck.id}
+                      href={"/truck/" + truck.id}
+                      className={`flex items-center gap-3 px-4 py-3 hover:bg-neutral-50 transition-colors ${
+                        i < Math.min(filtered.length, 5) - 1 ? "border-b border-neutral-50" : ""
+                      }`}
+                    >
+                      <div className="w-9 h-9 rounded-xl bg-neutral-100 overflow-hidden flex-shrink-0">
+                        {truck.profile_photo ? (
+                          <img src={truck.profile_photo} alt={truck.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-neutral-200">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#bbb" strokeWidth="2" strokeLinecap="round">
+                              <path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7V8z"/>
+                              <circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
+                            </svg>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-neutral-800 truncate">{truck.name}</p>
+                        <p className="text-xs text-neutral-400">{truck.cuisine ?? "Food Truck"}</p>
+                      </div>
+                      {truck.is_live && (
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-red opacity-75" />
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-red" />
+                          </span>
+                          <span className="text-[10px] font-bold text-brand-red">OPEN</span>
+                        </div>
+                      )}
+                    </Link>
+                  ))
+                )}
+              </div>
+            )}
+
+          </div>
         </div>
       </div>
 
@@ -327,17 +359,17 @@ export default function HomePage() {
         </button>
       </div>
 
-      {/* Truck List — bottom sheet */}
+      {/* Truck List — bottom sheet (mobile) / side panel (tablet+) */}
       {showList && (
-        <div className="absolute bottom-16 left-0 right-0 z-20" style={{ top: "0px" }}>
-          {/* Tap backdrop to close */}
+        <div className="absolute inset-0 bottom-16 z-20">
+          {/* Tap backdrop to close (mobile only) */}
           <div
-            className="absolute inset-0"
+            className="absolute inset-0 md:hidden"
             onClick={() => setShowList(false)}
           />
 
-          {/* Sheet */}
-          <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl overflow-hidden flex flex-col" style={{ maxHeight: "75vh" }}>
+          {/* Mobile: bottom sheet */}
+          <div className="md:hidden absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl overflow-hidden flex flex-col" style={{ maxHeight: "75vh" }}>
 
             {/* Sheet handle + header */}
             <div className="flex-shrink-0 pt-3 pb-2 px-4 border-b border-neutral-100">
@@ -449,6 +481,102 @@ export default function HomePage() {
               ))}
 
               <div className="h-6" />
+            </div>
+          </div>
+
+          {/* Tablet/Desktop: side panel */}
+          <div className="hidden md:flex absolute top-0 left-0 bottom-0 w-80 lg:w-96 bg-white shadow-2xl flex-col z-10">
+            {/* Panel header */}
+            <div className="flex-shrink-0 px-4 py-4 border-b border-neutral-100 flex items-center justify-between">
+              <p className="text-sm font-bold text-neutral-800">
+                {filtered.length} truck{filtered.length !== 1 ? "s" : ""}
+                {openNow ? " open now" : ""}
+                {cuisine !== "All" ? ` · ${cuisine}` : ""}
+              </p>
+              <button
+                onClick={() => setShowList(false)}
+                className="w-8 h-8 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center transition-colors"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M18 6 6 18M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+
+            {/* Scrollable list */}
+            <div className="flex-1 overflow-y-auto">
+              {loading && (
+                <div className="flex items-center justify-center py-16">
+                  <p className="text-neutral-400 text-sm">Loading trucks...</p>
+                </div>
+              )}
+
+              {!loading && filtered.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+                  <div className="w-12 h-12 bg-neutral-100 rounded-2xl flex items-center justify-center mb-3">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
+                      <path d="M1 3h15v13H1z"/>
+                      <path d="M16 8h4l3 3v5h-7V8z"/>
+                      <circle cx="5.5" cy="18.5" r="2.5"/>
+                      <circle cx="18.5" cy="18.5" r="2.5"/>
+                    </svg>
+                  </div>
+                  <p className="font-semibold text-neutral-700 mb-1">No trucks found</p>
+                  <p className="text-sm text-neutral-400">
+                    {openNow ? "Turn off Open Now to see all trucks" : "Try clearing your filters"}
+                  </p>
+                  {openNow && (
+                    <button
+                      onClick={() => setOpenNow(false)}
+                      className="mt-3 px-4 py-2 bg-brand-red text-white rounded-lg text-sm font-semibold"
+                    >
+                      Show All Trucks
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {filtered.map((truck) => (
+                <Link
+                  key={truck.id}
+                  href={"/truck/" + truck.id}
+                  className="flex gap-3 px-4 py-3 border-b border-neutral-100 hover:bg-neutral-50 transition-colors"
+                >
+                  <div className="w-14 h-14 rounded-xl bg-neutral-100 flex-shrink-0 overflow-hidden">
+                    {truck.profile_photo ? (
+                      <img src={truck.profile_photo} alt={truck.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-neutral-200">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
+                          <path d="M1 3h15v13H1z"/>
+                          <path d="M16 8h4l3 3v5h-7V8z"/>
+                          <circle cx="5.5" cy="18.5" r="2.5"/>
+                          <circle cx="18.5" cy="18.5" r="2.5"/>
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-black text-neutral-900 text-sm uppercase tracking-wide leading-tight">{truck.name}</p>
+                      {truck.is_live && (
+                        <span className="flex-shrink-0 flex items-center gap-1 text-[10px] font-black px-2 py-0.5 bg-brand-red text-white rounded tracking-wider">
+                          <span className="relative flex h-1.5 w-1.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-300 opacity-75" />
+                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white" />
+                          </span>
+                          OPEN
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-brand-red font-semibold mt-0.5">{truck.cuisine ?? "Food Truck"}</p>
+                    {truck.locations?.[0]?.address && (
+                      <p className="text-xs text-neutral-400 mt-0.5 truncate">{truck.locations[0].address}</p>
+                    )}
+                  </div>
+                </Link>
+              ))}
+              <div className="h-4" />
             </div>
           </div>
         </div>

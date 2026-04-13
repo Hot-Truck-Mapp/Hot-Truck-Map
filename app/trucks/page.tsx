@@ -105,139 +105,143 @@ export default function TrucksListPage() {
       </nav>
 
       {/* Search + Filter Bar */}
-      <div className="bg-white border-b border-neutral-200 px-4 py-4 sticky top-14 z-10">
+      <div className="bg-neutral-50 border-b border-neutral-200 px-4 py-3 sticky top-14 z-10">
+        <div
+          className="bg-white rounded-2xl"
+          style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05)" }}
+        >
 
-        {/* Search */}
-        <div className="relative mb-3">
-          <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400"
-            width="16" height="16" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="2" strokeLinecap="round"
-          >
-            <circle cx="11" cy="11" r="8"/>
-            <path d="m21 21-4.35-4.35"/>
-          </svg>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search trucks or cuisine..."
-            className="w-full pl-10 pr-4 py-3 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-brand-red bg-neutral-50 transition-colors"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+          {/* Search input */}
+          <div className="flex items-center gap-0 px-4 py-1">
+            <svg
+              className="text-neutral-400 flex-shrink-0"
+              width="17" height="17" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                <path d="M18 6 6 18M6 6l12 12"/>
-              </svg>
-            </button>
-          )}
-        </div>
-
-        {/* Quick Filters */}
-        <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
-          <button
-            onClick={() => setOpenNow(!openNow)}
-            className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black tracking-wide transition-colors ${
-              openNow
-                ? "bg-brand-red text-white"
-                : "border border-neutral-200 text-neutral-600"
-            }`}
-          >
-            {openNow && (
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-300 opacity-75" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white" />
-              </span>
-            )}
-            OPEN NOW
-          </button>
-
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors ${
-              showFilters
-                ? "border-brand-red text-brand-red bg-red-50"
-                : "border-neutral-200 text-neutral-600"
-            }`}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <path d="M22 3H2l8 9.46V19l4 2v-8.54z"/>
+              <circle cx="11" cy="11" r="8"/>
+              <path d="m21 21-4.35-4.35"/>
             </svg>
-            Filters
-            {activeFilterCount > 0 && (
-              <span className="bg-brand-red text-white rounded-full w-4 h-4 text-[10px] flex items-center justify-center">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
-
-          {/* Cuisine quick pills */}
-          {CUISINES.filter((c) => c !== "All").slice(0, 5).map((c) => (
-            <button
-              key={c}
-              onClick={() => setCuisine(cuisine === c ? "All" : c)}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors ${
-                cuisine === c
-                  ? "bg-brand-red text-white border-brand-red"
-                  : "border-neutral-200 text-neutral-600"
-              }`}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-
-        {/* Expanded Filters */}
-        {showFilters && (
-          <div className="pt-3 mt-3 border-t border-neutral-100 flex flex-col gap-3">
-            <div>
-              <p className="text-xs font-black text-neutral-400 uppercase tracking-wider mb-2">Cuisine</p>
-              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                {CUISINES.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setCuisine(c)}
-                    className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
-                      cuisine === c
-                        ? "bg-brand-red text-white border-brand-red"
-                        : "bg-white text-neutral-600 border-neutral-200"
-                    }`}
-                  >
-                    {c}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <p className="text-xs font-black text-neutral-400 uppercase tracking-wider mb-2">Dietary</p>
-              <div className="flex flex-wrap gap-2">
-                {DIETARY.map((d) => (
-                  <button
-                    key={d}
-                    onClick={() => toggleDietary(d)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
-                      dietary.includes(d)
-                        ? "bg-brand-red text-white border-brand-red"
-                        : "bg-white border-neutral-200 text-neutral-600"
-                    }`}
-                  >
-                    {d}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {activeFilterCount > 0 && (
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name or cuisine..."
+              className="flex-1 px-3 py-3 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none bg-transparent"
+            />
+            {search ? (
               <button
-                onClick={() => { setDietary([]); setCuisine("All"); setOpenNow(false); }}
-                className="text-xs text-brand-red font-bold text-left"
+                onClick={() => setSearch("")}
+                className="w-6 h-6 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center flex-shrink-0 transition-colors"
               >
-                Clear all filters
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                  <path d="M18 6 6 18M6 6l12 12"/>
+                </svg>
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all flex-shrink-0 ${
+                  showFilters || activeFilterCount > 0
+                    ? "bg-brand-red text-white"
+                    : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+                }`}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M22 3H2l8 9.46V19l4 2v-8.54z"/>
+                </svg>
+                {activeFilterCount > 0 ? activeFilterCount + " Active" : "Filter"}
               </button>
             )}
           </div>
-        )}
+
+          {/* Divider */}
+          <div className="h-px bg-neutral-100 mx-4" />
+
+          {/* Quick pills */}
+          <div className="flex gap-2 px-4 py-2.5 overflow-x-auto scrollbar-none">
+            <button
+              onClick={() => setOpenNow(!openNow)}
+              className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold tracking-wide transition-all ${
+                openNow
+                  ? "bg-brand-red text-white shadow-sm"
+                  : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+              }`}
+            >
+              {openNow ? (
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-300 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white" />
+                </span>
+              ) : (
+                <span className="w-1.5 h-1.5 rounded-full bg-neutral-400" />
+              )}
+              Open Now
+            </button>
+
+            {CUISINES.filter((c) => c !== "All").slice(0, 5).map((c) => (
+              <button
+                key={c}
+                onClick={() => setCuisine(cuisine === c ? "All" : c)}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                  cuisine === c
+                    ? "bg-neutral-900 text-white shadow-sm"
+                    : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+                }`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+
+          {/* Expanded Filters */}
+          {showFilters && (
+            <div className="border-t border-neutral-100 px-4 py-3 flex flex-col gap-3">
+              <div>
+                <p className="text-xs font-black text-neutral-400 uppercase tracking-widest mb-2">Cuisine</p>
+                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+                  {CUISINES.map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => setCuisine(c)}
+                      className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                        cuisine === c
+                          ? "bg-neutral-900 text-white"
+                          : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+                      }`}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-black text-neutral-400 uppercase tracking-widest mb-2">Dietary</p>
+                <div className="flex flex-wrap gap-2">
+                  {DIETARY.map((d) => (
+                    <button
+                      key={d}
+                      onClick={() => toggleDietary(d)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                        dietary.includes(d)
+                          ? "bg-brand-red text-white"
+                          : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+                      }`}
+                    >
+                      {d}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {activeFilterCount > 0 && (
+                <button
+                  onClick={() => { setDietary([]); setCuisine("All"); setOpenNow(false); }}
+                  className="text-xs text-brand-red font-bold text-left hover:underline"
+                >
+                  Clear all filters
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Results Header */}
