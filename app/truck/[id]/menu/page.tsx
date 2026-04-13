@@ -1,10 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 
-export default function MenuPage({ params }: { params: { id: string } }) {
+const DIETARY_COLORS: Record<string, string> = {
+  "GF":    "bg-green-50 text-green-700",
+  "Vegan": "bg-green-50 text-green-700",
+  "Halal": "bg-teal-50 text-teal-700",
+  "Spicy": "bg-red-50 text-red-600",
+};
+
+export default function MenuPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const [truck, setTruck] = useState<any>(null);
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,13 +28,13 @@ export default function MenuPage({ params }: { params: { id: string } }) {
     const { data: truckData } = await supabase
       .from("trucks")
       .select("*")
-      .eq("id", params.id)
+      .eq("id", id)
       .single();
 
     const { data: menuData } = await supabase
       .from("menu_items")
       .select("*")
-      .eq("truck_id", params.id)
+      .eq("truck_id", id)
       .order("created_at", { ascending: true });
 
     setTruck(truckData);
@@ -34,7 +42,6 @@ export default function MenuPage({ params }: { params: { id: string } }) {
     setLoading(false);
   }
 
-  // Get unique categories from menu items
   const categories = ["ALL", ...Array.from(
     new Set(items.map((i) => i.category?.toUpperCase()).filter(Boolean))
   )];
@@ -43,7 +50,6 @@ export default function MenuPage({ params }: { params: { id: string } }) {
     ? items
     : items.filter((i) => i.category?.toUpperCase() === activeCategory);
 
-  // Group filtered items by category
   const grouped = filtered.reduce((acc: Record<string, any[]>, item) => {
     const cat = item.category?.toUpperCase() ?? "OTHER";
     if (!acc[cat]) acc[cat] = [];
@@ -83,7 +89,7 @@ export default function MenuPage({ params }: { params: { id: string } }) {
         </div>
 
         <Link
-          href={"/truck/" + params.id}
+          href={"/truck/" + id}
           className="flex items-center gap-2 text-neutral-400 hover:text-white transition-colors text-sm font-medium"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -109,7 +115,10 @@ export default function MenuPage({ params }: { params: { id: string } }) {
 
           {truck?.is_live && (
             <div className="flex-shrink-0 flex items-center gap-2 bg-brand-red text-white px-5 py-2.5 rounded-full font-black text-sm tracking-wide">
-              🔥
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-300 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-200" />
+              </span>
               OPEN NOW
             </div>
           )}
@@ -119,7 +128,7 @@ export default function MenuPage({ params }: { params: { id: string } }) {
       {/* Category Pills */}
       {categories.length > 1 && (
         <div className="bg-white border-b border-neutral-200 px-6 py-4">
-          <div className="flex gap-2 overflow-x-auto">
+          <div className="flex gap-2 overflow-x-auto scrollbar-none">
             {categories.map((cat) => (
               <button
                 key={cat}
@@ -154,17 +163,13 @@ export default function MenuPage({ params }: { params: { id: string } }) {
             <p className="text-neutral-400 text-sm mt-1">Check back soon!</p>
           </div>
         ) : activeCategory === "ALL" ? (
-          // Grouped by category
           Object.entries(grouped).map(([category, categoryItems]) => (
             <div key={category} className="mb-6">
-              {/* Category Header */}
               <div className="bg-white rounded-t-2xl px-5 py-4 border-b border-neutral-100">
                 <h2 className="text-sm font-black text-neutral-800 uppercase tracking-widest">
                   {category}
                 </h2>
               </div>
-
-              {/* Items */}
               <div className="bg-white rounded-b-2xl shadow-sm overflow-hidden">
                 {categoryItems.map((item, index) => (
                   <MenuItemRow
@@ -177,7 +182,6 @@ export default function MenuPage({ params }: { params: { id: string } }) {
             </div>
           ))
         ) : (
-          // Single category view
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
             {filtered.map((item, index) => (
               <MenuItemRow
@@ -193,19 +197,33 @@ export default function MenuPage({ params }: { params: { id: string } }) {
   );
 }
 
+function getDietaryBadges(item: any): string[] {
+  const badges: string[] = [];
+  const allergens: string[] = item.allergens ?? [];
+
+  if (!allergens.includes("Gluten")) badges.push("GF");
+  if (!allergens.includes("Dairy") && !allergens.includes("Eggs")) badges.push("Vegan");
+
+  // Explicit tags from dietary_tags field if present
+  const tags: string[] = item.dietary_tags ?? [];
+  if (tags.includes("Halal")) badges.push("Halal");
+  if (tags.includes("Spicy")) badges.push("Spicy");
+
+  return badges;
+}
+
 function MenuItemRow({ item, isLast }: { item: any; isLast: boolean }) {
-  const [showPhoto, setShowPhoto] = useState(false);
+  const dietaryBadges = getDietaryBadges(item);
 
   return (
     <div
-      className={`flex items-start gap-4 px-5 py-5 cursor-pointer hover:bg-neutral-50 transition-colors ${
+      className={`flex items-start gap-4 px-5 py-5 ${
         !isLast ? "border-b border-neutral-100" : ""
       } ${item.is_sold_out ? "opacity-50" : ""}`}
-      onClick={() => item.photo && setShowPhoto(!showPhoto)}
     >
       {/* Item Info */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
           <p className={`font-black text-neutral-900 uppercase tracking-wide text-sm ${
             item.is_sold_out ? "line-through" : ""
           }`}>
@@ -229,7 +247,23 @@ function MenuItemRow({ item, isLast }: { item: any; isLast: boolean }) {
           </p>
         )}
 
-        {/* Allergens */}
+        {/* Dietary badges */}
+        {dietaryBadges.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-1.5">
+            {dietaryBadges.map((badge) => (
+              <span
+                key={badge}
+                className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                  DIETARY_COLORS[badge] ?? "bg-neutral-100 text-neutral-500"
+                }`}
+              >
+                {badge}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Allergen warnings */}
         {item.allergens?.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {item.allergens.map((a: string) => (
@@ -250,7 +284,6 @@ function MenuItemRow({ item, isLast }: { item: any; isLast: boolean }) {
           ${item.price?.toFixed(2)}
         </p>
 
-        {/* Photo Thumbnail */}
         {item.photo && (
           <div className="w-16 h-16 rounded-xl overflow-hidden bg-neutral-100 flex-shrink-0">
             <img

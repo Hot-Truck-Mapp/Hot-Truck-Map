@@ -123,7 +123,14 @@ export default function AccountPage() {
           <div className="flex flex-col gap-3">
             {followed.length === 0 ? (
               <div className="text-center py-16">
-                <p className="text-4xl mb-3">🚚</p>
+                <div className="w-14 h-14 bg-neutral-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
+                    <path d="M1 3h15v13H1z"/>
+                    <path d="M16 8h4l3 3v5h-7V8z"/>
+                    <circle cx="5.5" cy="18.5" r="2.5"/>
+                    <circle cx="18.5" cy="18.5" r="2.5"/>
+                  </svg>
+                </div>
                 <p className="text-neutral-500 font-medium">
                   No followed trucks yet
                 </p>
@@ -153,8 +160,13 @@ export default function AccountPage() {
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-xl">
-                          🚚
+                        <div className="w-full h-full flex items-center justify-center bg-neutral-200">
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="1.5" strokeLinecap="round">
+                            <path d="M1 3h15v13H1z"/>
+                            <path d="M16 8h4l3 3v5h-7V8z"/>
+                            <circle cx="5.5" cy="18.5" r="2.5"/>
+                            <circle cx="18.5" cy="18.5" r="2.5"/>
+                          </svg>
                         </div>
                       )}
                     </div>
@@ -197,7 +209,13 @@ export default function AccountPage() {
           <div className="flex flex-col gap-3">
             {orders.length === 0 ? (
               <div className="text-center py-16">
-                <p className="text-4xl mb-3">🛍️</p>
+                <div className="w-14 h-14 bg-neutral-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
+                    <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+                    <line x1="3" y1="6" x2="21" y2="6"/>
+                    <path d="M16 10a4 4 0 0 1-8 0"/>
+                  </svg>
+                </div>
                 <p className="text-neutral-500 font-medium">No orders yet</p>
                 <p className="text-neutral-400 text-sm mt-1">
                   Your order history will appear here

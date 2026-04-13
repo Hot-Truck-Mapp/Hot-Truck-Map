@@ -63,7 +63,14 @@ export default async function CityPage({ params }: Props) {
       <div className="p-4 flex flex-col gap-3">
         {!trucks || trucks.length === 0 ? (
           <div className="text-center py-16">
-            <p className="text-4xl mb-3">🚚</p>
+            <div className="w-14 h-14 bg-neutral-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
+                <path d="M1 3h15v13H1z"/>
+                <path d="M16 8h4l3 3v5h-7V8z"/>
+                <circle cx="5.5" cy="18.5" r="2.5"/>
+                <circle cx="18.5" cy="18.5" r="2.5"/>
+              </svg>
+            </div>
             <p className="text-neutral-500 font-medium">
               No active trucks in {city} right now
             </p>
@@ -92,8 +99,13 @@ export default async function CityPage({ params }: Props) {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-2xl">
-                    🚚
+                  <div className="w-full h-full flex items-center justify-center bg-neutral-200">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#bbb" strokeWidth="1.5" strokeLinecap="round">
+                      <path d="M1 3h15v13H1z"/>
+                      <path d="M16 8h4l3 3v5h-7V8z"/>
+                      <circle cx="5.5" cy="18.5" r="2.5"/>
+                      <circle cx="18.5" cy="18.5" r="2.5"/>
+                    </svg>
                   </div>
                 )}
               </div>
@@ -116,7 +128,7 @@ export default async function CityPage({ params }: Props) {
                 </p>
                 {truck.locations?.[0] && (
                   <p className="text-xs text-neutral-400 mt-1">
-                    📍 {truck.locations[0].address}
+                    {truck.locations[0].address}
                   </p>
                 )}
               </div>
