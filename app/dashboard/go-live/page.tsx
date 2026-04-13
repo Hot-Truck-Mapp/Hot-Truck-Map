@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import Link from "next/link";
 
 type Status = "idle" | "locating" | "live" | "error";
 
@@ -45,6 +46,32 @@ export default function GoLivePage() {
     setStatus("live");
   }
 
+  async function geocode(lat: number, lng: number): Promise<string> {
+    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+    if (!token) return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    try {
+      const res = await fetch(
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${token}`
+      );
+      const data = await res.json();
+      return data.features?.[0]?.place_name ?? `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    } catch {
+      return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    }
+  }
+
+  async function geocodeAddress(address: string): Promise<{ lat: number; lng: number; place: string } | null> {
+    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+    if (!token) throw new Error("Map service not configured. Please enter GPS coordinates (lat, lng).");
+    const res = await fetch(
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${token}`
+    );
+    const data = await res.json();
+    const feature = data.features?.[0];
+    if (!feature) throw new Error("Address not found. Try being more specific.");
+    return { lat: feature.center[1], lng: feature.center[0], place: feature.place_name };
+  }
+
   async function goLiveGPS() {
     setStatus("locating");
     setError(null);
@@ -53,14 +80,7 @@ export default function GoLivePage() {
       async (position) => {
         const { latitude: lat, longitude: lng } = position.coords;
         try {
-          const geo = await fetch(
-            "https://api.mapbox.com/geocoding/v5/mapbox.places/" +
-            lng + "," + lat +
-            ".json?access_token=" +
-            process.env.NEXT_PUBLIC_MAPBOX_TOKEN
-          );
-          const geoData = await geo.json();
-          const place = geoData.features?.[0]?.place_name ?? "Unknown location";
+          const place = await geocode(lat, lng);
           await broadcastLocation(lat, lng, place);
         } catch (err: any) {
           setError(err.message ?? "Something went wrong");
@@ -82,20 +102,9 @@ export default function GoLivePage() {
     setError(null);
 
     try {
-      const query = encodeURIComponent(manualAddress);
-      const geo = await fetch(
-        "https://api.mapbox.com/geocoding/v5/mapbox.places/" +
-        query +
-        ".json?access_token=" +
-        process.env.NEXT_PUBLIC_MAPBOX_TOKEN
-      );
-      const geoData = await geo.json();
-      const feature = geoData.features?.[0];
-      if (!feature) throw new Error("Address not found. Try being more specific.");
-
-      const [lng, lat] = feature.center;
-      const place = feature.place_name;
-      await broadcastLocation(lat, lng, place);
+      const result = await geocodeAddress(manualAddress);
+      if (!result) throw new Error("Address not found.");
+      await broadcastLocation(result.lat, result.lng, result.place);
     } catch (err: any) {
       setError(err.message ?? "Something went wrong");
       setStatus("error");
@@ -129,10 +138,23 @@ export default function GoLivePage() {
   return (
     <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center p-6">
 
+      {/* Back button */}
+      <div className="absolute top-4 left-4">
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-1.5 text-neutral-500 hover:text-neutral-800 text-sm font-medium transition-colors"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <path d="M19 12H5M12 5l-7 7 7 7"/>
+          </svg>
+          Dashboard
+        </Link>
+      </div>
+
       {/* Header */}
       <div className="mb-12 text-center">
-        <h1 className="text-2xl font-bold text-neutral-800">HotTruckMap</h1>
-        <p className="text-neutral-500 text-sm mt-1">Operator Dashboard</p>
+        <h1 className="text-2xl font-bold text-neutral-800">Go Live</h1>
+        <p className="text-neutral-500 text-sm mt-1">Broadcast your location</p>
       </div>
 
       {/* IDLE STATE */}
