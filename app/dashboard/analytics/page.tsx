@@ -2,39 +2,54 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend,
+} from "recharts";
 
-type Stats = {
-  totalFollowers: number;
-  ordersToday: number;
-  viewsThisWeek: number;
-  ordersThisWeek: number;
-  revenueToday: number;
-  revenueThisWeek: number;
-  topItem: string;
-  rating: number;
+type Range = "weekly" | "monthly" | "yearly";
+
+type ChartPoint = {
+  label: string;
+  followers: number;
+  orders: number;
+  views: number;
 };
 
-const EMPTY_STATS: Stats = {
-  totalFollowers: 0,
-  ordersToday: 0,
-  viewsThisWeek: 0,
-  ordersThisWeek: 0,
-  revenueToday: 0,
-  revenueThisWeek: 0,
-  topItem: "—",
-  rating: 0,
+type PeriodStats = {
+  followers: number;
+  orders: number;
+  views: number;
+  revenue: number;
 };
+
+const RANGES: { key: Range; label: string }[] = [
+  { key: "weekly", label: "Weekly" },
+  { key: "monthly", label: "Monthly" },
+  { key: "yearly", label: "Yearly" },
+];
 
 export default function AnalyticsPage() {
-  const [stats, setStats] = useState<Stats>(EMPTY_STATS);
-  const [loading, setLoading] = useState(true);
+  const [range, setRange] = useState<Range>("weekly");
+  const [truckId, setTruckId] = useState<string | null>(null);
   const [truckName, setTruckName] = useState("");
+  const [loadingInit, setLoadingInit] = useState(true);
+  const [loadingChart, setLoadingChart] = useState(false);
+  const [totalFollowers, setTotalFollowers] = useState(0);
+  const [chartData, setChartData] = useState<ChartPoint[]>([]);
+  const [periodStats, setPeriodStats] = useState<PeriodStats>({
+    followers: 0, orders: 0, views: 0, revenue: 0,
+  });
 
   useEffect(() => {
-    loadStats();
+    init();
   }, []);
 
-  async function loadStats() {
+  useEffect(() => {
+    if (truckId) loadRange(truckId, range);
+  }, [range, truckId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function init() {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -45,64 +60,122 @@ export default function AnalyticsPage() {
       .eq("owner_id", user.id)
       .single();
 
-    if (!truck) return;
-    setTruckName(truck.name);
+    if (!truck) { setLoadingInit(false); return; }
+    setTruckId(truck.id);
+    setTruckName(truck.name ?? "");
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-
-    const { count: followers } = await supabase
+    const { count } = await supabase
       .from("follows")
       .select("*", { count: "exact", head: true })
       .eq("truck_id", truck.id);
 
-    const { data: todayOrders } = await supabase
-      .from("orders")
-      .select("total")
-      .eq("truck_id", truck.id)
-      .gte("created_at", today.toISOString());
-
-    const { data: weekOrders } = await supabase
-      .from("orders")
-      .select("total")
-      .eq("truck_id", truck.id)
-      .gte("created_at", weekAgo.toISOString());
-
-    const { count: weekViews } = await supabase
-      .from("truck_views")
-      .select("*", { count: "exact", head: true })
-      .eq("truck_id", truck.id)
-      .gte("created_at", weekAgo.toISOString());
-
-    const { data: reviews } = await supabase
-      .from("reviews")
-      .select("rating")
-      .eq("truck_id", truck.id);
-
-    const avgRating = reviews && reviews.length > 0
-      ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
-      : 0;
-
-    setStats({
-      totalFollowers: followers ?? 0,
-      ordersToday: todayOrders?.length ?? 0,
-      viewsThisWeek: weekViews ?? 0,
-      ordersThisWeek: weekOrders?.length ?? 0,
-      revenueToday: todayOrders?.reduce((sum, o) => sum + o.total, 0) ?? 0,
-      revenueThisWeek: weekOrders?.reduce((sum, o) => sum + o.total, 0) ?? 0,
-      topItem: "—",
-      rating: Math.round(avgRating * 10) / 10,
-    });
-
-    setLoading(false);
+    setTotalFollowers(count ?? 0);
+    await loadRange(truck.id, "weekly");
+    setLoadingInit(false);
   }
 
-  if (loading) {
+  async function loadRange(id: string, r: Range) {
+    setLoadingChart(true);
+    const supabase = createClient();
+    const now = new Date();
+
+    type Bucket = { label: string; start: Date; end: Date };
+    let buckets: Bucket[] = [];
+    let startDate: Date;
+
+    if (r === "weekly") {
+      // Last 7 days, one bucket per day
+      startDate = new Date(now);
+      startDate.setDate(startDate.getDate() - 6);
+      startDate.setHours(0, 0, 0, 0);
+
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        const start = new Date(d); start.setHours(0, 0, 0, 0);
+        const end = new Date(d); end.setHours(23, 59, 59, 999);
+        const label = d.toLocaleDateString("en-US", { weekday: "short" });
+        buckets.push({ label, start, end });
+      }
+    } else if (r === "monthly") {
+      // Last 4 weeks, one bucket per week
+      startDate = new Date(now);
+      startDate.setDate(startDate.getDate() - 27);
+      startDate.setHours(0, 0, 0, 0);
+
+      for (let i = 3; i >= 0; i--) {
+        const end = new Date(now);
+        end.setDate(end.getDate() - i * 7);
+        end.setHours(23, 59, 59, 999);
+        const start = new Date(end);
+        start.setDate(start.getDate() - 6);
+        start.setHours(0, 0, 0, 0);
+        buckets.push({ label: `Wk ${4 - i}`, start, end });
+      }
+    } else {
+      // Last 12 months, one bucket per month
+      startDate = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+      startDate.setHours(0, 0, 0, 0);
+
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const start = new Date(d);
+        const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+        const label = d.toLocaleDateString("en-US", { month: "short" });
+        buckets.push({ label, start, end });
+      }
+    }
+
+    const [followsRes, ordersRes, viewsRes] = await Promise.all([
+      supabase
+        .from("follows")
+        .select("created_at")
+        .eq("truck_id", id)
+        .gte("created_at", startDate.toISOString()),
+      supabase
+        .from("orders")
+        .select("created_at, total")
+        .eq("truck_id", id)
+        .gte("created_at", startDate.toISOString()),
+      supabase
+        .from("truck_views")
+        .select("created_at")
+        .eq("truck_id", id)
+        .gte("created_at", startDate.toISOString()),
+    ]);
+
+    const followsRaw = followsRes.data ?? [];
+    const ordersRaw = ordersRes.data ?? [];
+    const viewsRaw = viewsRes.data ?? [];
+
+    const points: ChartPoint[] = buckets.map(({ label, start, end }) => ({
+      label,
+      followers: followsRaw.filter(f => { const d = new Date(f.created_at); return d >= start && d <= end; }).length,
+      orders: ordersRaw.filter(o => { const d = new Date(o.created_at); return d >= start && d <= end; }).length,
+      views: viewsRaw.filter(v => { const d = new Date(v.created_at); return d >= start && d <= end; }).length,
+    }));
+
+    setChartData(points);
+    setPeriodStats({
+      followers: followsRaw.length,
+      orders: ordersRaw.length,
+      views: viewsRaw.length,
+      revenue: ordersRaw.reduce((sum, o) => sum + (o.total ?? 0), 0),
+    });
+
+    setLoadingChart(false);
+  }
+
+  const rangeLabel = range === "weekly"
+    ? "Last 7 Days"
+    : range === "monthly"
+    ? "Last 4 Weeks"
+    : "Last 12 Months";
+
+  if (loadingInit) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-neutral-400">Loading stats...</p>
+      <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+        <p className="text-neutral-400 text-sm">Loading analytics...</p>
       </div>
     );
   }
@@ -111,119 +184,222 @@ export default function AnalyticsPage() {
     <div className="min-h-screen bg-neutral-50">
 
       {/* Header */}
-      <div className="bg-white border-b border-neutral-100 px-4 py-4">
-        <h1 className="text-lg font-bold text-neutral-800">Analytics</h1>
-        <p className="text-sm text-neutral-400">{truckName}</p>
+      <div className="bg-white border-b border-neutral-100 px-4 py-4 flex items-center justify-between sticky top-0 z-10">
+        <div>
+          <h1 className="text-lg font-bold text-neutral-800">Analytics</h1>
+          <p className="text-sm text-neutral-400">{truckName}</p>
+        </div>
+        <a href="/dashboard" className="text-sm text-neutral-400 hover:text-neutral-700 transition-colors">
+          ← Back
+        </a>
       </div>
 
-      <div className="p-4 flex flex-col gap-4 max-w-lg mx-auto">
+      <div className="p-4 flex flex-col gap-4 max-w-2xl mx-auto">
 
-        {/* Top 3 stat cards */}
-        <div className="grid grid-cols-3 gap-3">
-          <StatCard label="Followers" value={stats.totalFollowers} color="bg-red-50" />
-          <StatCard label="Orders Today" value={stats.ordersToday} color="bg-orange-50" />
-          <StatCard label="Views This Week" value={stats.viewsThisWeek} color="bg-amber-50" />
-        </div>
-
-        {/* Revenue cards */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white rounded-2xl shadow-sm p-4">
-            <p className="text-xs text-neutral-400 font-medium mb-1">Revenue Today</p>
-            <p className="text-2xl font-bold text-neutral-800">
-              ${stats.revenueToday.toFixed(2)}
-            </p>
-            <p className="text-xs text-neutral-400 mt-1">
-              {stats.ordersToday} order{stats.ordersToday !== 1 ? "s" : ""}
-            </p>
-          </div>
-          <div className="bg-white rounded-2xl shadow-sm p-4">
-            <p className="text-xs text-neutral-400 font-medium mb-1">Revenue This Week</p>
-            <p className="text-2xl font-bold text-neutral-800">
-              ${stats.revenueThisWeek.toFixed(2)}
-            </p>
-            <p className="text-xs text-neutral-400 mt-1">
-              {stats.ordersThisWeek} order{stats.ordersThisWeek !== 1 ? "s" : ""}
-            </p>
-          </div>
-        </div>
-
-        {/* Rating */}
-        <div className="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-yellow-50 flex items-center justify-center flex-shrink-0">
-            <span className="text-2xl font-bold text-yellow-500">
-              {stats.rating > 0 ? stats.rating.toFixed(1) : "—"}
-            </span>
+        {/* Total Followers — always all-time */}
+        <div className="bg-white rounded-2xl shadow-sm p-5 flex items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-red-50 flex items-center justify-center flex-shrink-0">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#E8481C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
           </div>
           <div>
-            <p className="text-xs text-neutral-400 font-medium">Average Rating</p>
-            <div className="flex gap-0.5 mt-1">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <span
-                  key={star}
-                  className={`text-sm ${
-                    star <= Math.round(stats.rating)
-                      ? "text-yellow-400"
-                      : "text-neutral-200"
-                  }`}
-                >
-                  ★
-                </span>
-              ))}
-            </div>
+            <p className="text-3xl font-black text-neutral-900">{totalFollowers.toLocaleString()}</p>
+            <p className="text-sm text-neutral-500 font-medium">Total Followers</p>
           </div>
         </div>
 
-        {/* Quick insights */}
+        {/* Range Tabs */}
+        <div className="bg-white rounded-2xl shadow-sm p-1 flex gap-1">
+          {RANGES.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setRange(key)}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                range === key
+                  ? "bg-neutral-900 text-white shadow-sm"
+                  : "text-neutral-500 hover:text-neutral-800"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Period Stats */}
+        <div className="grid grid-cols-2 gap-3">
+          <PeriodCard
+            label="New Followers"
+            value={periodStats.followers.toLocaleString()}
+            sublabel={rangeLabel}
+            color="bg-red-50"
+            icon={
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E8481C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <line x1="19" y1="8" x2="19" y2="14"/>
+                <line x1="22" y1="11" x2="16" y2="11"/>
+              </svg>
+            }
+          />
+          <PeriodCard
+            label="Orders"
+            value={periodStats.orders.toLocaleString()}
+            sublabel={rangeLabel}
+            color="bg-orange-50"
+            icon={
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#EA580C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+                <rect x="9" y="3" width="6" height="4" rx="2"/>
+                <line x1="9" y1="12" x2="15" y2="12"/>
+                <line x1="9" y1="16" x2="13" y2="16"/>
+              </svg>
+            }
+          />
+          <PeriodCard
+            label="Profile Views"
+            value={periodStats.views.toLocaleString()}
+            sublabel={rangeLabel}
+            color="bg-blue-50"
+            icon={
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            }
+          />
+          <PeriodCard
+            label="Revenue"
+            value={`$${periodStats.revenue.toFixed(2)}`}
+            sublabel={rangeLabel}
+            color="bg-green-50"
+            icon={
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="1" x2="12" y2="23"/>
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+              </svg>
+            }
+          />
+        </div>
+
+        {/* Followers + Orders Chart */}
         <div className="bg-white rounded-2xl shadow-sm p-4">
-          <p className="text-sm font-bold text-neutral-800 mb-3">Quick Insights</p>
-          <div className="flex flex-col gap-3">
-            <InsightRow label="Orders this week" value={String(stats.ordersThisWeek)} />
-            <InsightRow label="Total followers" value={String(stats.totalFollowers)} />
-            <InsightRow label="Profile views this week" value={String(stats.viewsThisWeek)} />
-            <InsightRow
-              label="Average rating"
-              value={stats.rating > 0 ? `${stats.rating}/5` : "No reviews yet"}
-            />
-          </div>
+          <p className="text-sm font-bold text-neutral-800 mb-1">Followers &amp; Orders</p>
+          <p className="text-xs text-neutral-400 mb-4">{rangeLabel}</p>
+          {loadingChart ? (
+            <div className="h-[220px] flex items-center justify-center">
+              <p className="text-neutral-400 text-sm">Loading...</p>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={chartData} barGap={2} barCategoryGap="28%">
+                <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 11, fill: "#aaa" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: "#aaa" }}
+                  axisLine={false}
+                  tickLine={false}
+                  allowDecimals={false}
+                  width={28}
+                />
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: "12px",
+                    border: "none",
+                    boxShadow: "0 4px 20px rgba(0,0,0,0.12)",
+                    fontSize: "12px",
+                    padding: "8px 12px",
+                  }}
+                  cursor={{ fill: "rgba(0,0,0,0.03)", radius: 4 }}
+                />
+                <Legend
+                  wrapperStyle={{ fontSize: "11px", paddingTop: "12px" }}
+                  iconType="circle"
+                  iconSize={8}
+                />
+                <Bar dataKey="followers" name="New Followers" fill="#E8481C" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                <Bar dataKey="orders" name="Orders" fill="#FB923C" radius={[4, 4, 0, 0]} maxBarSize={40} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
 
-        {/* Coming soon */}
-        <div className="bg-neutral-100 rounded-2xl p-4 text-center">
-          <p className="text-sm font-semibold text-neutral-600">
-            Detailed charts coming in Phase 5
-          </p>
-          <p className="text-xs text-neutral-400 mt-1">
-            Revenue trends, peak hours, and customer demographics
-          </p>
+        {/* Profile Views Chart */}
+        <div className="bg-white rounded-2xl shadow-sm p-4">
+          <p className="text-sm font-bold text-neutral-800 mb-1">Profile Views</p>
+          <p className="text-xs text-neutral-400 mb-4">{rangeLabel}</p>
+          {loadingChart ? (
+            <div className="h-[160px] flex items-center justify-center">
+              <p className="text-neutral-400 text-sm">Loading...</p>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={160}>
+              <BarChart data={chartData} barCategoryGap="28%">
+                <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 11, fill: "#aaa" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: "#aaa" }}
+                  axisLine={false}
+                  tickLine={false}
+                  allowDecimals={false}
+                  width={28}
+                />
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: "12px",
+                    border: "none",
+                    boxShadow: "0 4px 20px rgba(0,0,0,0.12)",
+                    fontSize: "12px",
+                    padding: "8px 12px",
+                  }}
+                  cursor={{ fill: "rgba(0,0,0,0.03)", radius: 4 }}
+                />
+                <Bar dataKey="views" name="Views" fill="#3B82F6" radius={[4, 4, 0, 0]} maxBarSize={40} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
 
+        <div className="h-8" />
       </div>
     </div>
   );
 }
 
-function StatCard({
+function PeriodCard({
   label,
   value,
+  sublabel,
   color,
+  icon,
 }: {
   label: string;
-  value: number;
+  value: string;
+  sublabel: string;
   color: string;
+  icon: React.ReactNode;
 }) {
   return (
-    <div className={`${color} rounded-2xl p-3 flex flex-col items-center text-center`}>
-      <p className="text-xl font-bold text-neutral-800">{value.toLocaleString()}</p>
-      <p className="text-[10px] text-neutral-500 font-medium leading-tight mt-0.5">{label}</p>
-    </div>
-  );
-}
-
-function InsightRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between">
-      <p className="text-sm text-neutral-600">{label}</p>
-      <p className="text-sm font-bold text-neutral-800">{value}</p>
+    <div className={`${color} rounded-2xl p-4`}>
+      <div className="flex items-center gap-1.5 mb-2">
+        {icon}
+        <p className="text-xs text-neutral-600 font-semibold">{label}</p>
+      </div>
+      <p className="text-2xl font-black text-neutral-900">{value}</p>
+      <p className="text-[10px] text-neutral-400 mt-0.5">{sublabel}</p>
     </div>
   );
 }

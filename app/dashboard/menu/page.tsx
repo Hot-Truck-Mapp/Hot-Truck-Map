@@ -200,7 +200,17 @@ export default function MenuPage() {
             <span className="font-black text-brand-orange text-sm leading-none">MAPS</span>
           </div>
         </div>
-        <span className="text-neutral-400 text-sm font-medium">Menu Manager</span>
+        <div className="flex items-center gap-3">
+          <a
+            href="/dashboard"
+            className="w-8 h-8 rounded-full border border-neutral-700 flex items-center justify-center text-neutral-400 hover:text-white hover:border-neutral-500 transition-colors"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M15 18l-6-6 6-6"/>
+            </svg>
+          </a>
+          <span className="text-neutral-400 text-sm font-medium">Menu Manager</span>
+        </div>
       </nav>
 
       {/* Header */}
