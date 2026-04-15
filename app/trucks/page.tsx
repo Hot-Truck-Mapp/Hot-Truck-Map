@@ -28,7 +28,7 @@ export default function TrucksListPage() {
     const supabase = createClient();
     const { data } = await supabase
       .from("trucks")
-      .select("*, locations(*)")
+      .select("*, locations(*), follows(count)")
       .order("is_live", { ascending: false });
     setTrucks(data ?? []);
     setLoading(false);
@@ -285,76 +285,111 @@ export default function TrucksListPage() {
           </div>
         )}
 
-        {filtered.map((truck) => (
-          <Link
-            key={truck.id}
-            href={"/truck/" + truck.id}
-            className="block bg-white border-b border-neutral-100 hover:bg-neutral-50 transition-colors"
-          >
-            <div className="flex gap-4 p-4">
+        {filtered.map((truck) => {
+          const followerCount = truck.follows?.[0]?.count ?? 0;
+          const address = truck.locations?.[0]?.address ?? null;
+          return (
+            <Link
+              key={truck.id}
+              href={"/truck/" + truck.id}
+              className="block bg-white border-b border-neutral-100 hover:bg-neutral-50 active:bg-neutral-100 transition-colors"
+            >
+              <div className="flex gap-4 p-4">
 
-              {/* Photo */}
-              <div className="w-24 h-24 rounded-xl bg-neutral-100 flex-shrink-0 overflow-hidden">
-                {truck.profile_photo ? (
-                  <img
-                    src={truck.profile_photo}
-                    alt={truck.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-neutral-200">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
-                      <path d="M1 3h15v13H1z"/>
-                      <path d="M16 8h4l3 3v5h-7V8z"/>
-                      <circle cx="5.5" cy="18.5" r="2.5"/>
-                      <circle cx="18.5" cy="18.5" r="2.5"/>
-                    </svg>
-                  </div>
-                )}
-              </div>
-
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2 mb-1">
-                  <h3 className="font-black text-neutral-900 text-sm uppercase tracking-wide leading-tight">
-                    {truck.name}
-                  </h3>
-                  {truck.is_live && (
-                    <span className="flex-shrink-0 flex items-center gap-1 text-[10px] font-black px-2 py-0.5 bg-brand-red text-white rounded tracking-wider">
-                      <span className="relative flex h-1.5 w-1.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-300 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white" />
-                      </span>
-                      OPEN
-                    </span>
+                {/* Photo */}
+                <div className="w-[88px] h-[88px] rounded-2xl bg-neutral-100 flex-shrink-0 overflow-hidden shadow-sm">
+                  {truck.profile_photo ? (
+                    <img
+                      src={truck.profile_photo}
+                      alt={truck.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-neutral-200 to-neutral-100">
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#bbb" strokeWidth="1.5" strokeLinecap="round">
+                        <path d="M1 3h15v13H1z"/>
+                        <path d="M16 8h4l3 3v5h-7V8z"/>
+                        <circle cx="5.5" cy="18.5" r="2.5"/>
+                        <circle cx="18.5" cy="18.5" r="2.5"/>
+                      </svg>
+                    </div>
                   )}
                 </div>
 
-                <p className="text-xs text-brand-red font-semibold mb-1">
-                  {truck.cuisine ?? "Food Truck"}
-                </p>
+                {/* Info */}
+                <div className="flex-1 min-w-0 py-0.5">
 
-                {truck.description && (
-                  <p className="text-xs text-neutral-500 line-clamp-2 mb-2">
-                    {truck.description}
+                  {/* Name row */}
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <h3 className="font-black text-neutral-900 text-sm uppercase tracking-wide leading-tight">
+                      {truck.name}
+                    </h3>
+                    {truck.is_live && (
+                      <span className="flex-shrink-0 flex items-center gap-1 text-[10px] font-black px-2 py-1 bg-brand-red text-white rounded-lg tracking-wider">
+                        <span className="relative flex h-1.5 w-1.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-300 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white" />
+                        </span>
+                        OPEN
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Cuisine */}
+                  <p className="text-xs font-bold text-brand-red mb-1.5">
+                    {truck.cuisine ?? "Food Truck"}
                   </p>
-                )}
 
-                <div className="flex items-center gap-3 text-xs text-neutral-500">
-                  {truck.locations?.[0]?.address && (
-                    <div className="flex items-center gap-1 min-w-0">
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#E8481C" strokeWidth="2.5" strokeLinecap="round" className="flex-shrink-0">
-                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-                        <circle cx="12" cy="10" r="3"/>
-                      </svg>
-                      <span className="truncate">{truck.locations[0].address}</span>
+                  {/* Description */}
+                  {truck.description && (
+                    <p className="text-xs text-neutral-500 line-clamp-2 leading-relaxed mb-2">
+                      {truck.description}
+                    </p>
+                  )}
+
+                  {/* Footer row — location + followers */}
+                  <div className="flex items-center justify-between gap-2">
+                    {address ? (
+                      <div className="flex items-center gap-1 min-w-0">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#E8481C" strokeWidth="2.5" strokeLinecap="round" className="flex-shrink-0">
+                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                          <circle cx="12" cy="10" r="3"/>
+                        </svg>
+                        <span className="text-xs text-neutral-400 truncate">{address}</span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-neutral-300">No location set</span>
+                    )}
+
+                    {followerCount > 0 && (
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="2" strokeLinecap="round">
+                          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                          <circle cx="9" cy="7" r="4"/>
+                          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                        </svg>
+                        <span className="text-xs text-neutral-400">{followerCount}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Instagram + Phone — if operator filled them in */}
+                  {(truck.instagram || truck.phone) && (
+                    <div className="flex items-center gap-3 mt-1.5">
+                      {truck.instagram && (
+                        <span className="text-[11px] text-neutral-400">@{truck.instagram}</span>
+                      )}
+                      {truck.phone && (
+                        <span className="text-[11px] text-neutral-400">{truck.phone}</span>
+                      )}
                     </div>
                   )}
                 </div>
               </div>
-            </div>
-          </Link>
-        ))}
+            </Link>
+          );
+        })}
 
         {/* Bottom padding */}
         <div className="h-8" />
