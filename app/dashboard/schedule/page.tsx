@@ -43,33 +43,36 @@ export default function SchedulePage() {
   }, []);
 
   async function loadSchedule() {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      window.location.href = "/login";
-      return;
-    }
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        window.location.href = "/login";
+        return;
+      }
 
-    const { data: truck } = await supabase
-      .from("trucks")
-      .select("id")
-      .eq("owner_id", user.id)
-      .single();
+      const { data: truck } = await supabase
+        .from("trucks")
+        .select("id")
+        .eq("owner_id", user.id)
+        .single();
 
-    if (!truck) {
+      if (!truck) return; // finally will still run
+
+      setTruckId(truck.id);
+
+      const { data } = await supabase
+        .from("schedules")
+        .select("*")
+        .eq("truck_id", truck.id)
+        .order("day_of_week", { ascending: true });
+
+      setSchedule(data ?? []);
+    } catch (err) {
+      console.error("loadSchedule error:", err);
+    } finally {
       setLoading(false);
-      return;
     }
-    setTruckId(truck.id);
-
-    const { data } = await supabase
-      .from("schedules")
-      .select("*")
-      .eq("truck_id", truck.id)
-      .order("day_of_week", { ascending: true });
-
-    setSchedule(data ?? []);
-    setLoading(false);
   }
 
   function openAdd(day: number) {

@@ -32,33 +32,36 @@ export default function MenuPage() {
   }, []);
 
   async function loadMenu() {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      window.location.href = "/login";
-      return;
-    }
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        window.location.href = "/login";
+        return;
+      }
 
-    const { data: truck } = await supabase
-      .from("trucks")
-      .select("id")
-      .eq("owner_id", user.id)
-      .single();
+      const { data: truck } = await supabase
+        .from("trucks")
+        .select("id")
+        .eq("owner_id", user.id)
+        .single();
 
-    if (!truck) {
+      if (!truck) return; // finally will still run
+
+      setTruckId(truck.id);
+
+      const { data } = await supabase
+        .from("menu_items")
+        .select("*")
+        .eq("truck_id", truck.id)
+        .order("created_at", { ascending: true });
+
+      setItems(data ?? []);
+    } catch (err) {
+      console.error("loadMenu error:", err);
+    } finally {
       setLoading(false);
-      return;
     }
-    setTruckId(truck.id);
-
-    const { data } = await supabase
-      .from("menu_items")
-      .select("*")
-      .eq("truck_id", truck.id)
-      .order("created_at", { ascending: true });
-
-    setItems(data ?? []);
-    setLoading(false);
   }
 
   async function uploadPhoto(file: File): Promise<string> {

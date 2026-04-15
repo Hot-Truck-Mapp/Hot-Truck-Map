@@ -50,31 +50,37 @@ export default function AnalyticsPage() {
   }, [range, truckId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function init() {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      window.location.href = "/login";
-      return;
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        window.location.href = "/login";
+        return;
+      }
+
+      const { data: truck } = await supabase
+        .from("trucks")
+        .select("id, name")
+        .eq("owner_id", user.id)
+        .single();
+
+      if (!truck) return; // finally will still run
+
+      setTruckId(truck.id);
+      setTruckName(truck.name ?? "");
+
+      const { count } = await supabase
+        .from("follows")
+        .select("*", { count: "exact", head: true })
+        .eq("truck_id", truck.id);
+
+      setTotalFollowers(count ?? 0);
+      await loadRange(truck.id, "weekly");
+    } catch (err) {
+      console.error("analytics init error:", err);
+    } finally {
+      setLoadingInit(false);
     }
-
-    const { data: truck } = await supabase
-      .from("trucks")
-      .select("id, name")
-      .eq("owner_id", user.id)
-      .single();
-
-    if (!truck) { setLoadingInit(false); return; }
-    setTruckId(truck.id);
-    setTruckName(truck.name ?? "");
-
-    const { count } = await supabase
-      .from("follows")
-      .select("*", { count: "exact", head: true })
-      .eq("truck_id", truck.id);
-
-    setTotalFollowers(count ?? 0);
-    await loadRange(truck.id, "weekly");
-    setLoadingInit(false);
   }
 
   async function loadRange(id: string, r: Range) {
