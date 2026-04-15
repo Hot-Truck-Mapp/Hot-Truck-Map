@@ -155,9 +155,9 @@ export default function SchedulePage() {
         >
           Create Truck Profile
         </a>
-        <a href="/dashboard" className="mt-3 text-sm text-neutral-400 hover:text-neutral-600">
+        <button onClick={() => window.history.back()} className="mt-3 text-sm text-neutral-400 hover:text-neutral-600">
           Back to Dashboard
-        </a>
+        </button>
       </div>
     );
   }
@@ -168,14 +168,14 @@ export default function SchedulePage() {
       {/* Header */}
       <div className="bg-white border-b border-neutral-100 px-4 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <a
-            href="/dashboard"
+          <button
+            onClick={() => window.history.back()}
             className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500 hover:bg-neutral-200 transition-colors flex-shrink-0"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
               <path d="M15 18l-6-6 6-6"/>
             </svg>
-          </a>
+          </button>
           <div>
             <h1 className="text-lg font-bold text-neutral-800">Weekly Schedule</h1>
             <p className="text-sm text-neutral-400">Plan your locations for the week</p>

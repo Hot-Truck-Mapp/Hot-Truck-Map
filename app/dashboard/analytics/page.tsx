@@ -203,9 +203,9 @@ export default function AnalyticsPage() {
         >
           Create Truck Profile
         </a>
-        <a href="/dashboard" className="mt-3 text-sm text-neutral-400 hover:text-neutral-600">
+        <button onClick={() => window.history.back()} className="mt-3 text-sm text-neutral-400 hover:text-neutral-600">
           Back to Dashboard
-        </a>
+        </button>
       </div>
     );
   }
@@ -219,9 +219,9 @@ export default function AnalyticsPage() {
           <h1 className="text-lg font-bold text-neutral-800">Analytics</h1>
           <p className="text-sm text-neutral-400">{truckName}</p>
         </div>
-        <a href="/dashboard" className="text-sm text-neutral-400 hover:text-neutral-700 transition-colors">
+        <button onClick={() => window.history.back()} className="text-sm text-neutral-400 hover:text-neutral-700 transition-colors">
           ← Back
-        </a>
+        </button>
       </div>
 
       <div className="p-4 flex flex-col gap-4 max-w-2xl mx-auto">
