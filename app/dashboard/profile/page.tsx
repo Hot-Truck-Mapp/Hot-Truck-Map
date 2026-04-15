@@ -42,33 +42,37 @@ export default function ProfilePage() {
   }, []);
 
   async function loadProfile() {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      window.location.href = "/login";
-      return;
-    }
-    setUserId(user.id);
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        window.location.href = "/login";
+        return;
+      }
+      setUserId(user.id);
 
-    const { data: truck } = await supabase
-      .from("trucks")
-      .select("*")
-      .eq("owner_id", user.id)
-      .single();
+      const { data: truck } = await supabase
+        .from("trucks")
+        .select("*")
+        .eq("owner_id", user.id)
+        .single();
 
-    if (truck) {
-      setTruckId(truck.id);
-      setForm({
-        name: truck.name ?? "",
-        description: truck.description ?? "",
-        cuisine: truck.cuisine ?? "",
-        phone: truck.phone ?? "",
-        instagram: truck.instagram ?? "",
-        profile_photo: truck.profile_photo ?? "",
-      });
+      if (truck) {
+        setTruckId(truck.id);
+        setForm({
+          name: truck.name ?? "",
+          description: truck.description ?? "",
+          cuisine: truck.cuisine ?? "",
+          phone: truck.phone ?? "",
+          instagram: truck.instagram ?? "",
+          profile_photo: truck.profile_photo ?? "",
+        });
+      }
+    } catch (err) {
+      console.error("loadProfile error:", err);
+    } finally {
+      setLoading(false);
     }
-    // Always clear loading — even when no truck found
-    setLoading(false);
   }
 
   async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
