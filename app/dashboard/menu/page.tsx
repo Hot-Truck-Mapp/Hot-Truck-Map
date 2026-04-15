@@ -34,7 +34,10 @@ export default function MenuPage() {
   async function loadMenu() {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) {
+      window.location.href = "/login";
+      return;
+    }
 
     const { data: truck } = await supabase
       .from("trucks")
@@ -42,7 +45,10 @@ export default function MenuPage() {
       .eq("owner_id", user.id)
       .single();
 
-    if (!truck) return;
+    if (!truck) {
+      setLoading(false);
+      return;
+    }
     setTruckId(truck.id);
 
     const { data } = await supabase
@@ -172,8 +178,36 @@ export default function MenuPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-neutral-900 flex items-center justify-center">
-        <p className="text-neutral-400">Loading menu...</p>
+      <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
+        <p className="text-neutral-400 text-sm">Loading menu...</p>
+      </div>
+    );
+  }
+
+  if (!truckId) {
+    return (
+      <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-16 h-16 bg-neutral-100 rounded-2xl flex items-center justify-center mb-4">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
+            <path d="M1 3h15v13H1z"/>
+            <path d="M16 8h4l3 3v5h-7V8z"/>
+            <circle cx="5.5" cy="18.5" r="2.5"/>
+            <circle cx="18.5" cy="18.5" r="2.5"/>
+          </svg>
+        </div>
+        <p className="font-bold text-neutral-800 mb-1">Set up your truck profile first</p>
+        <p className="text-sm text-neutral-400 mb-6">
+          You need to create your truck profile before adding menu items.
+        </p>
+        <a
+          href="/dashboard/profile"
+          className="px-6 py-3 bg-brand-red text-white rounded-2xl font-bold text-sm"
+        >
+          Create Truck Profile
+        </a>
+        <button onClick={() => window.history.back()} className="mt-3 text-sm text-neutral-400 hover:text-neutral-600">
+          Back to Dashboard
+        </button>
       </div>
     );
   }
@@ -200,7 +234,17 @@ export default function MenuPage() {
             <span className="font-black text-brand-orange text-sm leading-none">MAPS</span>
           </div>
         </div>
-        <span className="text-neutral-400 text-sm font-medium">Menu Manager</span>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => window.history.back()}
+            className="w-8 h-8 rounded-full border border-neutral-700 flex items-center justify-center text-neutral-400 hover:text-white hover:border-neutral-500 transition-colors"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M15 18l-6-6 6-6"/>
+            </svg>
+          </button>
+          <span className="text-neutral-400 text-sm font-medium">Menu Manager</span>
+        </div>
       </nav>
 
       {/* Header */}

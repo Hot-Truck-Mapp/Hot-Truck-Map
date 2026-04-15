@@ -157,15 +157,15 @@ export default function CateringDashboardPage() {
             <span className="font-black text-brand-orange text-sm leading-none">MAPS</span>
           </div>
         </div>
-        <Link
-          href="/dashboard"
+        <button
+          onClick={() => window.history.back()}
           className="flex items-center gap-2 text-neutral-400 hover:text-white transition-colors text-sm"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M19 12H5M12 5l-7 7 7 7"/>
           </svg>
           Dashboard
-        </Link>
+        </button>
       </nav>
 
       {/* Header */}
