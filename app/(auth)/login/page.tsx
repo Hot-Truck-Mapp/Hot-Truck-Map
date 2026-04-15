@@ -30,9 +30,10 @@ export default function LoginPage() {
 
   async function handleGoogle() {
     const supabase = createClient();
+    // After Google OAuth, the auth callback checks role and routes accordingly
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: window.location.origin + "/" },
+      options: { redirectTo: window.location.origin + "/auth/callback" },
     });
   }
 

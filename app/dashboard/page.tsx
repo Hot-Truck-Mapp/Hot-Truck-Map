@@ -37,6 +37,7 @@ export default function Dashboard() {
   // Profile form
   const [profile, setProfile] = useState({
     name:"", description:"", cuisine:"", phone:"", instagram:"", profile_photo:"",
+    dietary_tags: [] as string[],
   });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSaved, setProfileSaved]   = useState(false);
@@ -94,10 +95,15 @@ export default function Dashboard() {
         window.location.href = "/login";
         return;
       }
+      // Redirect non-operators back to home
+      if (user.user_metadata?.role !== "operator") {
+        window.location.href = "/";
+        return;
+      }
       setUserId(user.id);
 
       const { data: truck } = await supabase
-        .from("trucks").select("*").eq("owner_id", user.id).single();
+        .from("trucks").select("*").eq("owner_id", user.id).maybeSingle();
 
       if (truck) {
         setTruckId(truck.id);
@@ -109,6 +115,7 @@ export default function Dashboard() {
           phone:         truck.phone         ?? "",
           instagram:     truck.instagram     ?? "",
           profile_photo: truck.profile_photo ?? "",
+          dietary_tags:  truck.dietary_tags  ?? [],
         });
         if (truck.is_live) setLiveStatus("live");
 
@@ -178,6 +185,7 @@ export default function Dashboard() {
           name: profile.name.trim(), description: profile.description,
           cuisine: profile.cuisine, phone: profile.phone,
           instagram: profile.instagram, profile_photo: profile.profile_photo,
+          dietary_tags: profile.dietary_tags,
         }).eq("id", truckId);
       } else {
         const { data: newTruck } = await supabase.from("trucks").insert({
@@ -185,6 +193,7 @@ export default function Dashboard() {
           description: profile.description, cuisine: profile.cuisine,
           phone: profile.phone, instagram: profile.instagram,
           profile_photo: profile.profile_photo, is_live: false,
+          dietary_tags: profile.dietary_tags,
         }).select("id").single();
         if (newTruck) setTruckId(newTruck.id);
       }
@@ -579,6 +588,59 @@ export default function Dashboard() {
         {activeTab === "live" && (
           <div className="p-4 max-w-lg mx-auto flex flex-col items-center gap-5 pt-8">
 
+            {/* Onboarding checklist — shown until profile + menu are set up */}
+            {(!profile.phone || !profile.description || menuItems.length === 0) && (
+              <div className="w-full bg-white rounded-2xl shadow-sm overflow-hidden">
+                <div className="px-4 pt-4 pb-2">
+                  <p className="text-xs font-black text-neutral-400 uppercase tracking-widest">Complete Your Setup</p>
+                  <p className="text-xs text-neutral-400 mt-0.5">Finish these steps to get customers finding you</p>
+                </div>
+                <div className="divide-y divide-neutral-50">
+                  {[
+                    {
+                      done: !!profile.name,
+                      label: "Add your truck name & photo",
+                      action: () => setActiveTab("profile"),
+                      cta: "Go to Profile",
+                    },
+                    {
+                      done: !!profile.phone,
+                      label: "Add phone number for SMS order alerts",
+                      action: () => setActiveTab("profile"),
+                      cta: "Add Phone",
+                    },
+                    {
+                      done: menuItems.length > 0,
+                      label: "Add at least one menu item",
+                      action: () => setActiveTab("menu"),
+                      cta: "Add Menu Item",
+                    },
+                    {
+                      done: !!profile.description,
+                      label: "Write a description for your truck",
+                      action: () => setActiveTab("profile"),
+                      cta: "Add Description",
+                    },
+                  ].map(({ done, label, action, cta }) => (
+                    <div key={label} className="flex items-center gap-3 px-4 py-3">
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${done ? "bg-green-500" : "bg-neutral-100"}`}>
+                        {done
+                          ? <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><path d="M20 6 9 17l-5-5"/></svg>
+                          : <span className="w-2 h-2 rounded-full bg-neutral-300" />}
+                      </div>
+                      <p className={`flex-1 text-sm ${done ? "line-through text-neutral-300" : "text-neutral-700 font-medium"}`}>{label}</p>
+                      {!done && (
+                        <button onClick={action}
+                          className="text-xs text-brand-red font-bold hover:underline flex-shrink-0">
+                          {cta}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Stats row */}
             <div className="grid grid-cols-3 gap-3 w-full">
               {[
@@ -711,6 +773,30 @@ export default function Dashboard() {
                         ? "bg-brand-red text-white border-brand-red"
                         : "bg-white border-neutral-200 text-neutral-600 hover:border-neutral-400"}`}>
                     {c}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Dietary Tags */}
+            <div>
+              <p className="text-sm font-semibold text-neutral-700 mb-1">Dietary Options</p>
+              <p className="text-xs text-neutral-400 mb-2">Shown on the truck list so customers with dietary needs can find you</p>
+              <div className="flex flex-wrap gap-2">
+                {["Vegan", "Vegetarian", "Gluten-Free", "Halal", "Kosher"].map(tag => (
+                  <button key={tag} type="button"
+                    onClick={() => setProfile(p => ({
+                      ...p,
+                      dietary_tags: p.dietary_tags.includes(tag)
+                        ? p.dietary_tags.filter(t => t !== tag)
+                        : [...p.dietary_tags, tag],
+                    }))}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${
+                      profile.dietary_tags.includes(tag)
+                        ? "bg-green-600 text-white border-green-600"
+                        : "bg-white border-neutral-200 text-neutral-600 hover:border-neutral-400"
+                    }`}>
+                    {tag}
                   </button>
                 ))}
               </div>
