@@ -727,11 +727,21 @@ export default function Dashboard() {
               </p>
             </Field>
 
-            <Field label="Phone Number">
+            <div>
+              <p className="text-sm font-semibold text-neutral-700 mb-1.5">
+                Phone Number
+                <span className="ml-2 text-[11px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                  SMS order alerts
+                </span>
+              </p>
               <input value={profile.phone} onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))}
                 placeholder="(201) 555-0123" type="tel"
                 className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-brand-red bg-white"/>
-            </Field>
+              <p className="text-xs text-neutral-400 mt-1.5 flex items-center gap-1">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6.29 6.29l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                You&apos;ll get a text message every time a customer places an order
+              </p>
+            </div>
 
             <Field label="Instagram">
               <div className="relative">
