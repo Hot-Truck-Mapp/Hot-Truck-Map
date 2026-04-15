@@ -9,6 +9,37 @@ function getAdminClient() {
   );
 }
 
+// Send SMS to the truck operator via Twilio (fire-and-forget — never blocks the order)
+async function notifyOperatorBySMS(phone: string, truckName: string, pickupName: string, items: any[], total: number) {
+  const sid   = process.env.TWILIO_ACCOUNT_SID;
+  const token = process.env.TWILIO_AUTH_TOKEN;
+  const from  = process.env.TWILIO_PHONE_NUMBER;
+  if (!sid || !token || !from || !phone) return;
+
+  const itemLines = items.map((i: any) => `  ${i.quantity}× ${i.name}`).join("\n");
+  const body = [
+    `🔔 New order at ${truckName}!`,
+    `Customer: ${pickupName}`,
+    `Items:\n${itemLines}`,
+    `Total: $${total.toFixed(2)}`,
+    `Open your dashboard to update the status.`,
+  ].join("\n");
+
+  try {
+    const encoded = new URLSearchParams({ To: phone, From: from, Body: body });
+    await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: "Basic " + Buffer.from(`${sid}:${token}`).toString("base64"),
+      },
+      body: encoded.toString(),
+    });
+  } catch (err) {
+    console.error("Twilio SMS error:", err);
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -18,8 +49,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    // Validate all items belong to this truck
     const supabase = getAdminClient();
+
+    // Validate all items belong to this truck
     const itemIds = items.map((i: any) => i.menu_item_id);
     const { data: dbItems, error: itemErr } = await supabase
       .from("menu_items")
@@ -43,6 +75,7 @@ export async function POST(req: NextRequest) {
       return sum + (db?.price ?? 0) * item.quantity;
     }, 0);
 
+    // Insert the order
     const { data: order, error: orderErr } = await supabase
       .from("orders")
       .insert({
@@ -60,6 +93,18 @@ export async function POST(req: NextRequest) {
       console.error("Order insert error:", orderErr);
       return NextResponse.json({ error: "Failed to save order" }, { status: 500 });
     }
+
+    // Notify operator by SMS (non-blocking — runs in background)
+    supabase
+      .from("trucks")
+      .select("name, phone")
+      .eq("id", truck_id)
+      .single()
+      .then(({ data: truck }) => {
+        if (truck?.phone) {
+          notifyOperatorBySMS(truck.phone, truck.name, pickup_name, items, serverTotal);
+        }
+      });
 
     return NextResponse.json({ orderId: order.id, total: serverTotal });
   } catch (err) {

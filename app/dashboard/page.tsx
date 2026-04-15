@@ -20,7 +20,7 @@ const HOURS = [
   "12:00 PM","1:00 PM","2:00 PM","3:00 PM","4:00 PM","5:00 PM",
   "6:00 PM","7:00 PM","8:00 PM","9:00 PM","10:00 PM",
 ];
-type Tab = "live" | "profile" | "menu" | "schedule" | "analytics";
+type Tab = "live" | "profile" | "menu" | "schedule" | "analytics" | "orders";
 type AnalyticsRange = "weekly" | "monthly" | "yearly";
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -78,6 +78,10 @@ export default function Dashboard() {
   const [periodStats, setPeriodStats]           = useState({ followers:0, orders:0, views:0, revenue:0 });
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
+  // Orders
+  const [orders, setOrders]           = useState<any[]>([]);
+  const [newOrderCount, setNewOrderCount] = useState(0);
+
   // ── Initial load ────────────────────────────────────────────────────────────
   useEffect(() => { loadAll(); }, []);
 
@@ -108,12 +112,14 @@ export default function Dashboard() {
         });
         if (truck.is_live) setLiveStatus("live");
 
-        const [menuRes, schedRes] = await Promise.all([
+        const [menuRes, schedRes, ordersRes] = await Promise.all([
           supabase.from("menu_items").select("*").eq("truck_id", truck.id).order("created_at"),
           supabase.from("schedules").select("*").eq("truck_id", truck.id).order("day_of_week"),
+          supabase.from("orders").select("*").eq("truck_id", truck.id).order("created_at", { ascending: false }).limit(100),
         ]);
         setMenuItems(menuRes.data ?? []);
         setSchedule(schedRes.data ?? []);
+        setOrders(ordersRes.data ?? []);
       }
     } catch (err: any) {
       setError("Could not connect to the server. Check your internet and try again.");
@@ -128,6 +134,26 @@ export default function Dashboard() {
       loadAnalytics(truckId, analyticsRange);
     }
   }, [activeTab, truckId]); // eslint-disable-line
+
+  // ── Real-time order notifications ───────────────────────────────────────────
+  useEffect(() => {
+    if (!truckId) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`orders-${truckId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "orders", filter: `truck_id=eq.${truckId}` },
+        (payload) => {
+          const order = payload.new as any;
+          setOrders((prev) => [order, ...prev]);
+          setNewOrderCount((n) => n + 1);
+          playNotificationSound();
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [truckId]); // eslint-disable-line
 
   // ── Profile ─────────────────────────────────────────────────────────────────
   async function uploadProfilePhoto(file: File) {
@@ -403,6 +429,30 @@ export default function Dashboard() {
     if (truckId) loadAnalytics(truckId, r);
   }
 
+  // ── Order notifications ──────────────────────────────────────────────────────
+  function playNotificationSound() {
+    try {
+      const ctx = new AudioContext();
+      [[880, 0], [1100, 0.18]].forEach(([freq, delay]) => {
+        const osc  = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.25, ctx.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.3);
+        osc.start(ctx.currentTime + delay);
+        osc.stop(ctx.currentTime + delay + 0.35);
+      });
+    } catch { /* AudioContext unavailable */ }
+  }
+
+  async function updateOrderStatus(orderId: string, status: string) {
+    const supabase = createClient();
+    await supabase.from("orders").update({ status }).eq("id", orderId);
+    setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status } : o));
+  }
+
   // ── Render ───────────────────────────────────────────────────────────────────
   if (loading) return (
     <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center gap-3">
@@ -449,6 +499,10 @@ export default function Dashboard() {
     {
       key: "analytics", label: "Analytics",
       icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+    },
+    {
+      key: "orders", label: "Orders",
+      icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>,
     },
   ];
 
@@ -497,7 +551,7 @@ export default function Dashboard() {
           {TABS.map(({ key, label, icon }) => (
             <button
               key={key}
-              onClick={() => setActiveTab(key)}
+              onClick={() => { setActiveTab(key); if (key === "orders") setNewOrderCount(0); }}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all flex-shrink-0 ${
                 activeTab === key
                   ? "bg-brand-red text-white shadow-sm"
@@ -505,7 +559,14 @@ export default function Dashboard() {
               }`}
             >
               <span className={activeTab === key ? "text-white" : "text-neutral-400"}>{icon}</span>
-              {label}
+              <span className="relative">
+                {label}
+                {key === "orders" && newOrderCount > 0 && (
+                  <span className="absolute -top-3 -right-4 min-w-[18px] h-[18px] bg-green-500 text-white text-[10px] font-black rounded-full flex items-center justify-center px-1 shadow">
+                    {newOrderCount}
+                  </span>
+                )}
+              </span>
             </button>
           ))}
         </div>
@@ -958,6 +1019,163 @@ export default function Dashboard() {
             )}
           </div>
         )}
+
+        {/* ════ ORDERS ════ */}
+        {activeTab === "orders" && (
+          <div className="p-4 max-w-2xl mx-auto pb-10">
+
+            {/* Header */}
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="font-black text-neutral-800 text-xl">Incoming Orders</h2>
+                <p className="text-xs text-neutral-400 mt-0.5">Updates in real time — no refresh needed</p>
+              </div>
+              {orders.length > 0 && (
+                <span className="text-xs font-bold text-neutral-400 bg-neutral-100 px-3 py-1.5 rounded-full">
+                  {orders.length} total
+                </span>
+              )}
+            </div>
+
+            {!truckId ? (
+              <div className="text-center py-16">
+                <p className="font-bold text-neutral-700 mb-1">No truck set up yet</p>
+                <p className="text-sm text-neutral-400 mb-4">Create your profile first to receive orders.</p>
+                <button onClick={() => setActiveTab("profile")}
+                  className="px-5 py-2.5 bg-brand-red text-white rounded-full text-sm font-bold">
+                  Go to Profile
+                </button>
+              </div>
+            ) : orders.length === 0 ? (
+              <div className="bg-white rounded-2xl shadow-sm flex flex-col items-center py-16 gap-3">
+                <div className="w-16 h-16 rounded-full bg-neutral-100 flex items-center justify-center">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
+                    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+                    <line x1="3" y1="6" x2="21" y2="6"/>
+                    <path d="M16 10a4 4 0 0 1-8 0"/>
+                  </svg>
+                </div>
+                <p className="text-neutral-500 font-semibold">No orders yet</p>
+                <p className="text-neutral-400 text-sm text-center px-8">
+                  When customers place orders from your menu, they&apos;ll appear here instantly.
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {/* Pending first, then by time */}
+                {["pending", "preparing", "ready", "picked_up"].map((statusGroup) => {
+                  const groupOrders = orders.filter((o) => o.status === statusGroup);
+                  if (groupOrders.length === 0) return null;
+                  const statusLabel: Record<string, string> = {
+                    pending: "New Orders",
+                    preparing: "Preparing",
+                    ready: "Ready for Pickup",
+                    picked_up: "Picked Up",
+                  };
+                  const statusColor: Record<string, string> = {
+                    pending: "text-amber-600 bg-amber-50 border-amber-200",
+                    preparing: "text-blue-600 bg-blue-50 border-blue-200",
+                    ready: "text-green-600 bg-green-50 border-green-200",
+                    picked_up: "text-neutral-400 bg-neutral-50 border-neutral-200",
+                  };
+                  return (
+                    <div key={statusGroup}>
+                      <p className={`text-xs font-black uppercase tracking-widest px-3 py-1.5 rounded-full border inline-block mb-3 ${statusColor[statusGroup]}`}>
+                        {statusLabel[statusGroup]} · {groupOrders.length}
+                      </p>
+                      <div className="flex flex-col gap-3">
+                        {groupOrders.map((order) => {
+                          const items: any[] = order.items ?? [];
+                          const timeAgo = (() => {
+                            const diff = Math.floor((Date.now() - new Date(order.created_at).getTime()) / 1000);
+                            if (diff < 60) return `${diff}s ago`;
+                            if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+                            return `${Math.floor(diff / 3600)}h ago`;
+                          })();
+                          return (
+                            <div key={order.id}
+                              className={`bg-white rounded-2xl shadow-sm overflow-hidden border-l-4 ${
+                                order.status === "pending"   ? "border-amber-400" :
+                                order.status === "preparing" ? "border-blue-400"  :
+                                order.status === "ready"     ? "border-green-400" :
+                                "border-neutral-200"
+                              }`}
+                            >
+                              {/* Order header */}
+                              <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-black text-neutral-900 text-base">
+                                      {order.pickup_name ?? "Customer"}
+                                    </p>
+                                    <span className="text-[10px] font-bold text-neutral-400 bg-neutral-100 px-2 py-0.5 rounded-full font-mono">
+                                      #{order.id.slice(0, 6).toUpperCase()}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-neutral-400 mt-0.5">{timeAgo}</p>
+                                </div>
+                                <p className="font-black text-brand-red text-lg">${(order.total ?? 0).toFixed(2)}</p>
+                              </div>
+
+                              {/* Items */}
+                              <div className="px-4 pb-3 border-t border-neutral-50 pt-3 flex flex-col gap-1">
+                                {items.map((item: any, i: number) => (
+                                  <div key={i} className="flex items-center justify-between text-sm">
+                                    <span className="text-neutral-700">
+                                      <span className="font-bold text-neutral-400 mr-1.5">{item.quantity}×</span>
+                                      {item.name}
+                                    </span>
+                                    <span className="text-neutral-400">${(item.price * item.quantity).toFixed(2)}</span>
+                                  </div>
+                                ))}
+                                {order.notes && (
+                                  <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mt-1">
+                                    📝 {order.notes}
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Status actions */}
+                              {order.status !== "picked_up" && (
+                                <div className="px-4 pb-4 flex gap-2">
+                                  {order.status === "pending" && (
+                                    <button
+                                      onClick={() => updateOrderStatus(order.id, "preparing")}
+                                      className="flex-1 py-2.5 bg-blue-500 text-white rounded-xl font-bold text-sm active:scale-95 transition-all"
+                                    >
+                                      Start Preparing
+                                    </button>
+                                  )}
+                                  {order.status === "preparing" && (
+                                    <button
+                                      onClick={() => updateOrderStatus(order.id, "ready")}
+                                      className="flex-1 py-2.5 bg-green-500 text-white rounded-xl font-bold text-sm active:scale-95 transition-all"
+                                    >
+                                      Mark Ready
+                                    </button>
+                                  )}
+                                  {order.status === "ready" && (
+                                    <button
+                                      onClick={() => updateOrderStatus(order.id, "picked_up")}
+                                      className="flex-1 py-2.5 bg-neutral-800 text-white rounded-xl font-bold text-sm active:scale-95 transition-all"
+                                    >
+                                      Picked Up ✓
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
       </div>
 
       {/* ════ MENU MODAL ════ */}
