@@ -56,15 +56,16 @@ export default function SignupPage() {
     }
 
     if (data.user) {
-      try {
-        await supabase.from("trucks").insert({
-          owner_id: data.user.id,
-          name: truckName.trim(),
-          cuisine: cuisine || null,
-          is_live: false,
-        });
-      } catch {
-        // Non-fatal
+      const { error: truckError } = await supabase.from("trucks").insert({
+        owner_id: data.user.id,
+        name: truckName.trim(),
+        cuisine: cuisine || null,
+        is_live: false,
+      });
+      if (truckError) {
+        // Truck creation can fail if email confirmation is required first.
+        // The dashboard will prompt them to fill in their profile on first login.
+        console.warn("Truck pre-create failed (will retry on first login):", truckError.message);
       }
     }
 
