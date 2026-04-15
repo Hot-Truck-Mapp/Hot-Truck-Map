@@ -429,61 +429,82 @@ export default function Dashboard() {
     return acc;
   }, {});
 
-  const TABS: { key: Tab; label: string }[] = [
-    { key: "live",      label: "Go Live"   },
-    { key: "profile",   label: "Profile"   },
-    { key: "menu",      label: "Menu"      },
-    { key: "schedule",  label: "Schedule"  },
-    { key: "analytics", label: "Analytics" },
+  const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
+    {
+      key: "live", label: "Go Live",
+      icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>,
+    },
+    {
+      key: "profile", label: "Profile",
+      icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>,
+    },
+    {
+      key: "menu", label: "Menu",
+      icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>,
+    },
+    {
+      key: "schedule", label: "Schedule",
+      icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
+    },
+    {
+      key: "analytics", label: "Analytics",
+      icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+    },
   ];
 
   return (
     <div className="min-h-screen bg-neutral-50 flex flex-col">
 
       {/* ── Header ── */}
-      <div className="bg-neutral-900 px-4 py-3 flex items-center justify-between sticky top-0 z-20">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 bg-brand-red rounded-full flex items-center justify-center flex-shrink-0">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+      <div className="bg-neutral-900 px-5 py-4 flex items-center justify-between sticky top-0 z-20"
+        style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.06)" }}>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 bg-brand-red rounded-xl flex items-center justify-center flex-shrink-0">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
               <path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7V8z"/>
               <circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
             </svg>
           </div>
-          <div className="leading-tight">
-            <p className="font-black text-white text-sm leading-none">{profile.name || "My Truck"}</p>
-            <div className="flex items-center gap-1 mt-0.5">
+          <div>
+            <p className="font-black text-white text-base leading-tight">{profile.name || "My Truck"}</p>
+            <div className="flex items-center gap-1.5 mt-0.5">
               {isLive ? (
                 <>
                   <span className="relative flex h-1.5 w-1.5">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"/>
                     <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-400"/>
                   </span>
-                  <span className="text-[10px] text-green-400 font-bold">LIVE</span>
+                  <span className="text-[11px] text-green-400 font-bold tracking-wide">LIVE NOW</span>
                 </>
               ) : (
-                <span className="text-[10px] text-neutral-500 font-medium">Operator Dashboard</span>
+                <span className="text-[11px] text-neutral-500 font-medium">Operator Dashboard</span>
               )}
             </div>
           </div>
         </div>
-        <a href="/" className="text-xs text-neutral-500 hover:text-neutral-300 transition-colors">
+        <a href="/" className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-neutral-200 transition-colors px-3 py-1.5 rounded-lg hover:bg-white/10">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/>
+          </svg>
           View Map
         </a>
       </div>
 
       {/* ── Tab Bar ── */}
-      <div className="bg-white border-b border-neutral-200 sticky top-[52px] z-10 overflow-x-auto scrollbar-none">
-        <div className="flex min-w-max px-2">
-          {TABS.map(({ key, label }) => (
+      <div className="bg-white border-b border-neutral-100 sticky top-[61px] z-10"
+        style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+        <div className="flex overflow-x-auto scrollbar-none px-3 py-2 gap-1">
+          {TABS.map(({ key, label, icon }) => (
             <button
               key={key}
               onClick={() => setActiveTab(key)}
-              className={`px-4 py-3 text-sm font-bold whitespace-nowrap border-b-2 transition-colors ${
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all flex-shrink-0 ${
                 activeTab === key
-                  ? "border-brand-red text-brand-red"
-                  : "border-transparent text-neutral-500 hover:text-neutral-800"
+                  ? "bg-brand-red text-white shadow-sm"
+                  : "text-neutral-500 hover:text-neutral-800 hover:bg-neutral-100"
               }`}
             >
+              <span className={activeTab === key ? "text-white" : "text-neutral-400"}>{icon}</span>
               {label}
             </button>
           ))}
