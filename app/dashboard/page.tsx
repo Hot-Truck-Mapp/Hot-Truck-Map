@@ -37,7 +37,9 @@ export default function OperatorDashboard() {
       .single();
 
     if (!truck) {
+      // No truck found — operator needs to create their profile first
       setLoading(false);
+      window.location.href = "/dashboard/profile";
       return;
     }
 

@@ -52,7 +52,10 @@ export default function AnalyticsPage() {
   async function init() {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) {
+      window.location.href = "/login";
+      return;
+    }
 
     const { data: truck } = await supabase
       .from("trucks")
@@ -176,6 +179,33 @@ export default function AnalyticsPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-neutral-50">
         <p className="text-neutral-400 text-sm">Loading analytics...</p>
+      </div>
+    );
+  }
+
+  if (!truckId) {
+    return (
+      <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-16 h-16 bg-neutral-100 rounded-2xl flex items-center justify-center mb-4">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
+            <line x1="18" y1="20" x2="18" y2="10"/>
+            <line x1="12" y1="20" x2="12" y2="4"/>
+            <line x1="6" y1="20" x2="6" y2="14"/>
+          </svg>
+        </div>
+        <p className="font-bold text-neutral-800 mb-1">No analytics yet</p>
+        <p className="text-sm text-neutral-400 mb-6">
+          Create your truck profile first to start tracking followers and orders.
+        </p>
+        <a
+          href="/dashboard/profile"
+          className="px-6 py-3 bg-brand-red text-white rounded-2xl font-bold text-sm"
+        >
+          Create Truck Profile
+        </a>
+        <a href="/dashboard" className="mt-3 text-sm text-neutral-400 hover:text-neutral-600">
+          Back to Dashboard
+        </a>
       </div>
     );
   }

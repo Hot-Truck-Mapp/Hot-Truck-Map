@@ -45,7 +45,10 @@ export default function SchedulePage() {
   async function loadSchedule() {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) {
+      window.location.href = "/login";
+      return;
+    }
 
     const { data: truck } = await supabase
       .from("trucks")
@@ -53,7 +56,10 @@ export default function SchedulePage() {
       .eq("owner_id", user.id)
       .single();
 
-    if (!truck) return;
+    if (!truck) {
+      setLoading(false);
+      return;
+    }
     setTruckId(truck.id);
 
     const { data } = await supabase
@@ -122,8 +128,36 @@ export default function SchedulePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-neutral-400">Loading schedule...</p>
+      <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+        <p className="text-neutral-400 text-sm">Loading schedule...</p>
+      </div>
+    );
+  }
+
+  if (!truckId) {
+    return (
+      <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-16 h-16 bg-neutral-100 rounded-2xl flex items-center justify-center mb-4">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
+            <rect x="3" y="4" width="18" height="18" rx="2"/>
+            <line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/>
+            <line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+        </div>
+        <p className="font-bold text-neutral-800 mb-1">Set up your truck profile first</p>
+        <p className="text-sm text-neutral-400 mb-6">
+          You need to create your truck profile before adding a schedule.
+        </p>
+        <a
+          href="/dashboard/profile"
+          className="px-6 py-3 bg-brand-red text-white rounded-2xl font-bold text-sm"
+        >
+          Create Truck Profile
+        </a>
+        <a href="/dashboard" className="mt-3 text-sm text-neutral-400 hover:text-neutral-600">
+          Back to Dashboard
+        </a>
       </div>
     );
   }
