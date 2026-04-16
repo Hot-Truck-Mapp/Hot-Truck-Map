@@ -129,6 +129,14 @@ export default function Dashboard() {
         setMenuItems(menuRes.data ?? []);
         setSchedule(schedRes.data ?? []);
         setOrders(ordersRes.data ?? []);
+
+        // Route new (incomplete) operators to Profile tab so they fill it in first
+        if (!truck.description || !truck.phone) {
+          setActiveTab("profile");
+        }
+      } else {
+        // No truck at all — operator just signed up, go straight to profile setup
+        setActiveTab("profile");
       }
     } catch (err: any) {
       setError("Could not connect to the server. Check your internet and try again.");
@@ -629,57 +637,46 @@ export default function Dashboard() {
           <div className="p-4 max-w-lg mx-auto flex flex-col items-center gap-5 pt-8">
 
             {/* Onboarding checklist — shown until profile + menu are set up */}
-            {(!profile.phone || !profile.description || menuItems.length === 0) && (
-              <div className="w-full bg-white rounded-2xl shadow-sm overflow-hidden">
-                <div className="px-4 pt-4 pb-2">
-                  <p className="text-xs font-black text-neutral-400 uppercase tracking-widest">Complete Your Setup</p>
-                  <p className="text-xs text-neutral-400 mt-0.5">Finish these steps to get customers finding you</p>
-                </div>
-                <div className="divide-y divide-neutral-50">
-                  {[
-                    {
-                      done: !!profile.name,
-                      label: "Add your truck name & photo",
-                      action: () => setActiveTab("profile"),
-                      cta: "Go to Profile",
-                    },
-                    {
-                      done: !!profile.phone,
-                      label: "Add phone number for SMS order alerts",
-                      action: () => setActiveTab("profile"),
-                      cta: "Add Phone",
-                    },
-                    {
-                      done: menuItems.length > 0,
-                      label: "Add at least one menu item",
-                      action: () => setActiveTab("menu"),
-                      cta: "Add Menu Item",
-                    },
-                    {
-                      done: !!profile.description,
-                      label: "Write a description for your truck",
-                      action: () => setActiveTab("profile"),
-                      cta: "Add Description",
-                    },
-                  ].map(({ done, label, action, cta }) => (
-                    <div key={label} className="flex items-center gap-3 px-4 py-3">
-                      <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${done ? "bg-green-500" : "bg-neutral-100"}`}>
-                        {done
-                          ? <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><path d="M20 6 9 17l-5-5"/></svg>
-                          : <span className="w-2 h-2 rounded-full bg-neutral-300" />}
-                      </div>
-                      <p className={`flex-1 text-sm ${done ? "line-through text-neutral-300" : "text-neutral-700 font-medium"}`}>{label}</p>
-                      {!done && (
-                        <button onClick={action}
-                          className="text-xs text-brand-red font-bold hover:underline flex-shrink-0">
-                          {cta}
-                        </button>
-                      )}
+            {(!profile.phone || !profile.description || menuItems.length === 0) && (() => {
+              const steps = [
+                { done: !!profile.name && !!profile.description, label: "Complete your truck profile", action: () => setActiveTab("profile"), cta: "Complete Profile" },
+                { done: !!profile.phone, label: "Add phone number for order alerts", action: () => setActiveTab("profile"), cta: "Add Phone" },
+                { done: menuItems.length > 0, label: "Add at least one menu item", action: () => setActiveTab("menu"), cta: "Add Menu Item" },
+              ];
+              const doneCount = steps.filter(s => s.done).length;
+              const pct = Math.round((doneCount / steps.length) * 100);
+              return (
+                <div className="w-full bg-white rounded-2xl shadow-sm overflow-hidden">
+                  <div className="px-4 pt-4 pb-3">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="text-sm font-black text-neutral-800">Setup Checklist</p>
+                      <span className="text-xs font-bold text-neutral-400">{doneCount}/{steps.length} done</span>
                     </div>
-                  ))}
+                    <div className="h-1.5 bg-neutral-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-brand-red rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                  <div className="divide-y divide-neutral-50">
+                    {steps.map(({ done, label, action, cta }) => (
+                      <div key={label} className="flex items-center gap-3 px-4 py-3">
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${done ? "bg-green-500" : "bg-neutral-100"}`}>
+                          {done
+                            ? <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><path d="M20 6 9 17l-5-5"/></svg>
+                            : <span className="w-2 h-2 rounded-full bg-neutral-300" />}
+                        </div>
+                        <p className={`flex-1 text-sm ${done ? "line-through text-neutral-300" : "text-neutral-700 font-semibold"}`}>{label}</p>
+                        {!done && (
+                          <button onClick={action}
+                            className="text-xs text-brand-red font-bold bg-red-50 px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors flex-shrink-0">
+                            {cta} →
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Stats row */}
             <div className="grid grid-cols-3 gap-3 w-full">
@@ -766,11 +763,33 @@ export default function Dashboard() {
           <div className="p-4 flex flex-col gap-5 max-w-lg mx-auto pb-10">
 
             {!truckId && (
-              <div className="bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3 flex items-center gap-3">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#EA580C" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
-                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-                </svg>
-                <p className="text-sm text-orange-700 font-medium">Fill in your truck name and tap <strong>Save Profile</strong> to get started.</p>
+              <div className="bg-neutral-900 rounded-2xl p-5 flex flex-col gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-brand-red rounded-xl flex items-center justify-center flex-shrink-0">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+                      <path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7V8z"/>
+                      <circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-white font-black text-base leading-tight">Welcome to Hot Truck Maps!</p>
+                    <p className="text-neutral-400 text-xs mt-0.5">Let&apos;s get your truck on the map — takes under 2 minutes.</p>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {[
+                    "Fill in your truck name and description below",
+                    "Add a phone number to receive order alerts",
+                    "Upload a photo so customers recognize you",
+                  ].map((step, i) => (
+                    <div key={step} className="flex items-center gap-2.5">
+                      <div className="w-5 h-5 rounded-full bg-brand-red flex items-center justify-center flex-shrink-0">
+                        <span className="text-[10px] font-black text-white">{i + 1}</span>
+                      </div>
+                      <p className="text-neutral-300 text-xs">{step}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -884,9 +903,30 @@ export default function Dashboard() {
             </button>
 
             {profileSaved && (
-              <p className="text-center text-sm text-green-600 font-semibold">
-                ✓ Profile saved — use the tabs above to manage your menu, schedule, and more.
-              </p>
+              <div className="bg-green-50 border border-green-200 rounded-2xl p-4 flex flex-col gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round">
+                      <path d="M20 6 9 17l-5-5"/>
+                    </svg>
+                  </div>
+                  <p className="text-green-800 font-bold text-sm">Profile saved!</p>
+                </div>
+                {menuItems.length === 0 && (
+                  <div className="flex items-center justify-between bg-white border border-green-100 rounded-xl px-4 py-3">
+                    <div>
+                      <p className="text-sm font-bold text-neutral-800">Add your menu items</p>
+                      <p className="text-xs text-neutral-400 mt-0.5">Let customers browse and order before they arrive</p>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab("menu")}
+                      className="ml-3 flex-shrink-0 px-4 py-2 bg-brand-red text-white rounded-xl text-sm font-bold"
+                    >
+                      Add Menu →
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}
