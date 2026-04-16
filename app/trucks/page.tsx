@@ -15,7 +15,7 @@ export default function TrucksListPage() {
   const [trucks, setTrucks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [openNow, setOpenNow] = useState(false);
+  const [openNow, setOpenNow] = useState(true);
   const [cuisine, setCuisine] = useState("All");
   const [dietary, setDietary] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
