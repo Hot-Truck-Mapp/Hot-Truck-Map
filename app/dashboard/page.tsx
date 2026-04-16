@@ -831,11 +831,10 @@ export default function Dashboard() {
 
             <Field label="Instagram">
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 text-sm">@</span>
                 <input value={profile.instagram}
                   onChange={e => setProfile(p => ({ ...p, instagram: e.target.value.replace("@","") }))}
                   placeholder="yourtruck"
-                  className="w-full pl-9 pr-4 py-3 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-brand-red bg-white"/>
+                  className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-brand-red bg-white"/>
               </div>
             </Field>
 
@@ -843,6 +842,18 @@ export default function Dashboard() {
               className="w-full py-4 bg-brand-red text-white rounded-2xl font-black text-base disabled:opacity-40 transition-opacity">
               {profileSaving ? "Saving..." : profileSaved ? "Saved ✓" : truckId ? "Save Profile" : "Create My Truck"}
             </button>
+
+            {profileSaved && (
+              <button
+                onClick={() => { setProfileSaved(false); setActiveTab("menu"); }}
+                className="w-full py-4 bg-neutral-900 text-white rounded-2xl font-bold text-base flex items-center justify-center gap-2"
+              >
+                Next: Add Menu Items
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
+              </button>
+            )}
           </div>
         )}
 
@@ -940,6 +951,21 @@ export default function Dashboard() {
                 ))
               )}
             </div>
+
+            {/* Next step prompt — shown when menu has items but no schedule set */}
+            {menuItems.length > 0 && schedule.length === 0 && (
+              <div className="px-4 pb-6 max-w-2xl mx-auto">
+                <button
+                  onClick={() => setActiveTab("schedule")}
+                  className="w-full py-4 bg-neutral-900 text-white rounded-2xl font-bold text-base flex items-center justify-center gap-2"
+                >
+                  Next: Set Your Schedule
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                  </svg>
+                </button>
+              </div>
+            )}
           </div>
         )}
 
