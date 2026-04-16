@@ -104,10 +104,10 @@ export default function SignupPage() {
           <p className="text-neutral-500 text-sm mt-2">Join the community</p>
         </div>
 
-        <div className="w-full max-w-sm flex flex-col gap-3">
+        <div className="w-full max-w-sm md:max-w-2xl flex flex-col md:flex-row gap-3">
           <button
             onClick={() => setStep("operator")}
-            className="w-full bg-neutral-900 rounded-2xl p-5 text-left hover:bg-neutral-800 transition-colors group"
+            className="flex-1 bg-neutral-900 rounded-2xl p-5 text-left hover:bg-neutral-800 transition-colors group"
           >
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-black text-brand-red uppercase tracking-widest">
@@ -130,17 +130,25 @@ export default function SignupPage() {
 
           <button
             onClick={() => setStep("customer")}
-            className="w-full bg-white border border-neutral-200 rounded-2xl p-5 text-left hover:border-neutral-300 transition-colors"
+            className="flex-1 bg-white border border-neutral-200 rounded-2xl p-5 text-left hover:border-neutral-300 hover:shadow-sm transition-all"
           >
-            <p className="text-neutral-800 font-bold text-base mb-1">Find food trucks near me</p>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-black text-neutral-400 uppercase tracking-widest">
+                For Customers
+              </span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M5 12h14M12 5l7 7-7 7"/>
+              </svg>
+            </div>
+            <p className="text-neutral-800 font-bold text-lg leading-tight mb-1">Find food trucks near me</p>
             <p className="text-neutral-400 text-sm">Follow your favorites, get notified when they go live</p>
           </button>
-
-          <p className="text-center text-sm text-neutral-500 mt-2">
-            Already have an account?{" "}
-            <Link href="/login" className="text-brand-red font-semibold">Sign In</Link>
-          </p>
         </div>
+
+        <p className="text-center text-sm text-neutral-500 mt-4">
+          Already have an account?{" "}
+          <Link href="/login" className="text-brand-red font-semibold">Sign In</Link>
+        </p>
       </div>
     );
   }
@@ -257,7 +265,7 @@ export default function SignupPage() {
                       onChange={(e) => setTruckName(e.target.value)}
                       placeholder="e.g. The Taco Truck"
                       autoFocus
-                      className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
+                      className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
                     />
                   </div>
                   <div>
@@ -295,7 +303,7 @@ export default function SignupPage() {
                       value={opEmail}
                       onChange={(e) => setOpEmail(e.target.value)}
                       placeholder="you@example.com"
-                      className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
+                      className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
                     />
                   </div>
                   <div>
@@ -308,7 +316,7 @@ export default function SignupPage() {
                       onChange={(e) => setOpPassword(e.target.value)}
                       placeholder="Min 6 characters"
                       onKeyDown={(e) => e.key === "Enter" && handleOperatorSignup()}
-                      className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
+                      className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
                     />
                   </div>
                 </div>
@@ -388,7 +396,7 @@ export default function SignupPage() {
                   value={cuEmail}
                   onChange={(e) => setCuEmail(e.target.value)}
                   placeholder="you@example.com"
-                  className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
+                  className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
                 />
               </div>
 
@@ -400,7 +408,7 @@ export default function SignupPage() {
                   onChange={(e) => setCuPassword(e.target.value)}
                   placeholder="Min 6 characters"
                   onKeyDown={(e) => e.key === "Enter" && handleCustomerSignup()}
-                  className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
+                  className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
                 />
               </div>
 

@@ -246,19 +246,24 @@ export default function TrucksListPage() {
 
       {/* Results Header */}
       <div className="px-4 py-3 bg-white border-b border-neutral-100">
-        <p className="text-sm text-neutral-600">
-          <span className="font-bold text-neutral-900">{filtered.length}</span>
-          {" "}food truck{filtered.length !== 1 ? "s" : ""} found
-          {openNow && " · open now"}
-          {cuisine !== "All" && " · " + cuisine}
-        </p>
+        <div className="max-w-5xl mx-auto">
+          <p className="text-sm text-neutral-600">
+            <span className="font-bold text-neutral-900">{filtered.length}</span>
+            {" "}food truck{filtered.length !== 1 ? "s" : ""} found
+            {openNow && " · open now"}
+            {cuisine !== "All" && " · " + cuisine}
+          </p>
+        </div>
       </div>
 
       {/* Truck List */}
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-5xl mx-auto w-full px-0 md:px-4 md:py-4">
         {loading && (
           <div className="flex items-center justify-center py-24">
-            <p className="text-neutral-400 text-sm">Loading trucks...</p>
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-8 h-8 border-2 border-brand-red border-t-transparent rounded-full animate-spin" />
+              <p className="text-neutral-400 text-sm">Loading trucks...</p>
+            </div>
           </div>
         )}
 
@@ -285,6 +290,7 @@ export default function TrucksListPage() {
           </div>
         )}
 
+        <div className="grid grid-cols-1 md:grid-cols-2 md:gap-3">
         {filtered.map((truck) => {
           const followerCount = truck.follows?.[0]?.count ?? 0;
           const address = truck.locations?.[0]?.address ?? null;
@@ -292,7 +298,7 @@ export default function TrucksListPage() {
             <Link
               key={truck.id}
               href={"/truck/" + truck.id}
-              className="block bg-white border-b border-neutral-100 hover:bg-neutral-50 active:bg-neutral-100 transition-colors"
+              className="block bg-white border-b border-neutral-100 md:border md:rounded-2xl md:shadow-sm hover:bg-neutral-50 active:bg-neutral-100 transition-colors md:overflow-hidden"
             >
               <div className="flex gap-4 p-4">
 
@@ -390,6 +396,8 @@ export default function TrucksListPage() {
             </Link>
           );
         })}
+
+        </div> {/* end grid */}
 
         {/* Bottom padding */}
         <div className="h-8" />

@@ -126,7 +126,7 @@ export default function HomePage() {
         </div>
 
         {/* Search card — floats over the map */}
-        <div className="px-3 md:px-4 pt-2 pb-1">
+        <div className="px-3 md:px-4 pt-2 pb-1 md:max-w-2xl md:mx-auto">
           <div
             className="bg-white rounded-2xl overflow-visible"
             style={{ boxShadow: "0 4px 24px rgba(0,0,0,0.13), 0 1px 4px rgba(0,0,0,0.07)" }}
