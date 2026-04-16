@@ -78,6 +78,8 @@ export default function Dashboard() {
   const [chartData, setChartData]               = useState<any[]>([]);
   const [periodStats, setPeriodStats]           = useState({ followers:0, orders:0, views:0, revenue:0 });
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [allTimeOrders, setAllTimeOrders]       = useState(0);
+  const [allTimeRevenue, setAllTimeRevenue]     = useState(0);
 
   // Orders
   const [orders, setOrders]           = useState<any[]>([]);
@@ -408,16 +410,20 @@ export default function Dashboard() {
         }
       }
 
-      const [followsRes, ordersRes, viewsRes, totalRes] = await Promise.all([
+      const [followsRes, ordersRes, viewsRes, totalFollowsRes, allOrdersRes] = await Promise.all([
         supabase.from("follows").select("created_at").eq("truck_id", id).gte("created_at", startDate.toISOString()),
         supabase.from("orders").select("created_at,total").eq("truck_id", id).gte("created_at", startDate.toISOString()),
         supabase.from("truck_views").select("created_at").eq("truck_id", id).gte("created_at", startDate.toISOString()),
         supabase.from("follows").select("*",{count:"exact",head:true}).eq("truck_id", id),
+        supabase.from("orders").select("total").eq("truck_id", id),
       ]);
 
       const fw = followsRes.data ?? [], or = ordersRes.data ?? [], vw = viewsRes.data ?? [];
+      const allOrders = allOrdersRes.data ?? [];
 
-      setTotalFollowers(totalRes.count ?? 0);
+      setTotalFollowers(totalFollowsRes.count ?? 0);
+      setAllTimeOrders(allOrders.length);
+      setAllTimeRevenue(allOrders.reduce((s, o) => s + (o.total ?? 0), 0));
       setChartData(buckets.map(({ label, start, end }) => ({
         label,
         followers: fw.filter(f => { const d = new Date(f.created_at); return d >= start && d <= end; }).length,
@@ -1064,79 +1070,147 @@ export default function Dashboard() {
 
         {/* ════ ANALYTICS ════ */}
         {activeTab === "analytics" && (
-          <div className="p-4 flex flex-col gap-4 max-w-2xl mx-auto pb-10">
+          <div className="flex flex-col gap-4 max-w-2xl mx-auto pb-10">
+
             {!truckId ? (
-              <div className="text-center py-16">
+              <div className="p-4 text-center py-16">
                 <p className="font-bold text-neutral-700 mb-1">No analytics yet</p>
                 <p className="text-sm text-neutral-400 mb-4">Create your truck profile to start tracking data.</p>
                 <button onClick={() => setActiveTab("profile")} className="px-5 py-2.5 bg-brand-red text-white rounded-full text-sm font-bold">
                   Go to Profile
                 </button>
               </div>
+            ) : analyticsLoading ? (
+              <div className="p-8 flex flex-col items-center gap-3 py-20">
+                <div className="w-10 h-10 rounded-full border-4 border-brand-red border-t-transparent animate-spin"/>
+                <p className="text-neutral-400 text-sm">Loading your stats...</p>
+              </div>
             ) : (
               <>
-                {/* Total followers */}
-                <div className="bg-white rounded-2xl shadow-sm p-5 flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-2xl bg-red-50 flex items-center justify-center flex-shrink-0">
-                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#E8481C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                      <circle cx="9" cy="7" r="4"/>
-                      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="text-3xl font-black text-neutral-900">{totalFollowers.toLocaleString()}</p>
-                    <p className="text-sm text-neutral-500">Total Followers</p>
-                  </div>
-                </div>
+                {/* ── ALL-TIME HERO STATS ── */}
+                <div className="bg-neutral-900 px-5 pt-6 pb-5 flex flex-col gap-4">
+                  <p className="text-xs font-black text-neutral-500 uppercase tracking-widest">All Time</p>
+                  <div className="grid grid-cols-2 gap-3">
 
-                {/* Range tabs */}
-                <div className="bg-white rounded-2xl shadow-sm p-1 flex gap-1">
-                  {(["weekly","monthly","yearly"] as AnalyticsRange[]).map(r => (
-                    <button key={r} onClick={() => switchAnalyticsRange(r)}
-                      className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all capitalize ${
-                        analyticsRange === r ? "bg-neutral-900 text-white" : "text-neutral-500 hover:text-neutral-800"}`}>
-                      {r.charAt(0).toUpperCase() + r.slice(1)}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Period stats */}
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { label:"New Followers", val: periodStats.followers.toLocaleString(), color:"bg-red-50" },
-                    { label:"Orders",        val: periodStats.orders.toLocaleString(),    color:"bg-orange-50" },
-                    { label:"Profile Views", val: periodStats.views.toLocaleString(),     color:"bg-blue-50" },
-                    { label:"Revenue",       val: `$${periodStats.revenue.toFixed(2)}`,   color:"bg-green-50" },
-                  ].map(({ label, val, color }) => (
-                    <div key={label} className={`${color} rounded-2xl p-4`}>
-                      <p className="text-xs text-neutral-500 font-semibold mb-1">{label}</p>
-                      <p className="text-2xl font-black text-neutral-900">{val}</p>
+                    {/* Followers */}
+                    <div className="bg-neutral-800 rounded-2xl p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-8 h-8 rounded-xl bg-brand-red/20 flex items-center justify-center">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E8481C" strokeWidth="2" strokeLinecap="round">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                          </svg>
+                        </div>
+                        <p className="text-xs font-bold text-neutral-400">Followers</p>
+                      </div>
+                      <p className="text-4xl font-black text-white leading-none">{totalFollowers.toLocaleString()}</p>
+                      <p className="text-xs text-neutral-500 mt-1.5">customers following your truck</p>
                     </div>
-                  ))}
+
+                    {/* Orders */}
+                    <div className="bg-neutral-800 rounded-2xl p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-8 h-8 rounded-xl bg-orange-500/20 flex items-center justify-center">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FB923C" strokeWidth="2" strokeLinecap="round">
+                            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+                            <line x1="3" y1="6" x2="21" y2="6"/>
+                            <path d="M16 10a4 4 0 0 1-8 0"/>
+                          </svg>
+                        </div>
+                        <p className="text-xs font-bold text-neutral-400">Orders</p>
+                      </div>
+                      <p className="text-4xl font-black text-white leading-none">{allTimeOrders.toLocaleString()}</p>
+                      <p className="text-xs text-neutral-500 mt-1.5">total orders placed</p>
+                    </div>
+                  </div>
+
+                  {/* Revenue banner */}
+                  <div className="bg-green-900/40 border border-green-700/30 rounded-2xl px-4 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2" strokeLinecap="round">
+                        <line x1="12" y1="1" x2="12" y2="23"/>
+                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                      </svg>
+                      <p className="text-sm font-bold text-green-400">Total Revenue</p>
+                    </div>
+                    <p className="text-xl font-black text-green-400">${allTimeRevenue.toFixed(2)}</p>
+                  </div>
                 </div>
 
-                {/* Chart */}
-                {analyticsLoading ? (
-                  <div className="bg-white rounded-2xl shadow-sm p-8 flex items-center justify-center">
-                    <p className="text-neutral-400 text-sm">Loading chart...</p>
+                {/* ── PERIOD BREAKDOWN ── */}
+                <div className="px-4 flex flex-col gap-4">
+
+                  {/* Range selector */}
+                  <div className="bg-neutral-100 rounded-2xl p-1 flex gap-1">
+                    {(["weekly","monthly","yearly"] as AnalyticsRange[]).map(r => (
+                      <button key={r} onClick={() => switchAnalyticsRange(r)}
+                        className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                          analyticsRange === r ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-400 hover:text-neutral-700"}`}>
+                        {r === "weekly" ? "This Week" : r === "monthly" ? "This Month" : "This Year"}
+                      </button>
+                    ))}
                   </div>
-                ) : (
+
+                  {/* Period stat cards */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-brand-red">
+                      <p className="text-xs text-neutral-400 font-semibold mb-1">New Followers</p>
+                      <p className="text-3xl font-black text-neutral-900">{periodStats.followers.toLocaleString()}</p>
+                      <p className="text-xs text-neutral-400 mt-1">
+                        {analyticsRange === "weekly" ? "past 7 days" : analyticsRange === "monthly" ? "past 30 days" : "past 12 months"}
+                      </p>
+                    </div>
+                    <div className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-orange-400">
+                      <p className="text-xs text-neutral-400 font-semibold mb-1">Orders</p>
+                      <p className="text-3xl font-black text-neutral-900">{periodStats.orders.toLocaleString()}</p>
+                      <p className="text-xs text-neutral-400 mt-1">
+                        {analyticsRange === "weekly" ? "past 7 days" : analyticsRange === "monthly" ? "past 30 days" : "past 12 months"}
+                      </p>
+                    </div>
+                    <div className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-green-500">
+                      <p className="text-xs text-neutral-400 font-semibold mb-1">Revenue</p>
+                      <p className="text-3xl font-black text-neutral-900">${periodStats.revenue.toFixed(2)}</p>
+                      <p className="text-xs text-neutral-400 mt-1">from orders this period</p>
+                    </div>
+                    <div className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-blue-400">
+                      <p className="text-xs text-neutral-400 font-semibold mb-1">Profile Views</p>
+                      <p className="text-3xl font-black text-neutral-900">{periodStats.views.toLocaleString()}</p>
+                      <p className="text-xs text-neutral-400 mt-1">customers viewed your page</p>
+                    </div>
+                  </div>
+
+                  {/* Chart */}
                   <div className="bg-white rounded-2xl shadow-sm p-4">
-                    <p className="text-sm font-bold text-neutral-800 mb-4">Followers &amp; Orders</p>
-                    <ResponsiveContainer width="100%" height={220}>
-                      <BarChart data={chartData} barCategoryGap="28%">
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" vertical={false}/>
-                        <XAxis dataKey="label" tick={{ fontSize:11, fill:"#aaa" }} axisLine={false} tickLine={false}/>
-                        <YAxis tick={{ fontSize:11, fill:"#aaa" }} axisLine={false} tickLine={false} allowDecimals={false} width={28}/>
-                        <Tooltip contentStyle={{ borderRadius:"12px", border:"none", boxShadow:"0 4px 20px rgba(0,0,0,0.12)", fontSize:"12px" }} cursor={{ fill:"rgba(0,0,0,0.03)" }}/>
-                        <Legend wrapperStyle={{ fontSize:"11px", paddingTop:"12px" }} iconType="circle" iconSize={8}/>
-                        <Bar dataKey="followers" name="New Followers" fill="#E8481C" radius={[4,4,0,0]} maxBarSize={40}/>
-                        <Bar dataKey="orders"    name="Orders"        fill="#FB923C" radius={[4,4,0,0]} maxBarSize={40}/>
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <p className="text-sm font-black text-neutral-800 mb-1">Followers &amp; Orders Trend</p>
+                    <p className="text-xs text-neutral-400 mb-4">
+                      {analyticsRange === "weekly" ? "Day by day this week" : analyticsRange === "monthly" ? "Week by week this month" : "Month by month this year"}
+                    </p>
+                    {chartData.length === 0 || chartData.every(d => d.followers === 0 && d.orders === 0) ? (
+                      <div className="py-10 text-center">
+                        <p className="text-neutral-300 text-sm">No data for this period yet</p>
+                        <p className="text-neutral-300 text-xs mt-1">Go live and start getting customers!</p>
+                      </div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height={200}>
+                        <BarChart data={chartData} barCategoryGap="30%">
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" vertical={false}/>
+                          <XAxis dataKey="label" tick={{ fontSize:11, fill:"#aaa" }} axisLine={false} tickLine={false}/>
+                          <YAxis tick={{ fontSize:11, fill:"#aaa" }} axisLine={false} tickLine={false} allowDecimals={false} width={24}/>
+                          <Tooltip
+                            contentStyle={{ borderRadius:"12px", border:"none", boxShadow:"0 4px 20px rgba(0,0,0,0.12)", fontSize:"12px" }}
+                            cursor={{ fill:"rgba(0,0,0,0.03)" }}
+                          />
+                          <Legend wrapperStyle={{ fontSize:"11px", paddingTop:"12px" }} iconType="circle" iconSize={8}/>
+                          <Bar dataKey="followers" name="New Followers" fill="#E8481C" radius={[4,4,0,0]} maxBarSize={36}/>
+                          <Bar dataKey="orders"    name="Orders"        fill="#FB923C" radius={[4,4,0,0]} maxBarSize={36}/>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
                   </div>
-                )}
+
+                </div>
               </>
             )}
           </div>
