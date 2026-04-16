@@ -26,7 +26,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
-  const [openNow, setOpenNow] = useState(true);
+  const [openNow, setOpenNow] = useState(false);
   const [cuisine, setCuisine] = useState("All");
   const [dietary, setDietary] = useState<string[]>([]);
   const [showFilter, setShowFilter] = useState(false);
@@ -36,6 +36,16 @@ export default function HomePage() {
   useEffect(() => {
     setMounted(true);
     loadTrucks();
+
+    // Real-time: refresh truck list whenever any truck goes live/offline
+    const supabase = createClient();
+    const channel = supabase
+      .channel("home-trucks-live")
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "trucks" }, () => {
+        loadTrucks();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   async function loadTrucks() {
@@ -62,6 +72,15 @@ export default function HomePage() {
     }
     return true;
   });
+
+  // Search results for dropdown: search ALL trucks regardless of open/cuisine/dietary filters
+  const searchResults = search.trim()
+    ? trucks.filter(
+        (t) =>
+          t.name?.toLowerCase().includes(search.toLowerCase()) ||
+          t.cuisine?.toLowerCase().includes(search.toLowerCase())
+      )
+    : [];
 
   function toggleDietary(tag: string) {
     setDietary(
@@ -259,51 +278,67 @@ export default function HomePage() {
             {/* Search dropdown results */}
             {searchFocused && search && (
               <div className="border-t border-neutral-100 overflow-hidden rounded-b-2xl">
-                {filtered.length === 0 ? (
+                {searchResults.length === 0 ? (
                   <div className="px-4 py-4 flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center flex-shrink-0">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="2" strokeLinecap="round">
                         <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
                       </svg>
                     </div>
-                    <p className="text-sm text-neutral-400">No trucks found for "<span className="text-neutral-600 font-medium">{search}</span>"</p>
+                    <p className="text-sm text-neutral-400">No trucks found for &ldquo;<span className="text-neutral-600 font-medium">{search}</span>&rdquo;</p>
                   </div>
                 ) : (
-                  filtered.slice(0, 5).map((truck, i) => (
-                    <Link
-                      key={truck.id}
-                      href={"/truck/" + truck.id}
-                      className={`flex items-center gap-3 px-4 py-3 hover:bg-neutral-50 transition-colors ${
-                        i < Math.min(filtered.length, 5) - 1 ? "border-b border-neutral-50" : ""
-                      }`}
-                    >
-                      <div className="w-9 h-9 rounded-xl bg-neutral-100 overflow-hidden flex-shrink-0">
-                        {truck.profile_photo ? (
-                          <img src={truck.profile_photo} alt={truck.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-neutral-200">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#bbb" strokeWidth="2" strokeLinecap="round">
-                              <path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7V8z"/>
-                              <circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
-                            </svg>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-neutral-800 truncate">{truck.name}</p>
-                        <p className="text-xs text-neutral-400">{truck.cuisine ?? "Food Truck"}</p>
-                      </div>
-                      {truck.is_live && (
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <span className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-red opacity-75" />
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-red" />
-                          </span>
-                          <span className="text-[10px] font-bold text-brand-red">OPEN</span>
+                  <>
+                    {searchResults.slice(0, 8).map((truck, i) => (
+                      <Link
+                        key={truck.id}
+                        href={"/truck/" + truck.id}
+                        className={`flex items-center gap-3 px-4 py-3 hover:bg-neutral-50 active:bg-neutral-100 transition-colors ${
+                          i < Math.min(searchResults.length, 8) - 1 ? "border-b border-neutral-50" : ""
+                        }`}
+                      >
+                        <div className="w-9 h-9 rounded-xl bg-neutral-100 overflow-hidden flex-shrink-0">
+                          {truck.profile_photo ? (
+                            <img src={truck.profile_photo} alt={truck.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-neutral-200">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#bbb" strokeWidth="2" strokeLinecap="round">
+                                <path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7V8z"/>
+                                <circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
+                              </svg>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </Link>
-                  ))
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-neutral-800 truncate">{truck.name}</p>
+                          <p className="text-xs text-neutral-400">{truck.cuisine ?? "Food Truck"}</p>
+                        </div>
+                        {truck.is_live ? (
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-red opacity-75" />
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-red" />
+                            </span>
+                            <span className="text-[10px] font-bold text-brand-red">OPEN</span>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] font-semibold text-neutral-300 flex-shrink-0">Offline</span>
+                        )}
+                      </Link>
+                    ))}
+                    {searchResults.length > 8 && (
+                      <Link
+                        href={`/trucks`}
+                        onClick={() => setSearch("")}
+                        className="flex items-center justify-center gap-1.5 px-4 py-3 border-t border-neutral-50 text-xs font-bold text-brand-red hover:bg-red-50 transition-colors"
+                      >
+                        View all {searchResults.length} results
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                          <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                      </Link>
+                    )}
+                  </>
                 )}
               </div>
             )}

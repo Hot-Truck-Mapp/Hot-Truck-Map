@@ -43,7 +43,7 @@ async function notifyOperatorBySMS(phone: string, truckName: string, pickupName:
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { truck_id, pickup_name, notes, items, total } = body;
+    const { truck_id, pickup_name, notes, items, total, customer_id } = body;
 
     if (!truck_id || !pickup_name || !items?.length || total == null) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -85,6 +85,7 @@ export async function POST(req: NextRequest) {
         items,
         total: serverTotal,
         status: "pending",
+        ...(customer_id ? { customer_id } : {}),
       })
       .select("id")
       .single();

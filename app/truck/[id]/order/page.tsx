@@ -24,8 +24,10 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [customerId, setCustomerId] = useState<string | null>(null);
 
   useEffect(() => {
+    // Load cart
     try {
       const raw = localStorage.getItem("hot-truck-cart");
       if (raw) {
@@ -38,6 +40,12 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
     } catch {
       window.location.href = `/truck/${id}`;
     }
+    // Get logged-in user for order attribution
+    import("@/lib/supabase/client").then(({ createClient }) => {
+      createClient().auth.getUser().then(({ data }) => {
+        setCustomerId(data.user?.id ?? null);
+      });
+    });
   }, [id]);
 
   function updateQty(itemId: string, delta: number) {
@@ -79,6 +87,7 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
             quantity: i.quantity,
           })),
           total: subtotal,
+          ...(customerId ? { customer_id: customerId } : {}),
         }),
       });
       const data = await res.json();
