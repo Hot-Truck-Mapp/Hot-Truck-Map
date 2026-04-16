@@ -26,7 +26,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
-  const [openNow, setOpenNow] = useState(false);
+  const [openNow, setOpenNow] = useState(true);
   const [cuisine, setCuisine] = useState("All");
   const [dietary, setDietary] = useState<string[]>([]);
   const [showFilter, setShowFilter] = useState(false);
