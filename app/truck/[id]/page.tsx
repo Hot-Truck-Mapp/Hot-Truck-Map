@@ -104,8 +104,14 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
         const { data: follow } = await supabase
           .from("follows").select("*").eq("truck_id", id).eq("user_id", user.id).single();
         isFollowing = !!follow;
-        await supabase.from("truck_views").insert({ truck_id: id, viewer_id: user.id });
       }
+
+      // Track view for ALL visitors — logged-in users get viewer_id, anonymous get null
+      try {
+        const viewPayload: Record<string, string> = { truck_id: id };
+        if (user) viewPayload.viewer_id = user.id;
+        await supabase.from("truck_views").insert(viewPayload);
+      } catch { /* ignore — view tracking is non-critical */ }
 
       setTruck(truckData);
       setLocation(locationData ?? null);
