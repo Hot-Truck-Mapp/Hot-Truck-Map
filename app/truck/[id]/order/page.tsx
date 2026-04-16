@@ -245,7 +245,7 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
               value={pickupName}
               onChange={(e) => setPickupName(e.target.value)}
               placeholder="Name for your pickup order"
-              className="w-full border border-neutral-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-red transition-colors bg-white"
+              className="w-full border border-neutral-200 rounded-xl px-4 py-3 text-base focus:outline-none focus:border-brand-red transition-colors bg-white"
             />
             <p className="text-xs text-neutral-400 mt-1.5">The truck will call this name when your order is ready.</p>
           </div>

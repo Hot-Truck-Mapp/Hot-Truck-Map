@@ -148,7 +148,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
+                className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
               />
             </div>
 
@@ -160,7 +160,7 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
+                className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
               />
             </div>
 

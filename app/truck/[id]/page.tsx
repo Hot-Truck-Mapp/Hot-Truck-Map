@@ -160,7 +160,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
   const categories = Array.from(new Set(menuItems.map((m) => m.category ?? "Menu")));
 
   return (
-    <div className="min-h-screen bg-neutral-100 pb-32">
+    <div className="min-h-screen bg-neutral-100 pb-32 md:pb-10">
 
       {/* Navbar */}
       <nav className="bg-neutral-900 px-6 py-3 flex items-center justify-between fixed top-0 left-0 right-0 z-20">
@@ -190,7 +190,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
       </nav>
 
       {/* Hero Photo */}
-      <div className="relative h-56 md:h-72 mt-14 overflow-hidden bg-neutral-800">
+      <div className="relative h-48 sm:h-56 md:h-72 mt-14 overflow-hidden bg-neutral-800">
         {truck.profile_photo ? (
           <img src={truck.profile_photo} alt={truck.name} className="w-full h-full object-cover" />
         ) : (
@@ -212,8 +212,11 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
         )}
       </div>
 
+      {/* ── Content wrapper: constrain width on desktop ── */}
+      <div className="max-w-3xl mx-auto w-full">
+
       {/* Profile Section */}
-      <div className="bg-white px-5 py-5 shadow-sm">
+      <div className="bg-white px-5 py-5 shadow-sm md:mt-4 md:rounded-2xl md:shadow-sm md:mx-4">
         <div className="flex items-start justify-between gap-4 mb-3">
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl font-black text-neutral-900 uppercase tracking-wide leading-tight">
@@ -543,23 +546,27 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
         )}
       </div>
 
+      </div> {/* end max-w-3xl content wrapper */}
+
       {/* Floating Cart Bar — appears when items are in cart */}
       {cartCount > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-30 px-4 pb-4 pt-2">
-          <p className="text-center text-[11px] text-white/80 font-semibold mb-2 drop-shadow">
-            Pay with cash or card at the truck — no online payment required
-          </p>
-          <button
-            onClick={goToOrder}
-            className="w-full bg-brand-red text-white rounded-2xl py-4 px-5 flex items-center justify-between active:scale-95 transition-all"
-            style={{ boxShadow: "0 8px 30px rgba(232,72,28,0.45)" }}
-          >
-            <span className="bg-red-700 text-white text-xs font-black px-2.5 py-1 rounded-lg min-w-[28px] text-center">
-              {cartCount}
-            </span>
-            <span className="font-black text-base tracking-wide">Review Order</span>
-            <span className="font-black text-base">${cartTotal.toFixed(2)}</span>
-          </button>
+        <div className="fixed bottom-0 left-0 right-0 z-30 px-4 pb-4 pt-2 md:flex md:justify-center">
+          <div className="md:w-full md:max-w-lg">
+            <p className="text-center text-[11px] text-white/80 font-semibold mb-2 drop-shadow">
+              Pay with cash or card at the truck — no online payment required
+            </p>
+            <button
+              onClick={goToOrder}
+              className="w-full bg-brand-red text-white rounded-2xl py-4 px-5 flex items-center justify-between active:scale-95 transition-all"
+              style={{ boxShadow: "0 8px 30px rgba(232,72,28,0.45)" }}
+            >
+              <span className="bg-red-700 text-white text-xs font-black px-2.5 py-1 rounded-lg min-w-[28px] text-center">
+                {cartCount}
+              </span>
+              <span className="font-black text-base tracking-wide">Review Order</span>
+              <span className="font-black text-base">${cartTotal.toFixed(2)}</span>
+            </button>
+          </div>
         </div>
       )}
 

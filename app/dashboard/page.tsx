@@ -525,7 +525,7 @@ export default function Dashboard() {
     <div className="min-h-screen bg-neutral-50 flex flex-col">
 
       {/* ── Header ── */}
-      <div className="bg-neutral-900 px-5 py-4 flex items-center justify-between sticky top-0 z-20"
+      <div className="bg-neutral-900 px-5 py-4 flex items-center justify-between sticky top-0 z-20 h-[61px]"
         style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.06)" }}>
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-brand-red rounded-xl flex items-center justify-center flex-shrink-0">
@@ -559,8 +559,8 @@ export default function Dashboard() {
         </a>
       </div>
 
-      {/* ── Tab Bar ── */}
-      <div className="bg-white border-b border-neutral-100 sticky top-[61px] z-10"
+      {/* ── Mobile Tab Bar (hidden on desktop) ── */}
+      <div className="md:hidden bg-white border-b border-neutral-100 sticky top-[61px] z-10"
         style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
         <div className="flex overflow-x-auto scrollbar-none px-3 py-2 gap-1">
           {TABS.map(({ key, label, icon }) => (
@@ -587,8 +587,42 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Tab Content ── */}
-      <div className="flex-1">
+      {/* ── Body: sidebar + content ── */}
+      <div className="flex flex-1 overflow-hidden">
+
+        {/* Desktop Sidebar (hidden on mobile) */}
+        <aside className="hidden md:flex flex-col bg-white border-r border-neutral-100 w-56 shrink-0 sticky top-[61px] h-[calc(100vh-61px)] overflow-y-auto"
+          style={{ boxShadow: "2px 0 8px rgba(0,0,0,0.04)" }}>
+          <div className="flex flex-col gap-1 p-3 flex-1">
+            {TABS.map(({ key, label, icon }) => (
+              <button
+                key={key}
+                onClick={() => { setActiveTab(key); if (key === "orders") setNewOrderCount(0); }}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all text-left w-full ${
+                  activeTab === key
+                    ? "bg-brand-red text-white shadow-sm"
+                    : "text-neutral-500 hover:text-neutral-800 hover:bg-neutral-100"
+                }`}
+              >
+                <span className={`flex-shrink-0 ${activeTab === key ? "text-white" : "text-neutral-400"}`}>{icon}</span>
+                <span className="relative flex-1">
+                  {label}
+                  {key === "orders" && newOrderCount > 0 && (
+                    <span className="ml-2 inline-flex items-center justify-center min-w-[18px] h-[18px] bg-green-500 text-white text-[10px] font-black rounded-full px-1">
+                      {newOrderCount}
+                    </span>
+                  )}
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="p-3 border-t border-neutral-100">
+            <p className="text-[10px] text-neutral-300 font-medium px-4">HOT TRUCK MAPS</p>
+          </div>
+        </aside>
+
+        {/* ── Tab Content ── */}
+        <div className="flex-1 overflow-y-auto">
 
         {/* ════ GO LIVE ════ */}
         {activeTab === "live" && (
@@ -679,7 +713,7 @@ export default function Dashboard() {
                       <input value={manualAddr} onChange={e => setManualAddr(e.target.value)}
                         onKeyDown={e => e.key === "Enter" && goLiveManual()}
                         placeholder="e.g. 123 Main St, Newark NJ"
-                        className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-brand-red"/>
+                        className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red"/>
                       <button onClick={goLiveManual} disabled={!manualAddr.trim()}
                         className="w-full py-3 rounded-xl bg-brand-red text-white font-bold text-sm disabled:opacity-40">
                         Go Live at This Address
@@ -765,7 +799,7 @@ export default function Dashboard() {
             <Field label="Truck Name *">
               <input value={profile.name} onChange={e => setProfile(p => ({ ...p, name: e.target.value }))}
                 placeholder="e.g. The Taco Truck"
-                className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-brand-red bg-white"/>
+                className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red bg-white"/>
             </Field>
 
             <div>
@@ -813,7 +847,7 @@ export default function Dashboard() {
                 onChange={e => setProfile(p => ({ ...p, description: e.target.value.slice(0,200) }))}
                 placeholder="Tell customers what makes your truck special..."
                 rows={3} maxLength={200}
-                className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-brand-red resize-none bg-white"/>
+                className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red resize-none bg-white"/>
               <p className={`text-xs mt-1 ${profile.description.length >= 190 ? "text-brand-red" : "text-neutral-400"}`}>
                 {profile.description.length}/200
               </p>
@@ -828,7 +862,7 @@ export default function Dashboard() {
               </p>
               <input value={profile.phone} onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))}
                 placeholder="(201) 555-0123" type="tel"
-                className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-brand-red bg-white"/>
+                className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red bg-white"/>
               <p className="text-xs text-neutral-400 mt-1.5 flex items-center gap-1">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6.29 6.29l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
                 You&apos;ll get a text message every time a customer places an order
@@ -840,7 +874,7 @@ export default function Dashboard() {
                 <input value={profile.instagram}
                   onChange={e => setProfile(p => ({ ...p, instagram: e.target.value.replace("@","") }))}
                   placeholder="yourtruck"
-                  className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-brand-red bg-white"/>
+                  className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red bg-white"/>
               </div>
             </Field>
 
@@ -1406,13 +1440,13 @@ export default function Dashboard() {
               <Field label="Item Name *">
                 <input value={itemForm.name} onChange={e => setItemForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="e.g. Al Pastor Taco"
-                  className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-brand-red"/>
+                  className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red"/>
               </Field>
 
               <Field label="Description">
                 <textarea value={itemForm.description} onChange={e => setItemForm(f => ({ ...f, description: e.target.value }))}
                   placeholder="Marinated pork, pineapple, cilantro..." rows={2}
-                  className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-brand-red resize-none"/>
+                  className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red resize-none"/>
               </Field>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1421,13 +1455,13 @@ export default function Dashboard() {
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 font-bold text-sm">$</span>
                     <input type="number" value={itemForm.price} onChange={e => setItemForm(f => ({ ...f, price: e.target.value }))}
                       placeholder="0.00" step="0.01" min="0"
-                      className="w-full pl-7 pr-4 py-3 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-brand-red"/>
+                      className="w-full pl-7 pr-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red"/>
                   </div>
                 </Field>
                 <Field label="Category">
                   <input value={itemForm.category} onChange={e => setItemForm(f => ({ ...f, category: e.target.value }))}
                     placeholder="e.g. Tacos, Sides"
-                    className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-brand-red"/>
+                    className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red"/>
                 </Field>
               </div>
 
@@ -1488,19 +1522,19 @@ export default function Dashboard() {
             <Field label="Location *">
               <input value={schedForm.location} onChange={e => setSchedForm(f => ({ ...f, location: e.target.value }))}
                 placeholder="e.g. Main St & 5th Ave, Newark NJ"
-                className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-brand-red"/>
+                className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red"/>
             </Field>
 
             <div className="grid grid-cols-2 gap-3 mt-4">
               <Field label="Opening Time">
                 <select value={schedForm.open_time} onChange={e => setSchedForm(f => ({ ...f, open_time: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-brand-red">
+                  className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red">
                   {HOURS.map(h => <option key={h} value={h}>{h}</option>)}
                 </select>
               </Field>
               <Field label="Closing Time">
                 <select value={schedForm.close_time} onChange={e => setSchedForm(f => ({ ...f, close_time: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-brand-red">
+                  className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red">
                   {HOURS.map(h => <option key={h} value={h}>{h}</option>)}
                 </select>
               </Field>
@@ -1510,7 +1544,7 @@ export default function Dashboard() {
               <Field label="Notes">
                 <input value={schedForm.notes} onChange={e => setSchedForm(f => ({ ...f, notes: e.target.value }))}
                   placeholder="e.g. Near the farmers market"
-                  className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-brand-red"/>
+                  className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red"/>
               </Field>
             </div>
 
@@ -1521,6 +1555,7 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
