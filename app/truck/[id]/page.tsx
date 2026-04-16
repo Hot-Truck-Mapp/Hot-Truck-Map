@@ -545,16 +545,19 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
 
       {/* Floating Cart Bar — appears when items are in cart */}
       {cartCount > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-30 p-4 bg-gradient-to-t from-black/10 to-transparent">
+        <div className="fixed bottom-0 left-0 right-0 z-30 px-4 pb-4 pt-2">
+          <p className="text-center text-[11px] text-white/80 font-semibold mb-2 drop-shadow">
+            Pay with cash or card at the truck — no online payment required
+          </p>
           <button
             onClick={goToOrder}
-            className="w-full bg-brand-red text-white rounded-2xl py-4 px-5 flex items-center justify-between shadow-xl active:scale-95 transition-all"
-            style={{ boxShadow: "0 8px 30px rgba(232,72,28,0.4)" }}
+            className="w-full bg-brand-red text-white rounded-2xl py-4 px-5 flex items-center justify-between active:scale-95 transition-all"
+            style={{ boxShadow: "0 8px 30px rgba(232,72,28,0.45)" }}
           >
             <span className="bg-red-700 text-white text-xs font-black px-2.5 py-1 rounded-lg min-w-[28px] text-center">
               {cartCount}
             </span>
-            <span className="font-black text-base tracking-wide">Place Order</span>
+            <span className="font-black text-base tracking-wide">Review Order</span>
             <span className="font-black text-base">${cartTotal.toFixed(2)}</span>
           </button>
         </div>
