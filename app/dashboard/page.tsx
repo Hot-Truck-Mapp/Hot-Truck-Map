@@ -884,15 +884,9 @@ export default function Dashboard() {
             </button>
 
             {profileSaved && (
-              <button
-                onClick={() => { setProfileSaved(false); setActiveTab("menu"); }}
-                className="w-full py-4 bg-neutral-900 text-white rounded-2xl font-bold text-base flex items-center justify-center gap-2"
-              >
-                Next: Add Menu Items
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <path d="M5 12h14M12 5l7 7-7 7"/>
-                </svg>
-              </button>
+              <p className="text-center text-sm text-green-600 font-semibold">
+                ✓ Profile saved — use the tabs above to manage your menu, schedule, and more.
+              </p>
             )}
           </div>
         )}
@@ -916,16 +910,7 @@ export default function Dashboard() {
             </div>
 
             <div className="px-4 py-4 max-w-2xl mx-auto">
-              {!truckId ? (
-                <div className="text-center py-16 bg-white rounded-2xl shadow-sm">
-                  <p className="font-bold text-neutral-700 mb-1">Set up your profile first</p>
-                  <p className="text-sm text-neutral-400 mb-4">Create your truck profile before adding menu items.</p>
-                  <button onClick={() => setActiveTab("profile")}
-                    className="px-5 py-2.5 bg-brand-red text-white rounded-full text-sm font-bold">
-                    Go to Profile
-                  </button>
-                </div>
-              ) : menuItems.length === 0 ? (
+              {menuItems.length === 0 ? (
                 <div className="text-center py-16 bg-white rounded-2xl shadow-sm">
                   <p className="font-bold text-neutral-700 mb-1">No menu items yet</p>
                   <p className="text-sm text-neutral-400 mb-4">Add your first item to get started</p>
@@ -992,113 +977,148 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* Next step prompt — shown when menu has items but no schedule set */}
-            {menuItems.length > 0 && schedule.length === 0 && (
-              <div className="px-4 pb-6 max-w-2xl mx-auto">
-                <button
-                  onClick={() => setActiveTab("schedule")}
-                  className="w-full py-4 bg-neutral-900 text-white rounded-2xl font-bold text-base flex items-center justify-center gap-2"
-                >
-                  Next: Set Your Schedule
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                    <path d="M5 12h14M12 5l7 7-7 7"/>
-                  </svg>
-                </button>
-              </div>
-            )}
           </div>
         )}
 
         {/* ════ SCHEDULE ════ */}
         {activeTab === "schedule" && (
           <div className="pb-10">
-            {!truckId ? (
-              <div className="p-6 text-center">
-                <p className="font-bold text-neutral-700 mb-1">Set up your profile first</p>
-                <p className="text-sm text-neutral-400 mb-4">Create your truck profile before adding a schedule.</p>
-                <button onClick={() => setActiveTab("profile")} className="px-5 py-2.5 bg-brand-red text-white rounded-full text-sm font-bold">
-                  Go to Profile
-                </button>
+            {/* Header */}
+            <div className="bg-white border-b border-neutral-100 px-4 py-4 flex items-center justify-between">
+              <div>
+                <p className="font-black text-neutral-900 text-base uppercase tracking-wide">Weekly Schedule</p>
+                <p className="text-xs text-neutral-400 mt-0.5">Set your hours and location for each day</p>
               </div>
-            ) : (
-              <>
-                {/* Day selector */}
-                <div className="bg-white border-b border-neutral-100 px-4 py-3">
-                  <div className="flex gap-2 overflow-x-auto scrollbar-none">
-                    {DAYS.map((day, i) => {
-                      const hasEntry = schedule.some(s => s.day_of_week === i);
-                      const isToday  = i === new Date().getDay();
-                      return (
-                        <button key={day} onClick={() => setSchedDay(i)}
-                          className={`flex-shrink-0 flex flex-col items-center gap-1 px-4 py-2 rounded-2xl transition-all ${
-                            schedDay === i ? "bg-brand-red text-white" : "bg-neutral-100 text-neutral-600"}`}>
-                          <span className="text-xs font-medium">{day}</span>
-                          {isToday && <span className={`text-[9px] font-black ${schedDay === i ? "text-red-200" : "text-brand-red"}`}>TODAY</span>}
-                          {hasEntry && <span className={`w-1.5 h-1.5 rounded-full ${schedDay === i ? "bg-red-200" : "bg-brand-red"}`}/>}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+              <button onClick={() => openAddSched(schedDay)}
+                className="flex items-center gap-1.5 px-4 py-2 bg-brand-red text-white rounded-full text-sm font-bold">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                  <path d="M12 5v14M5 12h14"/>
+                </svg>
+                Add Schedule
+              </button>
+            </div>
 
-                <div className="p-4 flex flex-col gap-3 max-w-lg mx-auto">
-                  {schedule.filter(s => s.day_of_week === schedDay).length === 0 ? (
-                    <div className="text-center py-10">
-                      <p className="text-neutral-500 font-medium">No stops for {DAYS[schedDay]}</p>
-                      <p className="text-neutral-400 text-sm mt-1">Tap below to add a location</p>
-                    </div>
-                  ) : (
-                    schedule.filter(s => s.day_of_week === schedDay).map(entry => (
-                      <div key={entry.id} className="bg-white rounded-2xl shadow-sm p-4">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <p className="font-semibold text-neutral-800">{entry.location}</p>
-                            <p className="text-sm text-brand-red font-medium mt-0.5">{entry.open_time} – {entry.close_time}</p>
-                            {entry.notes && <p className="text-xs text-neutral-400 mt-1">{entry.notes}</p>}
+            {/* Day pills */}
+            <div className="bg-neutral-50 border-b border-neutral-100 px-4 py-3">
+              <div className="flex gap-2 overflow-x-auto scrollbar-none">
+                {["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"].map((day, i) => {
+                  const hasEntry = schedule.some(s => s.day_of_week === i);
+                  const isToday  = i === new Date().getDay();
+                  return (
+                    <button key={day} onClick={() => setSchedDay(i)}
+                      className={`flex-shrink-0 flex flex-col items-center gap-0.5 px-4 py-2.5 rounded-2xl transition-all ${
+                        schedDay === i
+                          ? "bg-brand-red text-white shadow-sm"
+                          : "bg-white border border-neutral-200 text-neutral-600 hover:border-brand-red"}`}>
+                      <span className="text-xs font-black tracking-wide">{DAYS[i]}</span>
+                      {isToday && <span className={`text-[9px] font-black ${schedDay === i ? "text-red-200" : "text-brand-red"}`}>TODAY</span>}
+                      {hasEntry && !isToday && <span className={`w-1.5 h-1.5 rounded-full ${schedDay === i ? "bg-red-200" : "bg-brand-red"}`}/>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="p-4 flex flex-col gap-3 max-w-2xl mx-auto">
+
+              {/* Selected day header */}
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-black text-neutral-700 uppercase tracking-widest">
+                  {["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][schedDay]}
+                </p>
+                {schedule.filter(s => s.day_of_week === schedDay).length > 0 && (
+                  <button onClick={() => openAddSched(schedDay)}
+                    className="text-xs text-brand-red font-bold hover:underline">
+                    + Add Another Stop
+                  </button>
+                )}
+              </div>
+
+              {/* Entries for selected day */}
+              {schedule.filter(s => s.day_of_week === schedDay).length === 0 ? (
+                <div className="bg-white rounded-2xl border-2 border-dashed border-neutral-200 py-12 text-center">
+                  <div className="w-12 h-12 bg-neutral-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
+                      <rect x="3" y="4" width="18" height="18" rx="2"/>
+                      <line x1="16" y1="2" x2="16" y2="6"/>
+                      <line x1="8" y1="2" x2="8" y2="6"/>
+                      <line x1="3" y1="10" x2="21" y2="10"/>
+                    </svg>
+                  </div>
+                  <p className="text-neutral-500 font-semibold mb-1">No schedule for {["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][schedDay]}</p>
+                  <p className="text-neutral-400 text-sm mb-4">Add your location and hours for this day</p>
+                  <button onClick={() => openAddSched(schedDay)}
+                    className="px-5 py-2.5 bg-brand-red text-white rounded-full text-sm font-bold">
+                    Add Schedule
+                  </button>
+                </div>
+              ) : (
+                schedule.filter(s => s.day_of_week === schedDay).map(entry => (
+                  <div key={entry.id} className="bg-white rounded-2xl shadow-sm border border-neutral-100 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3 flex-1 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E8481C" strokeWidth="2" strokeLinecap="round">
+                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                            <circle cx="12" cy="10" r="3"/>
+                          </svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-neutral-900 text-sm truncate">{entry.location}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#E8481C" strokeWidth="2" strokeLinecap="round">
+                              <circle cx="12" cy="12" r="10"/>
+                              <polyline points="12 6 12 12 16 14"/>
+                            </svg>
+                            <p className="text-sm font-semibold text-brand-red">{entry.open_time} – {entry.close_time}</p>
                           </div>
-                          <div className="flex gap-2">
-                            <button onClick={() => openEditSched(entry)} className="text-xs text-neutral-400 hover:text-neutral-600 font-semibold">Edit</button>
-                            <button onClick={() => deleteSchedEntry(entry.id)} className="text-xs text-red-300 hover:text-red-500 font-semibold">Remove</button>
-                          </div>
+                          {entry.notes && <p className="text-xs text-neutral-400 mt-1">{entry.notes}</p>}
                         </div>
                       </div>
-                    ))
-                  )}
-                  <button onClick={() => openAddSched(schedDay)}
-                    className="w-full py-4 rounded-2xl border-2 border-dashed border-neutral-200 text-neutral-400 font-medium text-sm hover:border-brand-red hover:text-brand-red transition-colors">
-                    + Add Location for {DAYS[schedDay]}
-                  </button>
-
-                  {/* Weekly overview */}
-                  <div className="mt-2">
-                    <p className="text-xs font-black text-neutral-400 uppercase tracking-widest mb-3">Full Week</p>
-                    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-                      {DAYS.map((day, i) => {
-                        const entries = schedule.filter(s => s.day_of_week === i);
-                        const isToday = i === new Date().getDay();
-                        return (
-                          <div key={day} onClick={() => setSchedDay(i)}
-                            className={`flex items-center gap-3 px-4 py-3 border-b border-neutral-50 last:border-0 cursor-pointer hover:bg-neutral-50 ${isToday ? "bg-red-50" : ""}`}>
-                            <span className={`text-sm font-bold w-8 ${isToday ? "text-brand-red" : "text-neutral-400"}`}>{day}</span>
-                            <div className="flex-1 text-sm">
-                              {entries.length === 0
-                                ? <span className="text-neutral-300">No stops</span>
-                                : entries.map(e => (
-                                    <p key={e.id} className="text-neutral-700">
-                                      {e.location}
-                                      <span className="text-neutral-400 ml-2 text-xs">{e.open_time}–{e.close_time}</span>
-                                    </p>
-                                  ))}
-                            </div>
-                            {isToday && <span className="text-[10px] font-black text-brand-red bg-red-50 px-2 py-0.5 rounded-full">TODAY</span>}
-                          </div>
-                        );
-                      })}
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <button onClick={() => openEditSched(entry)} className="text-xs text-neutral-400 hover:text-neutral-700 font-semibold">Edit</button>
+                        <button onClick={() => deleteSchedEntry(entry.id)} className="text-xs text-red-300 hover:text-red-500 font-semibold">Remove</button>
+                      </div>
                     </div>
                   </div>
+                ))
+              )}
+
+              {/* Full week overview */}
+              <div className="mt-4">
+                <p className="text-xs font-black text-neutral-400 uppercase tracking-widest mb-3">Full Week at a Glance</p>
+                <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-neutral-100">
+                  {["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"].map((fullDay, i) => {
+                    const entries = schedule.filter(s => s.day_of_week === i);
+                    const isToday = i === new Date().getDay();
+                    return (
+                      <div key={fullDay} onClick={() => setSchedDay(i)}
+                        className={`flex items-center gap-3 px-4 py-3.5 border-b border-neutral-50 last:border-0 cursor-pointer hover:bg-neutral-50 transition-colors ${isToday ? "bg-red-50/50" : ""}`}>
+                        <div className="w-20 flex-shrink-0">
+                          <span className={`text-sm font-bold ${isToday ? "text-brand-red" : "text-neutral-400"}`}>{DAYS[i]}</span>
+                          {isToday && <span className="block text-[9px] font-black text-brand-red uppercase tracking-wide">Today</span>}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          {entries.length === 0 ? (
+                            <span className="text-sm text-neutral-300">— Closed</span>
+                          ) : (
+                            entries.map(e => (
+                              <p key={e.id} className="text-sm text-neutral-700 truncate">
+                                <span className="font-medium">{e.open_time} – {e.close_time}</span>
+                                <span className="text-neutral-400 ml-2">· {e.location}</span>
+                              </p>
+                            ))
+                          )}
+                        </div>
+                        {entries.length > 0 && (
+                          <div className="w-2 h-2 rounded-full bg-brand-red flex-shrink-0"/>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              </>
-            )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -1106,15 +1126,7 @@ export default function Dashboard() {
         {activeTab === "analytics" && (
           <div className="flex flex-col gap-4 max-w-2xl mx-auto pb-10">
 
-            {!truckId ? (
-              <div className="p-4 text-center py-16">
-                <p className="font-bold text-neutral-700 mb-1">No analytics yet</p>
-                <p className="text-sm text-neutral-400 mb-4">Create your truck profile to start tracking data.</p>
-                <button onClick={() => setActiveTab("profile")} className="px-5 py-2.5 bg-brand-red text-white rounded-full text-sm font-bold">
-                  Go to Profile
-                </button>
-              </div>
-            ) : analyticsLoading ? (
+            {analyticsLoading ? (
               <div className="p-8 flex flex-col items-center gap-3 py-20">
                 <div className="w-10 h-10 rounded-full border-4 border-brand-red border-t-transparent animate-spin"/>
                 <p className="text-neutral-400 text-sm">Loading your stats...</p>
@@ -1269,12 +1281,8 @@ export default function Dashboard() {
 
             {!truckId ? (
               <div className="text-center py-16">
-                <p className="font-bold text-neutral-700 mb-1">No truck set up yet</p>
-                <p className="text-sm text-neutral-400 mb-4">Create your profile first to receive orders.</p>
-                <button onClick={() => setActiveTab("profile")}
-                  className="px-5 py-2.5 bg-brand-red text-white rounded-full text-sm font-bold">
-                  Go to Profile
-                </button>
+                <p className="font-bold text-neutral-700 mb-1">No orders yet</p>
+                <p className="text-sm text-neutral-400">Orders from customers will appear here in real time.</p>
               </div>
             ) : orders.length === 0 ? (
               <div className="bg-white rounded-2xl shadow-sm flex flex-col items-center py-16 gap-3">
@@ -1510,46 +1518,70 @@ export default function Dashboard() {
 
       {/* ════ SCHEDULE MODAL ════ */}
       {schedModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end">
-          <div className="bg-white w-full rounded-t-3xl p-5 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-bold text-neutral-800">
-                {editingSched ? "Edit Stop" : `Add Stop — ${DAYS[schedForm.day_of_week]}`}
-              </h2>
-              <button onClick={() => setSchedModal(false)} className="text-neutral-400 text-2xl leading-none">×</button>
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end md:items-center md:justify-center">
+          <div className="bg-white w-full md:max-w-lg md:rounded-3xl rounded-t-3xl p-5 pb-8 max-h-[92vh] overflow-y-auto">
+
+            {/* Modal header */}
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-lg font-black text-neutral-900">
+                  {editingSched ? "Edit Hours" : "Add Schedule"}
+                </h2>
+                <p className="text-xs text-neutral-400 mt-0.5">
+                  {["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][schedForm.day_of_week]}
+                </p>
+              </div>
+              <button onClick={() => setSchedModal(false)}
+                className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500 hover:bg-neutral-200">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M18 6 6 18M6 6l12 12"/>
+                </svg>
+              </button>
             </div>
 
-            <Field label="Location *">
+            {/* Hours row */}
+            <div className="mb-4">
+              <p className="text-xs font-black text-neutral-400 uppercase tracking-widest mb-3">Hours</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-semibold text-neutral-700 mb-1.5">Opening Time</label>
+                  <select value={schedForm.open_time} onChange={e => setSchedForm(f => ({ ...f, open_time: e.target.value }))}
+                    className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red bg-white">
+                    {HOURS.map(h => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-neutral-700 mb-1.5">Closing Time</label>
+                  <select value={schedForm.close_time} onChange={e => setSchedForm(f => ({ ...f, close_time: e.target.value }))}
+                    className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red bg-white">
+                    {HOURS.map(h => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Location */}
+            <div className="mb-4">
+              <p className="text-xs font-black text-neutral-400 uppercase tracking-widest mb-3">Location</p>
+              <label className="block text-sm font-semibold text-neutral-700 mb-1.5">Address or Intersection <span className="text-brand-red">*</span></label>
               <input value={schedForm.location} onChange={e => setSchedForm(f => ({ ...f, location: e.target.value }))}
                 placeholder="e.g. Main St & 5th Ave, Newark NJ"
-                className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red"/>
-            </Field>
-
-            <div className="grid grid-cols-2 gap-3 mt-4">
-              <Field label="Opening Time">
-                <select value={schedForm.open_time} onChange={e => setSchedForm(f => ({ ...f, open_time: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red">
-                  {HOURS.map(h => <option key={h} value={h}>{h}</option>)}
-                </select>
-              </Field>
-              <Field label="Closing Time">
-                <select value={schedForm.close_time} onChange={e => setSchedForm(f => ({ ...f, close_time: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red">
-                  {HOURS.map(h => <option key={h} value={h}>{h}</option>)}
-                </select>
-              </Field>
+                className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red bg-white"/>
             </div>
 
-            <div className="mt-4 mb-6">
-              <Field label="Notes">
-                <input value={schedForm.notes} onChange={e => setSchedForm(f => ({ ...f, notes: e.target.value }))}
-                  placeholder="e.g. Near the farmers market"
-                  className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red"/>
-              </Field>
+            {/* Notes */}
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-neutral-700 mb-1.5">
+                Notes <span className="text-neutral-400 font-normal">(optional)</span>
+              </label>
+              <input value={schedForm.notes} onChange={e => setSchedForm(f => ({ ...f, notes: e.target.value }))}
+                placeholder="e.g. Near the farmers market entrance"
+                className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red bg-white"/>
             </div>
 
-            <button onClick={saveSchedEntry} disabled={schedSaving || !schedForm.location}
-              className="w-full py-4 bg-brand-red text-white rounded-2xl font-bold text-base disabled:opacity-40">
+            <button onClick={saveSchedEntry} disabled={schedSaving || !schedForm.location.trim()}
+              className="w-full py-4 bg-brand-red text-white rounded-2xl font-black text-base disabled:opacity-40 transition-opacity"
+              style={{ boxShadow: "0 4px 16px rgba(232,72,28,0.3)" }}>
               {schedSaving ? "Saving..." : editingSched ? "Save Changes" : "Add to Schedule"}
             </button>
           </div>
