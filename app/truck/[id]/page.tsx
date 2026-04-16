@@ -18,6 +18,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
 
   // Cart state: maps menu item id → quantity
   const [cart, setCart] = useState<Record<string, number>>({});
+  const [cartConflict, setCartConflict] = useState<string | null>(null); // name of truck with existing cart
 
   // Computed cart values
   const cartEntries = Object.entries(cart).filter(([, qty]) => qty > 0);
@@ -59,6 +60,16 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
   }
 
   useEffect(() => {
+    // Check for an existing cart from a DIFFERENT truck
+    try {
+      const raw = localStorage.getItem("hot-truck-cart");
+      if (raw) {
+        const existingCart = JSON.parse(raw);
+        if (existingCart.truckId && existingCart.truckId !== id) {
+          setCartConflict(existingCart.truckName || "another truck");
+        }
+      }
+    } catch { /* ignore */ }
     loadTruck();
   }, []);
 
@@ -211,6 +222,31 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
           </div>
         )}
       </div>
+
+      {/* Cart conflict banner — existing cart from a different truck */}
+      {cartConflict && (
+        <div className="max-w-3xl mx-auto w-full px-4 pt-3">
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <p className="text-xs text-amber-800 font-semibold truncate">
+                You have items in your cart from <span className="font-black">{cartConflict}</span>
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem("hot-truck-cart");
+                setCartConflict(null);
+              }}
+              className="flex-shrink-0 text-xs font-bold text-amber-700 bg-amber-100 px-3 py-1.5 rounded-lg hover:bg-amber-200 transition-colors"
+            >
+              Clear Cart
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Content wrapper: constrain width on desktop ── */}
       <div className="max-w-3xl mx-auto w-full">

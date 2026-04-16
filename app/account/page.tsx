@@ -64,8 +64,9 @@ export default function AccountPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-neutral-400">Loading account...</p>
+      <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center gap-3">
+        <div className="w-10 h-10 rounded-full border-4 border-brand-red border-t-transparent animate-spin" />
+        <p className="text-neutral-400 text-sm">Loading account...</p>
       </div>
     );
   }
@@ -74,20 +75,24 @@ export default function AccountPage() {
     <div className="min-h-screen bg-neutral-50">
 
       {/* Header */}
-      <div className="bg-white border-b border-neutral-100 px-4 py-4">
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-3">
-            <Link href="/" className="text-neutral-400 text-xl">←</Link>
-            <h1 className="text-lg font-bold text-neutral-800">My Account</h1>
+      <div className="bg-neutral-900 px-4 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Link href="/" className="w-8 h-8 rounded-full bg-neutral-800 flex items-center justify-center text-neutral-400 hover:text-white transition-colors">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M19 12H5M12 5l-7 7 7 7"/>
+            </svg>
+          </Link>
+          <div>
+            <h1 className="font-black text-white text-base">My Account</h1>
+            <p className="text-neutral-500 text-xs">{user?.email}</p>
           </div>
-          <button
-            onClick={signOut}
-            className="text-xs text-neutral-400 hover:text-neutral-600"
-          >
-            Sign Out
-          </button>
         </div>
-        <p className="text-sm text-neutral-400 ml-8">{user?.email}</p>
+        <button
+          onClick={signOut}
+          className="text-xs font-semibold text-neutral-400 hover:text-white border border-neutral-700 px-3 py-1.5 rounded-lg transition-colors"
+        >
+          Sign Out
+        </button>
       </div>
 
       {/* Tabs */}
