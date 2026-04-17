@@ -66,7 +66,7 @@ export default function ResetPasswordPage() {
             </div>
           ) : !ready ? (
             <div className="text-center py-4">
-              <div className="w-8 h-8 border-3 border-brand-red border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <div className="w-8 h-8 border-[3px] border-brand-red border-t-transparent rounded-full animate-spin mx-auto mb-3" />
               <p className="text-sm text-neutral-500">Verifying your reset link...</p>
               <p className="text-xs text-neutral-400 mt-2">
                 If nothing happens,{" "}

@@ -105,7 +105,7 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
     return (
       <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 rounded-full border-3 border-brand-red border-t-transparent animate-spin" />
+          <div className="w-8 h-8 rounded-full border-[3px] border-brand-red border-t-transparent animate-spin" />
           <p className="text-neutral-400 text-sm">Loading your order...</p>
         </div>
       </div>
