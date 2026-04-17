@@ -112,6 +112,12 @@ export default function TrucksListPage() {
 
         <div className="flex items-center gap-2">
           <Link
+            href="/catering"
+            className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-neutral-700 text-neutral-300 text-xs font-semibold hover:border-neutral-500 hover:text-white transition-colors"
+          >
+            Catering
+          </Link>
+          <Link
             href="/"
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-neutral-700 text-neutral-300 text-xs font-semibold hover:border-neutral-500 hover:text-white transition-colors"
           >

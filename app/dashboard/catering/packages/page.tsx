@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 
@@ -373,13 +374,9 @@ export default function CateringPackagesPage() {
                   <div className="flex gap-3 p-4">
 
                     {/* Photo */}
-                    <div className="w-20 h-20 rounded-xl bg-neutral-100 flex-shrink-0 overflow-hidden">
+                    <div className="w-20 h-20 rounded-xl bg-neutral-100 flex-shrink-0 overflow-hidden relative">
                       {pkg.photo ? (
-                        <img
-                          src={pkg.photo}
-                          alt={pkg.name}
-                          className="w-full h-full object-cover"
-                        />
+                        <Image src={pkg.photo} alt={pkg.name} fill className="object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center bg-neutral-200">
                           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
@@ -496,14 +493,10 @@ export default function CateringPackagesPage() {
                 </label>
                 <div
                   onClick={() => fileRef.current?.click()}
-                  className="w-full h-36 rounded-2xl overflow-hidden cursor-pointer bg-neutral-100 border-2 border-dashed border-neutral-200 hover:border-brand-red transition-colors flex items-center justify-center"
+                  className="w-full h-36 rounded-2xl overflow-hidden cursor-pointer bg-neutral-100 border-2 border-dashed border-neutral-200 hover:border-brand-red transition-colors flex items-center justify-center relative"
                 >
                   {form.photo ? (
-                    <img
-                      src={form.photo}
-                      alt="preview"
-                      className="w-full h-full object-cover"
-                    />
+                    <Image src={form.photo} alt="preview" fill className="object-cover" />
                   ) : (
                     <div className="text-center">
                       <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round" className="mx-auto mb-2">
