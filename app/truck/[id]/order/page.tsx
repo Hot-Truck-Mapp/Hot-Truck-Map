@@ -63,7 +63,7 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
     }
     const newCart = { ...cart, items: updated };
     setCart(newCart);
-    localStorage.setItem("hot-truck-cart", JSON.stringify(newCart));
+    try { localStorage.setItem("hot-truck-cart", JSON.stringify(newCart)); } catch { /* ignore */ }
   }
 
   async function placeOrder() {
