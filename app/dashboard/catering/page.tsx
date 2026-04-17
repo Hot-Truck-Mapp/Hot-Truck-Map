@@ -71,17 +71,19 @@ export default function CateringDashboardPage() {
   async function updateStatus(requestId: string, status: string) {
     setUpdating(true);
     const supabase = createClient();
-    await supabase
+    const { error } = await supabase
       .from("catering_requests")
       .update({ status })
       .eq("id", requestId);
 
-    setRequests(requests.map((r) =>
-      r.id === requestId ? { ...r, status } : r
-    ));
+    if (!error) {
+      setRequests(requests.map((r) =>
+        r.id === requestId ? { ...r, status } : r
+      ));
 
-    if (selected?.id === requestId) {
-      setSelected({ ...selected, status });
+      if (selected?.id === requestId) {
+        setSelected({ ...selected, status });
+      }
     }
 
     setUpdating(false);
@@ -94,25 +96,27 @@ export default function CateringDashboardPage() {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
-    await supabase.from("catering_messages").insert({
+    const { error } = await supabase.from("catering_messages").insert({
       request_id: selected.id,
       sender_id: user?.id,
       message: message.trim(),
     });
 
-    setMessage("");
-    await loadMessages(selected.id);
+    if (!error) {
+      setMessage("");
+      await loadMessages(selected.id);
+    }
     setSending(false);
   }
 
   async function toggleCatering() {
     if (!truckId) return;
     const supabase = createClient();
-    await supabase
+    const { error } = await supabase
       .from("trucks")
       .update({ offers_catering: !cateringEnabled })
       .eq("id", truckId);
-    setCateringEnabled(!cateringEnabled);
+    if (!error) setCateringEnabled(!cateringEnabled);
   }
 
   const filtered = requests.filter((r) =>
