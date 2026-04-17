@@ -115,22 +115,29 @@ export default function AccountPage() {
       <div className="bg-white border-b border-neutral-100">
         <div className="flex">
           {[
-            { id: "trucks", label: "Following", count: followed.length },
+            { id: "trucks", label: "Favorites", count: followed.length },
             { id: "orders", label: "Orders", count: orders.length },
             { id: "settings", label: "Settings", count: null },
           ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`flex-1 py-3 text-sm font-semibold transition-colors ${
+              className={`flex-1 py-3 text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 ${
                 activeTab === tab.id
                   ? "text-brand-red border-b-2 border-brand-red"
                   : "text-neutral-400"
               }`}
             >
+              {tab.id === "trucks" && (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill={activeTab === "trucks" ? "#E8481C" : "none"} stroke={activeTab === "trucks" ? "#E8481C" : "#aaa"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                </svg>
+              )}
               {tab.label}
-              {tab.count !== null && (
-                <span className="ml-1 text-xs">({tab.count})</span>
+              {tab.count !== null && tab.count > 0 && (
+                <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${activeTab === tab.id ? "bg-red-100 text-brand-red" : "bg-neutral-100 text-neutral-400"}`}>
+                  {tab.count}
+                </span>
               )}
             </button>
           ))}
@@ -139,30 +146,25 @@ export default function AccountPage() {
 
       <div className="p-4 max-w-lg mx-auto">
 
-        {/* Following Tab */}
+        {/* Favorites Tab */}
         {activeTab === "trucks" && (
           <div className="flex flex-col gap-3">
             {followed.length === 0 ? (
               <div className="text-center py-16">
-                <div className="w-14 h-14 bg-neutral-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
-                    <path d="M1 3h15v13H1z"/>
-                    <path d="M16 8h4l3 3v5h-7V8z"/>
-                    <circle cx="5.5" cy="18.5" r="2.5"/>
-                    <circle cx="18.5" cy="18.5" r="2.5"/>
+                <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#E8481C" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
                   </svg>
                 </div>
-                <p className="text-neutral-500 font-medium">
-                  No followed trucks yet
-                </p>
-                <p className="text-neutral-400 text-sm mt-1">
-                  Follow trucks to get notified when they go live
+                <p className="text-neutral-800 font-black text-lg">No favorites yet</p>
+                <p className="text-neutral-400 text-sm mt-1 max-w-xs mx-auto">
+                  Tap the ♥ on any food truck to save it here and get notified when it goes live
                 </p>
                 <Link
-                  href="/"
-                  className="inline-block mt-4 px-4 py-2 bg-brand-red text-white rounded-full text-sm font-semibold"
+                  href="/trucks"
+                  className="inline-block mt-5 px-6 py-2.5 bg-brand-red text-white rounded-full text-sm font-bold"
                 >
-                  Find Trucks
+                  Browse Trucks
                 </Link>
               </div>
             ) : (
@@ -171,19 +173,15 @@ export default function AccountPage() {
                 return (
                   <div
                     key={follow.truck_id}
-                    className="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3"
+                    className="bg-white rounded-2xl shadow-sm overflow-hidden"
                   >
-                    <div className="w-12 h-12 rounded-full bg-neutral-100 overflow-hidden flex-shrink-0 relative">
+                    {/* Photo banner */}
+                    <div className="w-full h-28 bg-neutral-100 relative">
                       {truck?.profile_photo ? (
-                        <Image
-                          src={truck.profile_photo}
-                          alt={truck.name}
-                          fill
-                          className="object-cover"
-                        />
+                        <Image src={truck.profile_photo} alt={truck.name ?? ""} fill className="object-cover" />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-neutral-200">
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="1.5" strokeLinecap="round">
+                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-neutral-200 to-neutral-100">
+                          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
                             <path d="M1 3h15v13H1z"/>
                             <path d="M16 8h4l3 3v5h-7V8z"/>
                             <circle cx="5.5" cy="18.5" r="2.5"/>
@@ -191,33 +189,40 @@ export default function AccountPage() {
                           </svg>
                         </div>
                       )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-neutral-800 truncate">
-                        {truck?.name}
-                      </p>
-                      <p className="text-xs text-brand-red font-medium">
-                        {truck?.cuisine}
-                      </p>
+                      {/* Live badge */}
                       {truck?.is_live && (
-                        <span className="text-[10px] font-bold text-green-600">
-                          LIVE NOW
-                        </span>
+                        <div className="absolute top-2 left-2 flex items-center gap-1 bg-brand-red text-white text-[10px] font-black px-2 py-1 rounded-lg tracking-wider">
+                          <span className="relative flex h-1.5 w-1.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-300 opacity-75" />
+                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white" />
+                          </span>
+                          OPEN NOW
+                        </div>
                       )}
-                    </div>
-                    <div className="flex gap-2">
-                      <Link
-                        href={"/truck/" + follow.truck_id}
-                        className="px-3 py-1.5 bg-brand-red text-white text-xs font-semibold rounded-full"
-                      >
-                        View
-                      </Link>
+                      {/* Unfavorite button */}
                       <button
                         onClick={() => unfollowTruck(follow.truck_id)}
-                        className="px-3 py-1.5 bg-neutral-100 text-neutral-500 text-xs font-semibold rounded-full"
+                        className="absolute top-2 right-2 w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm active:scale-90 transition-all"
+                        aria-label="Remove from favorites"
                       >
-                        Unfollow
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#E8481C" stroke="#E8481C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                        </svg>
                       </button>
+                    </div>
+
+                    {/* Info row */}
+                    <div className="px-4 py-3 flex items-center justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-black text-neutral-900 text-sm uppercase tracking-wide truncate">{truck?.name}</p>
+                        <p className="text-xs text-brand-red font-bold mt-0.5">{truck?.cuisine ?? "Food Truck"}</p>
+                      </div>
+                      <Link
+                        href={"/truck/" + follow.truck_id}
+                        className="flex-shrink-0 px-4 py-2 bg-brand-red text-white text-xs font-bold rounded-full"
+                      >
+                        {truck?.is_live ? "Order Now →" : "View Menu"}
+                      </Link>
                     </div>
                   </div>
                 );
