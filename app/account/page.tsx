@@ -16,6 +16,7 @@ export default function AccountPage() {
     orderReady: true,
     weeklyDigest: false,
   });
+  const [savingNotif, setSavingNotif] = useState(false);
 
   useEffect(() => {
     loadAccount();
@@ -23,12 +24,12 @@ export default function AccountPage() {
 
   async function loadAccount() {
     const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const { data: { user: userData } } = await supabase.auth.getUser();
+    if (!userData) {
       window.location.href = "/login";
       return;
     }
-    setUser(user);
+    setUser(userData);
 
     const { data: follows } = await supabase
       .from("follows")
@@ -44,7 +45,21 @@ export default function AccountPage() {
 
     setFollowed(follows ?? []);
     setOrders(orderData ?? []);
+
+    // Load saved notification preferences from user metadata
+    const saved = userData.user_metadata?.notifications;
+    if (saved) setNotifications(saved);
+
     setLoading(false);
+  }
+
+  async function updateNotification(key: keyof typeof notifications, value: boolean) {
+    const updated = { ...notifications, [key]: value };
+    setNotifications(updated);
+    setSavingNotif(true);
+    const supabase = createClient();
+    await supabase.auth.updateUser({ data: { notifications: updated } });
+    setSavingNotif(false);
   }
 
   async function unfollowTruck(truckId: string) {
@@ -277,33 +292,28 @@ export default function AccountPage() {
 
             {/* Notifications */}
             <div className="bg-white rounded-2xl shadow-sm p-4">
-              <p className="text-sm font-bold text-neutral-800 mb-4">
-                Notifications
-              </p>
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-sm font-bold text-neutral-800">Notifications</p>
+                {savingNotif && <p className="text-xs text-neutral-400">Saving...</p>}
+              </div>
               <div className="flex flex-col gap-4">
                 <NotificationRow
                   label="New location alerts"
                   description="When a followed truck goes live"
                   value={notifications.newLocation}
-                  onChange={(v) =>
-                    setNotifications({ ...notifications, newLocation: v })
-                  }
+                  onChange={(v) => updateNotification("newLocation", v)}
                 />
                 <NotificationRow
                   label="Order ready"
                   description="When your order is ready for pickup"
                   value={notifications.orderReady}
-                  onChange={(v) =>
-                    setNotifications({ ...notifications, orderReady: v })
-                  }
+                  onChange={(v) => updateNotification("orderReady", v)}
                 />
                 <NotificationRow
                   label="Weekly digest"
                   description="New trucks and updates in your area"
                   value={notifications.weeklyDigest}
-                  onChange={(v) =>
-                    setNotifications({ ...notifications, weeklyDigest: v })
-                  }
+                  onChange={(v) => updateNotification("weeklyDigest", v)}
                 />
               </div>
             </div>
