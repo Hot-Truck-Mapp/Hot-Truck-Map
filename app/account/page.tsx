@@ -34,12 +34,12 @@ export default function AccountPage() {
     const { data: follows } = await supabase
       .from("follows")
       .select("truck_id, trucks(*)")
-      .eq("user_id", user.id);
+      .eq("user_id", userData.id);
 
     const { data: orderData } = await supabase
       .from("orders")
       .select("*, trucks(name)")
-      .eq("customer_id", user.id)
+      .eq("customer_id", userData.id)
       .order("created_at", { ascending: false })
       .limit(20);
 

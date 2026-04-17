@@ -131,13 +131,11 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
     if (!userId) { window.location.href = "/login"; return; }
     const supabase = createClient();
     if (following) {
-      await supabase.from("follows").delete().eq("truck_id", id).eq("user_id", userId);
-      setFollowing(false);
-      setFollowerCount((c) => c - 1);
+      const { error } = await supabase.from("follows").delete().eq("truck_id", id).eq("user_id", userId);
+      if (!error) { setFollowing(false); setFollowerCount((c) => c - 1); }
     } else {
-      await supabase.from("follows").insert({ truck_id: id, user_id: userId });
-      setFollowing(true);
-      setFollowerCount((c) => c + 1);
+      const { error } = await supabase.from("follows").insert({ truck_id: id, user_id: userId });
+      if (!error) { setFollowing(true); setFollowerCount((c) => c + 1); }
     }
   }
 
