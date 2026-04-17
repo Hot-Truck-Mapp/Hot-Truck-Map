@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import Image from "next/image";
 import Link from "next/link";
 
 type Props = {
@@ -93,12 +94,13 @@ export default async function CityPage({ params }: Props) {
               href={"/truck/" + truck.id}
               className="bg-white rounded-2xl shadow-sm p-4 flex gap-3"
             >
-              <div className="w-16 h-16 rounded-xl bg-neutral-100 flex-shrink-0 overflow-hidden">
+              <div className="w-16 h-16 rounded-xl bg-neutral-100 flex-shrink-0 overflow-hidden relative">
                 {truck.profile_photo ? (
-                  <img
+                  <Image
                     src={truck.profile_photo}
                     alt={truck.name}
-                    className="w-full h-full object-cover"
+                    fill
+                    className="object-cover"
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-neutral-200">

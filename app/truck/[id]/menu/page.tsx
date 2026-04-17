@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 
@@ -285,11 +286,12 @@ function MenuItemRow({ item, isLast }: { item: any; isLast: boolean }) {
         </p>
 
         {item.photo && (
-          <div className="w-16 h-16 rounded-xl overflow-hidden bg-neutral-100 flex-shrink-0">
-            <img
+          <div className="w-16 h-16 rounded-xl overflow-hidden bg-neutral-100 flex-shrink-0 relative">
+            <Image
               src={item.photo}
               alt={item.name}
-              className="w-full h-full object-cover"
+              fill
+              className="object-cover"
             />
           </div>
         )}
