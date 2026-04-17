@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
+import Image from "next/image";
 import Link from "next/link";
 
 interface CartItem {
@@ -183,9 +184,9 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
             {cart.items.map((item) => (
               <div key={item.id} className="flex items-center gap-3 px-4 py-3">
                 {/* Photo */}
-                <div className="w-12 h-12 rounded-lg bg-neutral-100 flex-shrink-0 overflow-hidden">
+                <div className="w-12 h-12 rounded-lg bg-neutral-100 flex-shrink-0 overflow-hidden relative">
                   {item.photo ? (
-                    <img src={item.photo} alt={item.name} className="w-full h-full object-cover" />
+                    <Image src={item.photo} alt={item.name} fill className="object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-neutral-100">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">

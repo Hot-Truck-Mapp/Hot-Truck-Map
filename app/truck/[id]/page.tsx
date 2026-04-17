@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 
@@ -209,7 +210,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
       {/* Hero Photo */}
       <div className="relative h-48 sm:h-56 md:h-72 mt-14 overflow-hidden bg-neutral-800">
         {truck.profile_photo ? (
-          <img src={truck.profile_photo} alt={truck.name} className="w-full h-full object-cover" />
+          <Image src={truck.profile_photo} alt={truck.name} fill className="object-cover" />
         ) : (
           <div className="w-full h-full bg-neutral-800 flex items-center justify-center">
             <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="1.5" strokeLinecap="round">
@@ -408,9 +409,9 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
                         return (
                           <div key={item.id} className={`flex gap-3 p-4 ${item.is_sold_out ? "opacity-40" : ""}`}>
                             {/* Item photo */}
-                            <div className="w-[72px] h-[72px] rounded-xl bg-neutral-100 flex-shrink-0 overflow-hidden">
+                            <div className="w-[72px] h-[72px] rounded-xl bg-neutral-100 flex-shrink-0 overflow-hidden relative">
                               {item.photo ? (
-                                <img src={item.photo} alt={item.name} className="w-full h-full object-cover" />
+                                <Image src={item.photo} alt={item.name} fill className="object-cover" />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center bg-neutral-100">
                                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
