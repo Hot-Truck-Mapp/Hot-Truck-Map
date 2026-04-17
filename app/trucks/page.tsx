@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 
@@ -19,10 +20,37 @@ export default function TrucksListPage() {
   const [cuisine, setCuisine] = useState("All");
   const [dietary, setDietary] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadTrucks();
+    loadUser();
   }, []);
+
+  async function loadUser() {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    setUserId(user.id);
+    const { data } = await supabase.from("follows").select("truck_id").eq("user_id", user.id);
+    setFavorites(new Set((data ?? []).map((f: any) => f.truck_id)));
+  }
+
+  async function toggleFavorite(e: React.MouseEvent, truckId: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!userId) { window.location.href = "/login"; return; }
+    const supabase = createClient();
+    const isFaved = favorites.has(truckId);
+    if (isFaved) {
+      await supabase.from("follows").delete().eq("truck_id", truckId).eq("user_id", userId);
+      setFavorites((prev) => { const next = new Set(prev); next.delete(truckId); return next; });
+    } else {
+      await supabase.from("follows").insert({ truck_id: truckId, user_id: userId });
+      setFavorites((prev) => new Set(prev).add(truckId));
+    }
+  }
 
   async function loadTrucks() {
     const supabase = createClient();
@@ -303,13 +331,9 @@ export default function TrucksListPage() {
               <div className="flex gap-4 p-4">
 
                 {/* Photo */}
-                <div className="w-[88px] h-[88px] rounded-2xl bg-neutral-100 flex-shrink-0 overflow-hidden shadow-sm">
+                <div className="w-[88px] h-[88px] rounded-2xl bg-neutral-100 flex-shrink-0 overflow-hidden shadow-sm relative">
                   {truck.profile_photo ? (
-                    <img
-                      src={truck.profile_photo}
-                      alt={truck.name}
-                      className="w-full h-full object-cover"
-                    />
+                    <Image src={truck.profile_photo} alt={truck.name} fill className="object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-neutral-200 to-neutral-100">
                       <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#bbb" strokeWidth="1.5" strokeLinecap="round">
@@ -330,15 +354,27 @@ export default function TrucksListPage() {
                     <h3 className="font-black text-neutral-900 text-sm uppercase tracking-wide leading-tight">
                       {truck.name}
                     </h3>
-                    {truck.is_live && (
-                      <span className="flex-shrink-0 flex items-center gap-1 text-[10px] font-black px-2 py-1 bg-brand-red text-white rounded-lg tracking-wider">
-                        <span className="relative flex h-1.5 w-1.5">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-300 opacity-75" />
-                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white" />
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {truck.is_live && (
+                        <span className="flex items-center gap-1 text-[10px] font-black px-2 py-1 bg-brand-red text-white rounded-lg tracking-wider">
+                          <span className="relative flex h-1.5 w-1.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-300 opacity-75" />
+                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white" />
+                          </span>
+                          OPEN
                         </span>
-                        OPEN
-                      </span>
-                    )}
+                      )}
+                      {/* Heart / Favorite button */}
+                      <button
+                        onClick={(e) => toggleFavorite(e, truck.id)}
+                        className="w-7 h-7 flex items-center justify-center rounded-full transition-all active:scale-90"
+                        aria-label={favorites.has(truck.id) ? "Remove from favorites" : "Add to favorites"}
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill={favorites.has(truck.id) ? "#E8481C" : "none"} stroke={favorites.has(truck.id) ? "#E8481C" : "#ccc"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                        </svg>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Cuisine */}

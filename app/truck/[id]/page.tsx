@@ -268,17 +268,16 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
           </div>
           <button
             onClick={toggleFollow}
-            className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold border-2 transition-all ${
+            className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold border-2 transition-all active:scale-95 ${
               following
-                ? "border-neutral-200 text-neutral-400 bg-neutral-50"
-                : "border-brand-red text-brand-red hover:bg-brand-red hover:text-white"
+                ? "border-brand-red bg-brand-red text-white"
+                : "border-neutral-200 text-neutral-500 bg-white hover:border-brand-red hover:text-brand-red"
             }`}
           >
-            {following ? (
-              <><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20 6L9 17l-5-5"/></svg>Following</>
-            ) : (
-              <>+ Follow</>
-            )}
+            <svg width="15" height="15" viewBox="0 0 24 24" fill={following ? "white" : "none"} stroke={following ? "white" : "currentColor"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+            </svg>
+            {following ? "Saved" : "Save"}
           </button>
         </div>
 
