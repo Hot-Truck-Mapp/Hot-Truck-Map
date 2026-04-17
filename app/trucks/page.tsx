@@ -44,11 +44,11 @@ export default function TrucksListPage() {
     const supabase = createClient();
     const isFaved = favorites.has(truckId);
     if (isFaved) {
-      await supabase.from("follows").delete().eq("truck_id", truckId).eq("user_id", userId);
-      setFavorites((prev) => { const next = new Set(prev); next.delete(truckId); return next; });
+      const { error } = await supabase.from("follows").delete().eq("truck_id", truckId).eq("user_id", userId);
+      if (!error) setFavorites((prev) => { const next = new Set(prev); next.delete(truckId); return next; });
     } else {
-      await supabase.from("follows").insert({ truck_id: truckId, user_id: userId });
-      setFavorites((prev) => new Set(prev).add(truckId));
+      const { error } = await supabase.from("follows").insert({ truck_id: truckId, user_id: userId });
+      if (!error) setFavorites((prev) => new Set(prev).add(truckId));
     }
   }
 
