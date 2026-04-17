@@ -455,7 +455,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
                               {/* Price + Cart controls */}
                               <div className="flex items-center justify-between mt-2">
                                 <p className="text-brand-red font-black text-sm">
-                                  ${item.price?.toFixed(2)}
+                                  ${(item.price ?? 0).toFixed(2)}
                                 </p>
                                 {item.is_sold_out ? (
                                   <span className="text-xs text-neutral-400 font-semibold">Sold out</span>
