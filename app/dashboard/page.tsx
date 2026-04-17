@@ -122,14 +122,16 @@ export default function Dashboard() {
         });
         if (truck.is_live) setLiveStatus("live");
 
-        const [menuRes, schedRes, ordersRes] = await Promise.all([
+        const [menuRes, schedRes, ordersRes, followsRes] = await Promise.all([
           supabase.from("menu_items").select("*").eq("truck_id", truck.id).order("created_at"),
           supabase.from("schedules").select("*").eq("truck_id", truck.id).order("day_of_week"),
           supabase.from("orders").select("*").eq("truck_id", truck.id).order("created_at", { ascending: false }).limit(100),
+          supabase.from("follows").select("*", { count: "exact", head: true }).eq("truck_id", truck.id),
         ]);
         setMenuItems(menuRes.data ?? []);
         setSchedule(schedRes.data ?? []);
         setOrders(ordersRes.data ?? []);
+        setTotalFollowers(followsRes.count ?? 0);
 
         // Route new (incomplete) operators to Profile tab so they fill it in first
         if (!truck.description || !truck.phone) {
