@@ -110,8 +110,9 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-neutral-100 flex items-center justify-center">
-        <p className="text-neutral-400">Loading...</p>
+      <div className="min-h-screen bg-neutral-100 flex flex-col items-center justify-center gap-3">
+        <div className="w-10 h-10 border-[3px] border-brand-red border-t-transparent rounded-full animate-spin" />
+        <p className="text-neutral-400 text-sm">Loading truck details...</p>
       </div>
     );
   }
@@ -392,7 +393,7 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
                 value={form.event_location}
                 onChange={(e) => setForm({ ...form, event_location: e.target.value })}
                 placeholder="e.g. 123 Main St, Newark NJ"
-                className="w-full text-sm text-neutral-800 focus:outline-none placeholder-neutral-300"
+                className="w-full text-sm text-neutral-800 focus:outline-none placeholder-neutral-300 bg-transparent focus:bg-neutral-50 rounded transition-colors"
               />
             </div>
 
@@ -408,7 +409,7 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
                   onChange={(e) => setForm({ ...form, guest_count: e.target.value })}
                   placeholder="e.g. 50"
                   min="1"
-                  className="w-full text-sm text-neutral-800 focus:outline-none placeholder-neutral-300"
+                  className="w-full text-sm text-neutral-800 focus:outline-none placeholder-neutral-300 bg-transparent focus:bg-neutral-50 rounded transition-colors"
                 />
               </div>
               <div className="p-4">
@@ -422,7 +423,7 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
                     value={form.budget}
                     onChange={(e) => setForm({ ...form, budget: e.target.value })}
                     placeholder="Optional"
-                    className="w-full text-sm text-neutral-800 focus:outline-none placeholder-neutral-300"
+                    className="w-full text-sm text-neutral-800 focus:outline-none placeholder-neutral-300 bg-transparent focus:bg-neutral-50 rounded transition-colors"
                   />
                 </div>
               </div>
@@ -460,7 +461,7 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
                 value={form.customer_name}
                 onChange={(e) => setForm({ ...form, customer_name: e.target.value })}
                 placeholder="Your full name"
-                className="w-full text-sm text-neutral-800 focus:outline-none placeholder-neutral-300"
+                className="w-full text-sm text-neutral-800 focus:outline-none placeholder-neutral-300 bg-transparent focus:bg-neutral-50 rounded transition-colors"
               />
             </div>
             <div className="p-4 border-b border-neutral-100">
@@ -472,7 +473,7 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
                 value={form.customer_email}
                 onChange={(e) => setForm({ ...form, customer_email: e.target.value })}
                 placeholder="your@email.com"
-                className="w-full text-sm text-neutral-800 focus:outline-none placeholder-neutral-300"
+                className="w-full text-sm text-neutral-800 focus:outline-none placeholder-neutral-300 bg-transparent focus:bg-neutral-50 rounded transition-colors"
               />
             </div>
             <div className="p-4">
@@ -484,7 +485,7 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
                 value={form.customer_phone}
                 onChange={(e) => setForm({ ...form, customer_phone: e.target.value })}
                 placeholder="(201) 555-0123"
-                className="w-full text-sm text-neutral-800 focus:outline-none placeholder-neutral-300"
+                className="w-full text-sm text-neutral-800 focus:outline-none placeholder-neutral-300 bg-transparent focus:bg-neutral-50 rounded transition-colors"
               />
             </div>
           </div>
