@@ -192,25 +192,27 @@ export default function Dashboard() {
     try {
       const supabase = createClient();
       if (truckId) {
-        await supabase.from("trucks").update({
+        const { error } = await supabase.from("trucks").update({
           name: profile.name.trim(), description: profile.description,
           cuisine: profile.cuisine, phone: profile.phone,
           instagram: profile.instagram, profile_photo: profile.profile_photo,
           dietary_tags: profile.dietary_tags,
         }).eq("id", truckId);
+        if (error) throw new Error(error.message);
       } else {
-        const { data: newTruck } = await supabase.from("trucks").insert({
+        const { data: newTruck, error } = await supabase.from("trucks").insert({
           owner_id: userId, name: profile.name.trim(),
           description: profile.description, cuisine: profile.cuisine,
           phone: profile.phone, instagram: profile.instagram,
           profile_photo: profile.profile_photo, is_live: false,
           dietary_tags: profile.dietary_tags,
         }).select("id").single();
+        if (error) throw new Error(error.message);
         if (newTruck) setTruckId(newTruck.id);
       }
       setProfileSaved(true);
       setTimeout(() => setProfileSaved(false), 3000);
-    } catch { alert("Save failed. Please try again."); }
+    } catch (err: any) { alert("Save failed: " + (err?.message ?? "Please try again.")); }
     setProfileSaving(false);
   }
 
@@ -256,14 +258,18 @@ export default function Dashboard() {
         photo: itemForm.photo,
       };
       if (editingItem) {
-        await supabase.from("menu_items").update(payload).eq("id", editingItem.id);
+        const { error } = await supabase.from("menu_items").update(payload).eq("id", editingItem.id);
+        if (error) throw new Error(error.message);
       } else {
-        await supabase.from("menu_items").insert(payload);
+        const { error } = await supabase.from("menu_items").insert(payload);
+        if (error) throw new Error(error.message);
       }
       const { data } = await supabase.from("menu_items").select("*").eq("truck_id", truckId).order("created_at");
       setMenuItems(data ?? []);
       setMenuModal(false);
-    } catch { alert("Save failed. Please try again."); }
+    } catch (err: any) {
+      alert("Save failed: " + (err?.message ?? "Please try again."));
+    }
     setMenuSaving(false);
   }
 
@@ -303,14 +309,16 @@ export default function Dashboard() {
       const supabase = createClient();
       const payload = { truck_id: truckId, ...schedForm };
       if (editingSched?.id) {
-        await supabase.from("schedules").update(payload).eq("id", editingSched.id);
+        const { error } = await supabase.from("schedules").update(payload).eq("id", editingSched.id);
+        if (error) throw new Error(error.message);
       } else {
-        await supabase.from("schedules").insert(payload);
+        const { error } = await supabase.from("schedules").insert(payload);
+        if (error) throw new Error(error.message);
       }
       const { data } = await supabase.from("schedules").select("*").eq("truck_id", truckId).order("day_of_week");
       setSchedule(data ?? []);
       setSchedModal(false);
-    } catch { alert("Save failed. Please try again."); }
+    } catch (err: any) { alert("Save failed: " + (err?.message ?? "Please try again.")); }
     setSchedSaving(false);
   }
 
