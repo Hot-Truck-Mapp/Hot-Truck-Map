@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 
@@ -157,12 +158,13 @@ export default function AccountPage() {
                     key={follow.truck_id}
                     className="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3"
                   >
-                    <div className="w-12 h-12 rounded-full bg-neutral-100 overflow-hidden flex-shrink-0">
+                    <div className="w-12 h-12 rounded-full bg-neutral-100 overflow-hidden flex-shrink-0 relative">
                       {truck?.profile_photo ? (
-                        <img
+                        <Image
                           src={truck.profile_photo}
                           alt={truck.name}
-                          className="w-full h-full object-cover"
+                          fill
+                          className="object-cover"
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center bg-neutral-200">
