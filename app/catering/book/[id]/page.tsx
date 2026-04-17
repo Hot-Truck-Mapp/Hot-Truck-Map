@@ -77,6 +77,14 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
       !form.guest_count
     ) return;
 
+    // Reject past dates
+    const today = new Date().toISOString().split("T")[0];
+    if (form.event_date < today) {
+      setSubmitError("Please select a future date for your event.");
+      return;
+    }
+
+    setSubmitError(null);
     setSubmitting(true);
 
     const supabase = createClient();
