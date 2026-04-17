@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 
@@ -210,11 +211,7 @@ export default function CateringPage() {
                 {/* Photo */}
                 <div className="h-48 bg-neutral-200 relative overflow-hidden">
                   {truck.profile_photo ? (
-                    <img
-                      src={truck.profile_photo}
-                      alt={truck.name}
-                      className="w-full h-full object-cover"
-                    />
+                    <Image src={truck.profile_photo} alt={truck.name} fill className="object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-neutral-200">
                       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">

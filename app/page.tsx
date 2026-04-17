@@ -127,6 +127,12 @@ export default function HomePage() {
 
           <div className="flex items-center gap-2">
             <Link
+              href="/catering"
+              className="hidden sm:block px-3 py-1.5 rounded-lg border border-neutral-600 text-neutral-300 font-bold text-xs hover:border-neutral-400 hover:text-white transition-colors"
+            >
+              Catering
+            </Link>
+            <Link
               href="/signup?role=operator"
               className="hidden sm:block px-3 py-1.5 rounded-lg border border-brand-red text-brand-red font-bold text-xs hover:bg-brand-red hover:text-white transition-colors"
             >

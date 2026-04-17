@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 
@@ -204,11 +205,7 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
       <div className="bg-white border-b border-neutral-200">
         <div className="h-40 bg-neutral-200 overflow-hidden relative">
           {truck.profile_photo ? (
-            <img
-              src={truck.profile_photo}
-              alt={truck.name}
-              className="w-full h-full object-cover"
-            />
+            <Image src={truck.profile_photo} alt={truck.name} fill className="object-cover" />
           ) : (
             <div className="w-full h-full bg-neutral-800 flex items-center justify-center">
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="1.5" strokeLinecap="round">
