@@ -82,7 +82,10 @@ export default function SignupPage() {
     const { error } = await supabase.auth.signUp({
       email: cuEmail,
       password: cuPassword,
-      options: { data: { role: "customer" } },
+      options: {
+        data: { role: "customer" },
+        emailRedirectTo: window.location.origin + "/",
+      },
     });
 
     if (error) {

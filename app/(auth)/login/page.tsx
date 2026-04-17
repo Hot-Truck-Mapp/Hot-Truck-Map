@@ -153,14 +153,19 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="text-sm font-medium text-neutral-600">Password</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-sm font-medium text-neutral-600">Password</label>
+                <Link href="/forgot-password" className="text-xs text-brand-red font-semibold hover:underline">
+                  Forgot password?
+                </Link>
+              </div>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
+                className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red transition-colors bg-white"
               />
             </div>
 
