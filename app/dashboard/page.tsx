@@ -65,6 +65,17 @@ export default function Dashboard() {
     day_of_week: new Date().getDay(), location:"", open_time:"10:00 AM", close_time:"3:00 PM", notes:"",
   });
 
+  // Toast notifications
+  const [toast, setToast] = useState<{msg: string; isError?: boolean} | null>(null);
+  function showToast(msg: string, isError = true) {
+    setToast({ msg, isError });
+    setTimeout(() => setToast(null), 4000);
+  }
+
+  // Inline delete confirms
+  const [deletingMenuId, setDeletingMenuId]   = useState<string | null>(null);
+  const [deletingSchedId, setDeletingSchedId] = useState<string | null>(null);
+
   // Go Live
   const [liveStatus, setLiveStatus]   = useState<"idle"|"locating"|"live"|"error">("idle");
   const [liveAddress, setLiveAddress] = useState<string | null>(null);
@@ -184,7 +195,7 @@ export default function Dashboard() {
       await supabase.storage.from("avatars").upload(path, file, { upsert: true });
       const { data } = supabase.storage.from("avatars").getPublicUrl(path);
       setProfile(p => ({ ...p, profile_photo: data.publicUrl }));
-    } catch { alert("Photo upload failed"); }
+    } catch { showToast("Photo upload failed"); }
     setPhotoUploading(false);
   }
 
@@ -214,7 +225,7 @@ export default function Dashboard() {
       }
       setProfileSaved(true);
       setTimeout(() => setProfileSaved(false), 3000);
-    } catch (err: any) { alert("Save failed: " + (err?.message ?? "Please try again.")); }
+    } catch (err: any) { showToast("Save failed: " + (err?.message ?? "Please try again.")); }
     setProfileSaving(false);
   }
 
@@ -227,7 +238,7 @@ export default function Dashboard() {
       await supabase.storage.from("menu-photos").upload(path, file, { upsert: true });
       const { data } = supabase.storage.from("menu-photos").getPublicUrl(path);
       setItemForm(f => ({ ...f, photo: data.publicUrl }));
-    } catch { alert("Photo upload failed"); }
+    } catch { showToast("Photo upload failed"); }
     setMenuUploading(false);
   }
 
@@ -270,17 +281,18 @@ export default function Dashboard() {
       setMenuItems(data ?? []);
       setMenuModal(false);
     } catch (err: any) {
-      alert("Save failed: " + (err?.message ?? "Please try again."));
+      showToast("Save failed: " + (err?.message ?? "Please try again."));
     }
     setMenuSaving(false);
   }
 
   async function deleteMenuItem(id: string) {
-    if (!confirm("Delete this item?")) return;
+    if (deletingMenuId !== id) { setDeletingMenuId(id); return; }
+    setDeletingMenuId(null);
     const supabase = createClient();
     const { error } = await supabase.from("menu_items").delete().eq("id", id);
     if (!error) setMenuItems(items => items.filter(i => i.id !== id));
-    else alert("Delete failed: " + error.message);
+    else showToast("Delete failed: " + error.message);
   }
 
   async function toggleSoldOut(item: any) {
@@ -321,16 +333,17 @@ export default function Dashboard() {
       const { data } = await supabase.from("schedules").select("*").eq("truck_id", truckId).order("day_of_week");
       setSchedule(data ?? []);
       setSchedModal(false);
-    } catch (err: any) { alert("Save failed: " + (err?.message ?? "Please try again.")); }
+    } catch (err: any) { showToast("Save failed: " + (err?.message ?? "Please try again.")); }
     setSchedSaving(false);
   }
 
   async function deleteSchedEntry(id: string) {
-    if (!confirm("Remove this stop?")) return;
+    if (deletingSchedId !== id) { setDeletingSchedId(id); return; }
+    setDeletingSchedId(null);
     const supabase = createClient();
     const { error } = await supabase.from("schedules").delete().eq("id", id);
     if (!error) setSchedule(s => s.filter(e => e.id !== id));
-    else alert("Delete failed: " + error.message);
+    else showToast("Delete failed: " + error.message);
   }
 
   // ── Go Live ─────────────────────────────────────────────────────────────────
@@ -360,9 +373,9 @@ export default function Dashboard() {
   }
 
   async function goLiveGPS() {
-    if (!truckId) { alert("Save your truck profile first."); setActiveTab("profile"); return; }
-    if (!profile.description || !profile.phone) { alert("Please complete your profile (description + phone) before going live."); setActiveTab("profile"); return; }
-    if (menuItems.length === 0) { alert("Add at least one menu item before going live so customers can order!"); setActiveTab("menu"); return; }
+    if (!truckId) { showToast("Save your truck profile first."); setActiveTab("profile"); return; }
+    if (!profile.description || !profile.phone) { showToast("Complete your profile (description + phone) before going live."); setActiveTab("profile"); return; }
+    if (menuItems.length === 0) { showToast("Add at least one menu item before going live."); setActiveTab("menu"); return; }
     setLiveStatus("locating");
     setLiveError(null);
     navigator.geolocation.getCurrentPosition(
@@ -397,7 +410,7 @@ export default function Dashboard() {
     if (!truckId) return;
     const supabase = createClient();
     const { error } = await supabase.from("trucks").update({ is_live: false }).eq("id", truckId);
-    if (error) { alert("Could not go offline: " + error.message); return; }
+    if (error) { showToast("Could not go offline: " + error.message); return; }
     setLiveStatus("idle"); setIsLive(false); setLiveAddress(null);
     setManualAddr(""); setShowManual(false);
   }
@@ -1035,7 +1048,14 @@ export default function Dashboard() {
                                 {item.is_sold_out ? "Mark Available" : "Mark Sold Out"}
                               </button>
                               <button onClick={() => openEditItem(item)} className="text-xs text-neutral-400 hover:text-neutral-700 font-semibold">Edit</button>
-                              <button onClick={() => deleteMenuItem(item.id)} className="text-xs text-red-300 hover:text-red-500 font-semibold">Delete</button>
+                              {deletingMenuId === item.id ? (
+                                <>
+                                  <button onClick={() => setDeletingMenuId(null)} className="text-xs text-neutral-400 font-semibold">Cancel</button>
+                                  <button onClick={() => deleteMenuItem(item.id)} className="text-xs text-red-500 font-bold">Confirm</button>
+                                </>
+                              ) : (
+                                <button onClick={() => deleteMenuItem(item.id)} className="text-xs text-red-300 hover:text-red-500 font-semibold">Delete</button>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1146,7 +1166,14 @@ export default function Dashboard() {
                       </div>
                       <div className="flex items-center gap-3 flex-shrink-0">
                         <button onClick={() => openEditSched(entry)} className="text-xs text-neutral-400 hover:text-neutral-700 font-semibold">Edit</button>
-                        <button onClick={() => deleteSchedEntry(entry.id)} className="text-xs text-red-300 hover:text-red-500 font-semibold">Remove</button>
+                        {deletingSchedId === entry.id ? (
+                          <>
+                            <button onClick={() => setDeletingSchedId(null)} className="text-xs text-neutral-400 font-semibold">Cancel</button>
+                            <button onClick={() => deleteSchedEntry(entry.id)} className="text-xs text-red-500 font-bold">Confirm</button>
+                          </>
+                        ) : (
+                          <button onClick={() => deleteSchedEntry(entry.id)} className="text-xs text-red-300 hover:text-red-500 font-semibold">Remove</button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1657,6 +1684,22 @@ export default function Dashboard() {
         </div>
       )}
       </div>
+
+      {/* Toast notification */}
+      {toast && (
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-5 py-3 rounded-2xl shadow-xl text-sm font-semibold text-white max-w-xs text-center pointer-events-none ${toast.isError ? "bg-neutral-900" : "bg-green-600"}`}>
+          {toast.isError ? (
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="flex-shrink-0">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          ) : (
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="flex-shrink-0">
+              <path d="M20 6L9 17l-5-5"/>
+            </svg>
+          )}
+          {toast.msg}
+        </div>
+      )}
     </div>
   );
 }

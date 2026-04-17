@@ -17,6 +17,7 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
 
@@ -104,7 +105,7 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
     if (!error) {
       setSubmitted(true);
     } else {
-      alert("Something went wrong. Please try again.");
+      setSubmitError("Something went wrong. Please try again.");
     }
   }
 
@@ -492,6 +493,14 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
         </div>
 
         {/* Submit */}
+        {submitError && (
+          <div className="bg-red-50 border border-red-100 rounded-2xl px-4 py-3 flex items-center gap-2">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#E8481C" strokeWidth="2.5" strokeLinecap="round" className="flex-shrink-0">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <p className="text-sm text-red-600 font-semibold">{submitError}</p>
+          </div>
+        )}
         <button
           onClick={handleSubmit}
           disabled={
