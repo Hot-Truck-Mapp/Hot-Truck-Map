@@ -32,7 +32,14 @@ export default function CateringPackagesPage() {
     catering_min_guests: "20",
   });
   const [savingInfo, setSavingInfo] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 4000);
+  }
 
   useEffect(() => {
     loadPackages();
@@ -87,7 +94,7 @@ export default function CateringPackagesPage() {
           : null,
       })
       .eq("id", truckId);
-    if (error) alert("Save failed: " + error.message);
+    if (error) showToast("Save failed: " + error.message);
     setSavingInfo(false);
   }
 
@@ -112,7 +119,7 @@ export default function CateringPackagesPage() {
       const url = await uploadPhoto(file);
       setForm({ ...form, photo: url });
     } catch {
-      alert("Photo upload failed");
+      showToast("Photo upload failed");
     }
     setUploading(false);
   }
@@ -182,18 +189,19 @@ export default function CateringPackagesPage() {
     }
 
     setSaving(false);
-    if (error) { alert("Save failed: " + error.message); return; }
+    if (error) { showToast("Save failed: " + error.message); return; }
     setIsAdding(false);
     setEditing(null);
     loadPackages();
   }
 
   async function deletePackage(id: string) {
-    if (!confirm("Delete this package?")) return;
+    if (deletingId !== id) { setDeletingId(id); return; }
+    setDeletingId(null);
     const supabase = createClient();
     const { error } = await supabase.from("catering_packages").delete().eq("id", id);
     if (!error) setPackages(packages.filter((p) => p.id !== id));
-    else alert("Delete failed: " + error.message);
+    else showToast("Delete failed: " + error.message);
   }
 
   async function toggleActive(pkg: any) {
@@ -452,12 +460,14 @@ export default function CateringPackagesPage() {
                         >
                           Edit
                         </button>
-                        <button
-                          onClick={() => deletePackage(pkg.id)}
-                          className="text-xs text-red-300 hover:text-red-500 font-semibold"
-                        >
-                          Delete
-                        </button>
+                        {deletingId === pkg.id ? (
+                          <>
+                            <button onClick={() => setDeletingId(null)} className="text-xs text-neutral-400 font-semibold">Cancel</button>
+                            <button onClick={() => deletePackage(pkg.id)} className="text-xs text-red-500 font-bold">Confirm</button>
+                          </>
+                        ) : (
+                          <button onClick={() => deletePackage(pkg.id)} className="text-xs text-red-300 hover:text-red-500 font-semibold">Delete</button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -667,6 +677,16 @@ export default function CateringPackagesPage() {
 
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Toast notification */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-5 py-3 rounded-2xl shadow-xl bg-neutral-900 text-sm font-semibold text-white max-w-xs text-center pointer-events-none">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="flex-shrink-0">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          {toast}
         </div>
       )}
     </div>
