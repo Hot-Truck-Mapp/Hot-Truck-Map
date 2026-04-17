@@ -26,7 +26,7 @@ export default function GoLivePage() {
 
     if (!truck) throw new Error("No truck found");
 
-    await supabase.from("locations").upsert(
+    const { error: upsertError } = await supabase.from("locations").upsert(
       {
         truck_id: truck.id,
         lat,
@@ -37,10 +37,14 @@ export default function GoLivePage() {
       { onConflict: "truck_id" }
     );
 
-    await supabase
+    if (upsertError) throw new Error(upsertError.message);
+
+    const { error: updateError } = await supabase
       .from("trucks")
       .update({ is_live: true })
       .eq("id", truck.id);
+
+    if (updateError) throw new Error(updateError.message);
 
     setAddress(place);
     setStatus("live");
@@ -123,10 +127,14 @@ export default function GoLivePage() {
       .single();
 
     if (truck) {
-      await supabase
+      const { error } = await supabase
         .from("trucks")
         .update({ is_live: false })
         .eq("id", truck.id);
+      if (error) {
+        setError(error.message);
+        return;
+      }
     }
 
     setStatus("idle");
