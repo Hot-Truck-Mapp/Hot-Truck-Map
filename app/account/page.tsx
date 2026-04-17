@@ -265,7 +265,7 @@ export default function AccountPage() {
                     </div>
                     <div className="text-right">
                       <p className="font-bold text-brand-red">
-                        ${order.total?.toFixed(2)}
+                        ${(order.total ?? 0).toFixed(2)}
                       </p>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                         order.status === "picked_up"

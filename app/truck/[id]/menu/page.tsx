@@ -60,8 +60,9 @@ export default function MenuPage({ params }: { params: Promise<{ id: string }> }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <p className="text-neutral-400">Loading menu...</p>
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center gap-3">
+        <div className="w-10 h-10 border-[3px] border-brand-red border-t-transparent rounded-full animate-spin" />
+        <p className="text-neutral-400 text-sm">Loading menu...</p>
       </div>
     );
   }
@@ -282,7 +283,7 @@ function MenuItemRow({ item, isLast }: { item: any; isLast: boolean }) {
       {/* Price + Photo */}
       <div className="flex items-start gap-3 flex-shrink-0">
         <p className="text-brand-red font-black text-lg">
-          ${item.price?.toFixed(2)}
+          ${(item.price ?? 0).toFixed(2)}
         </p>
 
         {item.photo && (

@@ -217,8 +217,9 @@ export default function CateringPackagesPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-neutral-900 flex items-center justify-center">
-        <p className="text-neutral-400">Loading...</p>
+      <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center gap-3">
+        <div className="w-10 h-10 border-[3px] border-brand-red border-t-transparent rounded-full animate-spin" />
+        <p className="text-neutral-400 text-sm">Loading packages...</p>
       </div>
     );
   }
