@@ -161,8 +161,8 @@ export default function GoLivePage() {
 
       {/* Header */}
       <div className="mb-12 text-center">
-        <h1 className="text-2xl font-bold text-neutral-800">Go Live</h1>
-        <p className="text-neutral-500 text-sm mt-1">Broadcast your location</p>
+        <h1 className="text-2xl font-black text-neutral-800 uppercase tracking-wide">Go Live</h1>
+        <p className="text-neutral-500 text-sm mt-1">Broadcast your location to customers</p>
       </div>
 
       {/* IDLE STATE */}
@@ -170,11 +170,15 @@ export default function GoLivePage() {
         <div className="flex flex-col items-center gap-6 w-full max-w-xs">
           <button
             onClick={goLiveGPS}
-            className="w-64 h-64 rounded-full bg-brand-red text-white flex flex-col items-center justify-center gap-3 active:scale-95 transition-transform shadow-2xl"
+            className="w-64 h-64 rounded-full bg-brand-red text-white flex flex-col items-center justify-center gap-3 active:scale-95 transition-transform"
             style={{ boxShadow: "0 8px 40px rgba(217,79,61,0.4)" }}
           >
-            <span className="text-2xl font-bold">Go Live</span>
-            <span className="text-sm opacity-80">at my location</span>
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+              <circle cx="12" cy="10" r="3"/>
+            </svg>
+            <span className="text-2xl font-black uppercase tracking-wide">Go Live</span>
+            <span className="text-sm opacity-80">Tap to broadcast location</span>
           </button>
 
           <button
@@ -192,7 +196,7 @@ export default function GoLivePage() {
                 onChange={(e) => setManualAddress(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && goLiveManual()}
                 placeholder="e.g. 123 Main St, Newark, NJ"
-                className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm focus:outline-none"
+                className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-brand-red transition-colors bg-white"
               />
               <button
                 onClick={goLiveManual}
@@ -212,8 +216,12 @@ export default function GoLivePage() {
 
       {/* LOCATING STATE */}
       {status === "locating" && (
-        <div className="w-64 h-64 rounded-full bg-neutral-200 flex flex-col items-center justify-center gap-3 animate-pulse">
-          <span className="text-xl font-bold text-neutral-600">Finding you...</span>
+        <div className="w-64 h-64 rounded-full bg-neutral-100 border-4 border-neutral-200 flex flex-col items-center justify-center gap-4">
+          <div className="w-10 h-10 border-[3px] border-brand-red border-t-transparent rounded-full animate-spin" />
+          <div className="text-center">
+            <span className="text-base font-black text-neutral-700 uppercase tracking-wide block">Finding you...</span>
+            <span className="text-xs text-neutral-400 mt-1 block">Getting your GPS location</span>
+          </div>
         </div>
       )}
 
@@ -228,12 +236,12 @@ export default function GoLivePage() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-300 opacity-75" />
               <span className="relative inline-flex rounded-full h-6 w-6 bg-red-200" />
             </span>
-            <span className="text-2xl font-bold">You're Live!</span>
-            <span className="text-xs opacity-80 text-center px-6">{address}</span>
+            <span className="text-2xl font-black uppercase tracking-wide">You're Live!</span>
+            <span className="text-xs opacity-80 text-center px-6 leading-relaxed">{address}</span>
           </div>
           <button
             onClick={goOffline}
-            className="px-6 py-3 rounded-full border-2 border-neutral-300 text-neutral-600 font-semibold text-sm"
+            className="px-8 py-3 rounded-full bg-neutral-800 text-white font-black text-sm uppercase tracking-wide hover:bg-neutral-700 active:scale-95 transition-all"
           >
             Go Offline
           </button>
@@ -243,12 +251,19 @@ export default function GoLivePage() {
       {/* ERROR STATE */}
       {status === "error" && (
         <div className="flex flex-col items-center gap-6">
-          <div className="w-64 h-64 rounded-full bg-neutral-100 border-2 border-red-200 flex flex-col items-center justify-center gap-3 text-center px-8">
-            <span className="text-sm text-neutral-500">{error}</span>
+          <div className="w-64 h-64 rounded-full bg-red-50 border-2 border-red-200 flex flex-col items-center justify-center gap-3 text-center px-8">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-1">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E8481C" strokeWidth="2.5" strokeLinecap="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+            </div>
+            <span className="text-sm font-semibold text-neutral-700 leading-relaxed">{error}</span>
           </div>
           <button
             onClick={() => setStatus("idle")}
-            className="px-6 py-3 rounded-full bg-brand-red text-white font-semibold text-sm"
+            className="px-8 py-3 rounded-full bg-brand-red text-white font-black text-sm uppercase tracking-wide hover:bg-brand-red-dark active:scale-95 transition-all"
           >
             Try Again
           </button>

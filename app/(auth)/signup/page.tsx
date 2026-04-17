@@ -387,7 +387,7 @@ export default function SignupPage() {
             </button>
 
             <div className="mb-6">
-              <h1 className="text-2xl md:text-3xl font-bold text-neutral-900">Create account</h1>
+              <h1 className="text-2xl md:text-3xl font-black text-neutral-900">Create account</h1>
               <p className="text-neutral-400 text-sm mt-1">Find food trucks near you</p>
             </div>
 
@@ -424,7 +424,7 @@ export default function SignupPage() {
               <button
                 onClick={handleCustomerSignup}
                 disabled={cuLoading || !cuEmail || !cuPassword}
-                className="w-full py-4 bg-brand-red text-white rounded-2xl font-bold text-base disabled:opacity-40"
+                className="w-full py-4 bg-brand-red text-white rounded-2xl font-black text-base disabled:opacity-40"
               >
                 {cuLoading ? "Creating account..." : "Create Account"}
               </button>
