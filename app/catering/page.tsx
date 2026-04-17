@@ -27,7 +27,7 @@ export default function CateringPage() {
 
   const filtered = trucks.filter((t) =>
     search.trim() === "" ||
-    t.name.toLowerCase().includes(search.toLowerCase()) ||
+    t.name?.toLowerCase().includes(search.toLowerCase()) ||
     t.cuisine?.toLowerCase().includes(search.toLowerCase())
   );
 

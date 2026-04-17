@@ -1032,7 +1032,7 @@ export default function Dashboard() {
                                   <span className="text-[10px] font-bold px-2 py-0.5 bg-red-100 text-brand-red rounded-full">POPULAR</span>
                                 )}
                               </div>
-                              <p className="text-brand-red font-black flex-shrink-0">${parseFloat(item.price).toFixed(2)}</p>
+                              <p className="text-brand-red font-black flex-shrink-0">${(Number(item.price) || 0).toFixed(2)}</p>
                             </div>
                             {item.description && <p className="text-xs text-neutral-400 mt-0.5 line-clamp-2">{item.description}</p>}
                             {item.allergens?.length > 0 && (
