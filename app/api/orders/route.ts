@@ -152,8 +152,38 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "truck_id required" }, { status: 400 });
     }
 
-    const supabase = getAdminClient();
-    const { data, error } = await supabase
+    // Verify the requester is authenticated and owns this truck
+    const authHeader = req.headers.get("authorization") ?? "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { createClient: createSupabaseClient } = await import("@supabase/supabase-js");
+    const userClient = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { global: { headers: { Authorization: `Bearer ${token}` } } }
+    );
+    const { data: { user }, error: authErr } = await userClient.auth.getUser();
+    if (authErr || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Confirm user owns the truck (using admin client to bypass RLS for the ownership check)
+    const admin = getAdminClient();
+    const { data: truck, error: truckErr } = await admin
+      .from("trucks")
+      .select("id")
+      .eq("id", truck_id)
+      .eq("owner_id", user.id)
+      .single();
+
+    if (truckErr || !truck) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const { data, error } = await admin
       .from("orders")
       .select("*")
       .eq("truck_id", truck_id)
