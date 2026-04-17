@@ -53,10 +53,15 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
         photo: item?.photo ?? null,
       };
     });
-    localStorage.setItem(
-      "hot-truck-cart",
-      JSON.stringify({ truckId: id, truckName: truck?.name ?? "", items })
-    );
+    try {
+      localStorage.setItem(
+        "hot-truck-cart",
+        JSON.stringify({ truckId: id, truckName: truck?.name ?? "", items })
+      );
+    } catch {
+      // localStorage unavailable (e.g. Safari private browsing) — proceed anyway,
+      // the order page will redirect back if it can't read the cart
+    }
     window.location.href = `/truck/${id}/order`;
   }
 
