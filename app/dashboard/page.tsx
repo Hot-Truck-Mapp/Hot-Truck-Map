@@ -347,6 +347,8 @@ export default function Dashboard() {
 
   async function goLiveGPS() {
     if (!truckId) { alert("Save your truck profile first."); setActiveTab("profile"); return; }
+    if (!profile.description || !profile.phone) { alert("Please complete your profile (description + phone) before going live."); setActiveTab("profile"); return; }
+    if (menuItems.length === 0) { alert("Add at least one menu item before going live so customers can order!"); setActiveTab("menu"); return; }
     setLiveStatus("locating");
     setLiveError(null);
     navigator.geolocation.getCurrentPosition(
@@ -697,12 +699,22 @@ export default function Dashboard() {
             <div className="bg-white rounded-3xl shadow-sm p-8 w-full flex flex-col items-center gap-4">
               {liveStatus === "idle" && (
                 <>
-                  <button onClick={goLiveGPS}
-                    className="w-52 h-52 rounded-full bg-brand-red text-white flex flex-col items-center justify-center gap-2 active:scale-95 transition-transform"
-                    style={{ boxShadow: "0 8px 40px rgba(217,79,61,0.35)" }}>
-                    <span className="text-2xl font-black">Go Live</span>
-                    <span className="text-sm opacity-80">at my location</span>
-                  </button>
+                  {(() => {
+                    const readyToLive = !!profile.description && !!profile.phone && menuItems.length > 0;
+                    return (
+                      <>
+                        <button onClick={goLiveGPS}
+                          className={`w-52 h-52 rounded-full text-white flex flex-col items-center justify-center gap-2 transition-all ${readyToLive ? "bg-brand-red active:scale-95" : "bg-neutral-300 cursor-not-allowed"}`}
+                          style={readyToLive ? { boxShadow: "0 8px 40px rgba(217,79,61,0.35)" } : {}}>
+                          <span className="text-2xl font-black">Go Live</span>
+                          <span className="text-sm opacity-80">at my location</span>
+                        </button>
+                        {!readyToLive && (
+                          <p className="text-xs text-neutral-400 text-center -mt-1">Complete the checklist above to go live</p>
+                        )}
+                      </>
+                    );
+                  })()}
                   <button onClick={() => setShowManual(!showManual)} className="text-sm text-neutral-400">
                     {showManual ? "Hide manual entry" : "GPS not working? Enter address"}
                   </button>
