@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -798,7 +799,7 @@ export default function Dashboard() {
               <div onClick={() => photoRef.current?.click()}
                 className="w-28 h-28 rounded-full bg-neutral-200 overflow-hidden cursor-pointer relative mb-3 border-4 border-white shadow-md">
                 {profile.profile_photo
-                  ? <img src={profile.profile_photo} alt="Truck" className="w-full h-full object-cover"/>
+                  ? <Image src={profile.profile_photo} alt="Truck" fill className="object-cover"/>
                   : <div className="w-full h-full flex items-center justify-center">
                       <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="1.5" strokeLinecap="round">
                         <path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7V8z"/>
@@ -970,9 +971,9 @@ export default function Dashboard() {
                       {items.map((item, idx) => (
                         <div key={item.id}
                           className={`flex gap-3 p-4 ${idx < items.length - 1 ? "border-b border-neutral-100" : ""} ${item.is_sold_out ? "opacity-50" : ""}`}>
-                          <div className="w-20 h-20 rounded-xl bg-neutral-100 flex-shrink-0 overflow-hidden">
+                          <div className="w-20 h-20 rounded-xl bg-neutral-100 flex-shrink-0 overflow-hidden relative">
                             {item.photo
-                              ? <img src={item.photo} alt={item.name} className="w-full h-full object-cover"/>
+                              ? <Image src={item.photo} alt={item.name} fill className="object-cover"/>
                               : <div className="w-full h-full flex items-center justify-center bg-neutral-200">
                                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
                                     <rect x="3" y="3" width="18" height="18" rx="2"/>
@@ -1474,7 +1475,7 @@ export default function Dashboard() {
               <div onClick={() => menuPhotoRef.current?.click()}
                 className="w-full h-36 rounded-2xl overflow-hidden cursor-pointer bg-neutral-100 border-2 border-dashed border-neutral-200 hover:border-brand-red transition-colors flex items-center justify-center relative">
                 {itemForm.photo
-                  ? <img src={itemForm.photo} alt="preview" className="w-full h-full object-cover"/>
+                  ? <Image src={itemForm.photo} alt="preview" fill className="object-cover"/>
                   : <p className="text-sm text-neutral-400">{menuUploading ? "Uploading..." : "Tap to add photo"}</p>}
                 {itemForm.photo && (
                   <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
