@@ -9,13 +9,6 @@ export default function CateringPage() {
   const [trucks, setTrucks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [eventType, setEventType] = useState("All");
-
-  const EVENT_TYPES = [
-    "All", "Corporate", "Wedding", "Birthday",
-    "Festival", "Private Party", "Graduation"
-  ];
-
   useEffect(() => {
     loadCateringTrucks();
   }, []);
@@ -152,25 +145,6 @@ export default function CateringPage() {
                 {item.desc}
               </p>
             </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Event Type Filter */}
-      <div className="px-4 py-4 bg-neutral-100">
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {EVENT_TYPES.map((type) => (
-            <button
-              key={type}
-              onClick={() => setEventType(type)}
-              className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-black tracking-wide transition-all border-2 ${
-                eventType === type
-                  ? "bg-brand-red text-white border-brand-red"
-                  : "bg-white text-neutral-600 border-neutral-200 hover:border-neutral-400"
-              }`}
-            >
-              {type.toUpperCase()}
-            </button>
           ))}
         </div>
       </div>

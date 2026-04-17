@@ -917,11 +917,12 @@ export default function Dashboard() {
             </div>
 
             <Field label="Instagram">
-              <div className="relative">
+              <div className="relative flex items-center">
+                <span className="absolute left-4 text-neutral-400 text-base font-semibold select-none pointer-events-none">@</span>
                 <input value={profile.instagram}
                   onChange={e => setProfile(p => ({ ...p, instagram: e.target.value.replace("@","") }))}
                   placeholder="yourtruck"
-                  className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red bg-white"/>
+                  className="w-full pl-8 pr-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red bg-white"/>
               </div>
             </Field>
 
