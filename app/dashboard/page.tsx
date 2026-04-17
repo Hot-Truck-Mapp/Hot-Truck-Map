@@ -276,14 +276,15 @@ export default function Dashboard() {
   async function deleteMenuItem(id: string) {
     if (!confirm("Delete this item?")) return;
     const supabase = createClient();
-    await supabase.from("menu_items").delete().eq("id", id);
-    setMenuItems(items => items.filter(i => i.id !== id));
+    const { error } = await supabase.from("menu_items").delete().eq("id", id);
+    if (!error) setMenuItems(items => items.filter(i => i.id !== id));
+    else alert("Delete failed: " + error.message);
   }
 
   async function toggleSoldOut(item: any) {
     const supabase = createClient();
-    await supabase.from("menu_items").update({ is_sold_out: !item.is_sold_out }).eq("id", item.id);
-    setMenuItems(items => items.map(i => i.id === item.id ? { ...i, is_sold_out: !i.is_sold_out } : i));
+    const { error } = await supabase.from("menu_items").update({ is_sold_out: !item.is_sold_out }).eq("id", item.id);
+    if (!error) setMenuItems(items => items.map(i => i.id === item.id ? { ...i, is_sold_out: !i.is_sold_out } : i));
   }
 
   // ── Schedule ────────────────────────────────────────────────────────────────
@@ -325,19 +326,22 @@ export default function Dashboard() {
   async function deleteSchedEntry(id: string) {
     if (!confirm("Remove this stop?")) return;
     const supabase = createClient();
-    await supabase.from("schedules").delete().eq("id", id);
-    setSchedule(s => s.filter(e => e.id !== id));
+    const { error } = await supabase.from("schedules").delete().eq("id", id);
+    if (!error) setSchedule(s => s.filter(e => e.id !== id));
+    else alert("Delete failed: " + error.message);
   }
 
   // ── Go Live ─────────────────────────────────────────────────────────────────
   async function broadcastLocation(lat: number, lng: number, address: string) {
     const supabase = createClient();
     if (!truckId) return;
-    await supabase.from("locations").upsert(
+    const { error: upsertErr } = await supabase.from("locations").upsert(
       { truck_id: truckId, lat, lng, address, broadcasted_at: new Date().toISOString() },
       { onConflict: "truck_id" }
     );
-    await supabase.from("trucks").update({ is_live: true }).eq("id", truckId);
+    if (upsertErr) throw new Error(upsertErr.message);
+    const { error: updateErr } = await supabase.from("trucks").update({ is_live: true }).eq("id", truckId);
+    if (updateErr) throw new Error(updateErr.message);
     setLiveAddress(address);
     setLiveStatus("live");
     setIsLive(true);
@@ -390,7 +394,8 @@ export default function Dashboard() {
   async function goOffline() {
     if (!truckId) return;
     const supabase = createClient();
-    await supabase.from("trucks").update({ is_live: false }).eq("id", truckId);
+    const { error } = await supabase.from("trucks").update({ is_live: false }).eq("id", truckId);
+    if (error) { alert("Could not go offline: " + error.message); return; }
     setLiveStatus("idle"); setIsLive(false); setLiveAddress(null);
     setManualAddr(""); setShowManual(false);
   }
@@ -483,8 +488,8 @@ export default function Dashboard() {
 
   async function updateOrderStatus(orderId: string, status: string) {
     const supabase = createClient();
-    await supabase.from("orders").update({ status }).eq("id", orderId);
-    setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status } : o));
+    const { error } = await supabase.from("orders").update({ status }).eq("id", orderId);
+    if (!error) setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status } : o));
   }
 
   // ── Render ───────────────────────────────────────────────────────────────────

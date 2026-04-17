@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
@@ -303,9 +304,9 @@ export default function HomePage() {
                           i < Math.min(searchResults.length, 8) - 1 ? "border-b border-neutral-50" : ""
                         }`}
                       >
-                        <div className="w-9 h-9 rounded-xl bg-neutral-100 overflow-hidden flex-shrink-0">
+                        <div className="w-9 h-9 rounded-xl bg-neutral-100 overflow-hidden flex-shrink-0 relative">
                           {truck.profile_photo ? (
-                            <img src={truck.profile_photo} alt={truck.name} className="w-full h-full object-cover" />
+                            <Image src={truck.profile_photo} alt={truck.name} fill className="object-cover" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center bg-neutral-200">
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#bbb" strokeWidth="2" strokeLinecap="round">
@@ -472,9 +473,9 @@ export default function HomePage() {
                   className="flex gap-3 px-4 py-3 border-b border-neutral-100 active:bg-neutral-50 transition-colors"
                 >
                   {/* Photo */}
-                  <div className="w-16 h-16 rounded-xl bg-neutral-100 flex-shrink-0 overflow-hidden">
+                  <div className="w-16 h-16 rounded-xl bg-neutral-100 flex-shrink-0 overflow-hidden relative">
                     {truck.profile_photo ? (
-                      <img src={truck.profile_photo} alt={truck.name} className="w-full h-full object-cover" />
+                      <Image src={truck.profile_photo} alt={truck.name} fill className="object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-neutral-200">
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
@@ -583,9 +584,9 @@ export default function HomePage() {
                   href={"/truck/" + truck.id}
                   className="flex gap-3 px-4 py-3 border-b border-neutral-100 hover:bg-neutral-50 transition-colors"
                 >
-                  <div className="w-14 h-14 rounded-xl bg-neutral-100 flex-shrink-0 overflow-hidden">
+                  <div className="w-14 h-14 rounded-xl bg-neutral-100 flex-shrink-0 overflow-hidden relative">
                     {truck.profile_photo ? (
-                      <img src={truck.profile_photo} alt={truck.name} className="w-full h-full object-cover" />
+                      <Image src={truck.profile_photo} alt={truck.name} fill className="object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-neutral-200">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
