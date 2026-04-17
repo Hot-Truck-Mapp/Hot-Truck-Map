@@ -75,7 +75,7 @@ export default function CateringPackagesPage() {
     if (!truckId) return;
     setSavingInfo(true);
     const supabase = createClient();
-    await supabase
+    const { error } = await supabase
       .from("trucks")
       .update({
         catering_description: cateringInfo.catering_description,
@@ -87,6 +87,7 @@ export default function CateringPackagesPage() {
           : null,
       })
       .eq("id", truckId);
+    if (error) alert("Save failed: " + error.message);
     setSavingInfo(false);
   }
 
@@ -170,16 +171,18 @@ export default function CateringPackagesPage() {
       is_active: form.is_active,
     };
 
+    let error;
     if (editing) {
-      await supabase
+      ({ error } = await supabase
         .from("catering_packages")
         .update(payload)
-        .eq("id", editing.id);
+        .eq("id", editing.id));
     } else {
-      await supabase.from("catering_packages").insert(payload);
+      ({ error } = await supabase.from("catering_packages").insert(payload));
     }
 
     setSaving(false);
+    if (error) { alert("Save failed: " + error.message); return; }
     setIsAdding(false);
     setEditing(null);
     loadPackages();
@@ -188,17 +191,18 @@ export default function CateringPackagesPage() {
   async function deletePackage(id: string) {
     if (!confirm("Delete this package?")) return;
     const supabase = createClient();
-    await supabase.from("catering_packages").delete().eq("id", id);
-    setPackages(packages.filter((p) => p.id !== id));
+    const { error } = await supabase.from("catering_packages").delete().eq("id", id);
+    if (!error) setPackages(packages.filter((p) => p.id !== id));
+    else alert("Delete failed: " + error.message);
   }
 
   async function toggleActive(pkg: any) {
     const supabase = createClient();
-    await supabase
+    const { error } = await supabase
       .from("catering_packages")
       .update({ is_active: !pkg.is_active })
       .eq("id", pkg.id);
-    setPackages(packages.map((p) =>
+    if (!error) setPackages(packages.map((p) =>
       p.id === pkg.id ? { ...p, is_active: !p.is_active } : p
     ));
   }
