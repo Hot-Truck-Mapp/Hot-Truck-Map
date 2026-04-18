@@ -16,9 +16,10 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     // Supabase puts the recovery token in the URL hash — we need the session to be active
     const supabase = createClient();
-    supabase.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY") setReady(true);
     });
+    return () => subscription.unsubscribe();
   }, []);
 
   async function handleUpdate() {
