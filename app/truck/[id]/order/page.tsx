@@ -33,7 +33,7 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
       const raw = localStorage.getItem("hot-truck-cart");
       if (raw) {
         const data: CartData = JSON.parse(raw);
-        if (data.truckId === id) setCart(data);
+        if (data.truckId === id && Array.isArray(data.items) && data.items.length > 0) setCart(data);
         else window.location.href = `/truck/${id}`;
       } else {
         window.location.href = `/truck/${id}`;
