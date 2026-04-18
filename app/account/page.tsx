@@ -100,7 +100,7 @@ export default function AccountPage() {
           </Link>
           <div>
             <h1 className="font-black text-white text-base">My Account</h1>
-            <p className="text-neutral-500 text-xs">{user?.email}</p>
+            <p className="text-neutral-500 text-xs truncate max-w-[200px]">{user?.email}</p>
           </div>
         </div>
         <button

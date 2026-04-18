@@ -69,7 +69,7 @@ export default function CateringPage() {
         <div className="inline-block bg-brand-red/20 text-brand-red text-xs font-black px-3 py-1.5 rounded-full uppercase tracking-widest mb-4">
           Private Catering
         </div>
-        <h1 className="text-4xl font-black text-white uppercase tracking-wide mb-3">
+        <h1 className="text-2xl md:text-4xl font-black text-white uppercase tracking-wide mb-3">
           Book a Food Truck
           <br />
           <span className="text-brand-orange">For Your Event</span>
@@ -116,7 +116,7 @@ export default function CateringPage() {
         <h2 className="text-center text-xs font-black text-neutral-400 uppercase tracking-widest mb-8">
           How It Works
         </h2>
-        <div className="grid grid-cols-3 gap-6 max-w-2xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-2xl mx-auto">
           {[
             {
               step: "01",

@@ -93,7 +93,29 @@ export default function HomePage() {
 
   const activeFilterCount = dietary.length + (cuisine !== "All" ? 1 : 0);
 
-  if (!mounted) return null;
+  if (!mounted) return (
+    <div className="relative h-screen w-screen bg-neutral-900 flex flex-col items-center justify-center gap-4">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 bg-brand-red rounded-full flex items-center justify-center flex-shrink-0">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+            <path d="M1 3h15v13H1z"/>
+            <path d="M16 8h4l3 3v5h-7V8z"/>
+            <circle cx="5.5" cy="18.5" r="2.5"/>
+            <circle cx="18.5" cy="18.5" r="2.5"/>
+          </svg>
+        </div>
+        <div className="leading-tight">
+          <div className="flex items-center gap-1">
+            <span className="font-black text-brand-red text-2xl tracking-tight">HOT</span>
+            <span className="font-black text-white text-2xl tracking-tight">TRUCK</span>
+          </div>
+          <span className="font-black text-brand-orange text-2xl tracking-tight leading-none">MAPS</span>
+        </div>
+      </div>
+      <div className="w-10 h-10 border-[3px] border-brand-red border-t-transparent rounded-full animate-spin" />
+      <p className="text-neutral-400 text-sm">Finding food trucks near you...</p>
+    </div>
+  );
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-neutral-900">
@@ -370,7 +392,7 @@ export default function HomePage() {
       )}
 
       {/* Bottom Tab Bar */}
-      <div className="absolute bottom-0 left-0 right-0 z-30 bg-white border-t border-neutral-200 flex">
+      <div className="absolute bottom-0 left-0 right-0 z-30 bg-white border-t border-neutral-200 flex safe-bottom">
         <button
           onClick={() => setShowList(false)}
           className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-colors ${
