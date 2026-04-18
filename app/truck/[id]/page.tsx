@@ -595,7 +595,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
 
       {/* Floating Cart Bar — appears when items are in cart */}
       {cartCount > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-30 px-4 pb-4 pt-2 md:flex md:justify-center">
+        <div className="fixed bottom-0 left-0 right-0 z-30 px-4 pt-2 md:flex md:justify-center safe-bottom" style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}>
           <div className="md:w-full md:max-w-lg">
             <p className="text-center text-[11px] text-white/80 font-semibold mb-2 drop-shadow">
               Pay with cash or card at the truck — no online payment required
