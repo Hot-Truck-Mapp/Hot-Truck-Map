@@ -81,9 +81,9 @@ export default function CateringPage() {
         {/* Stats */}
         <div className="flex items-center justify-center gap-8 mb-8">
           {[
-            { value: trucks.length + "+", label: "Trucks Available" },
-            { value: "50+", label: "Events Booked" },
-            { value: "4.9", label: "Average Rating" },
+            { value: trucks.length > 0 ? trucks.length + "+" : "—", label: "Trucks Available" },
+            { value: "Free", label: "To Request" },
+            { value: "Local", label: "NJ & NY" },
           ].map((stat) => (
             <div key={stat.label} className="text-center">
               <p className="text-2xl font-black text-white">{stat.value}</p>
