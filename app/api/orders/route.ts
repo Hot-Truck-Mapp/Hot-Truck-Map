@@ -135,7 +135,8 @@ export async function POST(req: NextRequest) {
         if (truck?.phone) {
           notifyOperatorBySMS(truck.phone, truck.name, pickup_name, items, serverTotal);
         }
-      });
+      })
+      .catch((err) => console.error("SMS notification truck fetch error:", err));
 
     return NextResponse.json({ orderId: order.id, total: serverTotal });
   } catch (err) {

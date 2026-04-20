@@ -39,6 +39,16 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Redirect non-operators away from the dashboard (server-side guard)
+  if (user && pathname.startsWith("/dashboard")) {
+    const role = user.user_metadata?.role;
+    if (role !== "operator") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/";
+      return NextResponse.redirect(url);
+    }
+  }
+
   return supabaseResponse;
 }
 
