@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 
 // ── Owner emails — add yours here ────────────────────────────────────────────
-const OWNER_EMAILS = ["mechanicsmillionaire@gmail.com"];
+const OWNER_EMAILS = ["Hottruckmap@gmail.com"];
 
 type Stats = {
   totalTrucks: number;
