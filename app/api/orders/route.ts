@@ -126,17 +126,18 @@ export async function POST(req: NextRequest) {
     }
 
     // Notify operator by SMS (non-blocking — runs in background)
-    supabase
-      .from("trucks")
-      .select("name, phone")
-      .eq("id", truck_id)
-      .single()
-      .then(({ data: truck }) => {
-        if (truck?.phone) {
-          notifyOperatorBySMS(truck.phone, truck.name, pickup_name, items, serverTotal);
-        }
-      })
-      .catch((err) => console.error("SMS notification truck fetch error:", err));
+    Promise.resolve(
+      supabase
+        .from("trucks")
+        .select("name, phone")
+        .eq("id", truck_id)
+        .single()
+        .then(({ data: truck }) => {
+          if (truck?.phone) {
+            notifyOperatorBySMS(truck.phone, truck.name, pickup_name, items, serverTotal);
+          }
+        })
+    ).catch((err) => console.error("SMS notification truck fetch error:", err));
 
     return NextResponse.json({ orderId: order.id, total: serverTotal });
   } catch (err) {
