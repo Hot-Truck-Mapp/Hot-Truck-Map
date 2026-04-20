@@ -131,7 +131,13 @@ export default function Dashboard() {
           profile_photo: truck.profile_photo ?? "",
           dietary_tags:  truck.dietary_tags  ?? [],
         });
-        if (truck.is_live) setLiveStatus("live");
+        if (truck.is_live) {
+          setLiveStatus("live");
+          // Re-hydrate the live address so the "You're Live!" card shows the location
+          const { data: loc } = await supabase
+            .from("locations").select("address").eq("truck_id", truck.id).maybeSingle();
+          if (loc?.address) setLiveAddress(loc.address);
+        }
 
         const [menuRes, schedRes, ordersRes, followsRes] = await Promise.all([
           supabase.from("menu_items").select("*").eq("truck_id", truck.id).order("created_at"),
@@ -299,6 +305,7 @@ export default function Dashboard() {
     const supabase = createClient();
     const { error } = await supabase.from("menu_items").update({ is_sold_out: !item.is_sold_out }).eq("id", item.id);
     if (!error) setMenuItems(items => items.map(i => i.id === item.id ? { ...i, is_sold_out: !i.is_sold_out } : i));
+    else showToast("Could not update item: " + error.message);
   }
 
   // ── Schedule ────────────────────────────────────────────────────────────────
