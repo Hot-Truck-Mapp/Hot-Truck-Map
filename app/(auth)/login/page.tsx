@@ -104,7 +104,13 @@ export default function LoginPage() {
         <div className="w-full max-w-sm mx-auto">
 
           {/* Mobile logo */}
-          <div className="mb-10 text-center md:hidden">
+          <div className="mb-8 text-center md:hidden">
+            <Link href="/" className="inline-flex items-center gap-2 text-neutral-400 hover:text-neutral-600 text-sm font-semibold mb-6 transition-colors">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M19 12H5M12 5l-7 7 7 7"/>
+              </svg>
+              Back to Map
+            </Link>
             <div className="inline-flex items-center gap-1.5 mb-2">
               <span className="font-black text-brand-red text-2xl tracking-tight">HOT</span>
               <span className="font-black text-neutral-800 text-2xl tracking-tight">TRUCK</span>

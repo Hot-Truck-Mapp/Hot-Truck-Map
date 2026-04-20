@@ -33,7 +33,8 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Redirect unauthenticated users away from protected routes
-  if (!user && (pathname.startsWith("/dashboard") || pathname === "/account" || pathname.startsWith("/admin"))) {
+  // Note: /account handles its own unauthenticated state client-side (shows sign-in card)
+  if (!user && (pathname.startsWith("/dashboard") || pathname.startsWith("/admin"))) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
@@ -53,5 +54,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/account", "/admin/:path*"],
+  matcher: ["/dashboard/:path*", "/admin/:path*"],
 };

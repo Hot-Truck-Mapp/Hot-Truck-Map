@@ -26,8 +26,8 @@ export default function AccountPage() {
     const supabase = createClient();
     const { data: { user: userData } } = await supabase.auth.getUser();
     if (!userData) {
-      window.location.href = "/login";
-      return;
+      setLoading(false);
+      return; // show sign-in prompt instead of redirecting
     }
     setUser(userData);
 
@@ -83,6 +83,63 @@ export default function AccountPage() {
       <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center gap-3">
         <div className="w-10 h-10 rounded-full border-4 border-brand-red border-t-transparent animate-spin" />
         <p className="text-neutral-400 text-sm">Loading account...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center p-6">
+        {/* Logo */}
+        <div className="flex items-center gap-3 mb-10">
+          <div className="w-12 h-12 bg-brand-red rounded-full flex items-center justify-center flex-shrink-0">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M1 3h15v13H1z"/>
+              <path d="M16 8h4l3 3v5h-7V8z"/>
+              <circle cx="5.5" cy="18.5" r="2.5"/>
+              <circle cx="18.5" cy="18.5" r="2.5"/>
+            </svg>
+          </div>
+          <div className="leading-tight">
+            <div className="flex items-center gap-1">
+              <span className="font-black text-brand-red text-2xl tracking-tight">HOT</span>
+              <span className="font-black text-white text-2xl tracking-tight">TRUCK</span>
+            </div>
+            <span className="font-black text-brand-orange text-2xl tracking-tight leading-none">MAPS</span>
+          </div>
+        </div>
+
+        <div className="w-full max-w-sm bg-neutral-800 rounded-3xl p-6 flex flex-col gap-4">
+          <div className="text-center mb-2">
+            <h2 className="text-xl font-black text-white">Sign in to your account</h2>
+            <p className="text-neutral-400 text-sm mt-1">Track orders, follow trucks, and more</p>
+          </div>
+
+          <Link
+            href="/login"
+            className="w-full py-4 bg-brand-red text-white rounded-2xl font-black text-base text-center uppercase tracking-wide"
+          >
+            Sign In
+          </Link>
+          <Link
+            href="/signup"
+            className="w-full py-4 border-2 border-neutral-600 text-white rounded-2xl font-black text-base text-center uppercase tracking-wide"
+          >
+            Create Account
+          </Link>
+
+          <div className="pt-2 border-t border-neutral-700">
+            <Link
+              href="/"
+              className="flex items-center justify-center gap-2 text-neutral-400 hover:text-white text-sm font-semibold transition-colors"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/>
+              </svg>
+              Back to Map
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }
