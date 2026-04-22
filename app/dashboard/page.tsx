@@ -937,13 +937,47 @@ export default function Dashboard() {
             </div>
 
             <Field label="Instagram">
-              <div className="relative flex items-center">
-                <span className="absolute left-4 text-neutral-400 text-base font-semibold select-none pointer-events-none">@</span>
-                <input value={profile.instagram}
+              <div className="flex rounded-xl border border-neutral-200 overflow-hidden focus-within:border-brand-red transition-colors bg-white">
+                {/* Instagram brand badge */}
+                <div className="flex items-center gap-1.5 px-3 bg-neutral-50 border-r border-neutral-200 flex-shrink-0">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <defs>
+                      <linearGradient id="ig-grad" x1="0%" y1="100%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#f09433"/>
+                        <stop offset="25%" stopColor="#e6683c"/>
+                        <stop offset="50%" stopColor="#dc2743"/>
+                        <stop offset="75%" stopColor="#cc2366"/>
+                        <stop offset="100%" stopColor="#bc1888"/>
+                      </linearGradient>
+                    </defs>
+                    <rect x="2" y="2" width="20" height="20" rx="5" ry="5" fill="url(#ig-grad)"/>
+                    <circle cx="12" cy="12" r="4.5" stroke="white" strokeWidth="1.8" fill="none"/>
+                    <circle cx="17.5" cy="6.5" r="1.2" fill="white"/>
+                  </svg>
+                  <span className="text-neutral-500 text-sm font-bold select-none">@</span>
+                </div>
+                <input
+                  value={profile.instagram}
                   onChange={e => setProfile(p => ({ ...p, instagram: e.target.value.replace("@","") }))}
                   placeholder="yourtruck"
-                  className="w-full pl-8 pr-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red bg-white"/>
+                  className="flex-1 px-3 py-3 text-base focus:outline-none bg-white text-neutral-800 placeholder-neutral-300"
+                />
               </div>
+              {profile.instagram ? (
+                <a
+                  href={`https://instagram.com/${profile.instagram}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-brand-red font-semibold mt-1.5 hover:underline"
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/>
+                    <line x1="10" y1="14" x2="21" y2="3"/>
+                  </svg>
+                  instagram.com/{profile.instagram}
+                </a>
+              ) : null}
             </Field>
 
             <button onClick={saveProfile} disabled={profileSaving || !profile.name.trim()}
@@ -1562,11 +1596,19 @@ export default function Dashboard() {
 
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Price *">
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 font-bold text-sm">$</span>
-                    <input type="number" value={itemForm.price} onChange={e => setItemForm(f => ({ ...f, price: e.target.value }))}
-                      placeholder="0.00" step="0.01" min="0"
-                      className="w-full pl-7 pr-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red"/>
+                  <div className="flex rounded-xl border border-neutral-200 overflow-hidden focus-within:border-brand-red transition-colors bg-white">
+                    <div className="flex items-center px-3 bg-neutral-50 border-r border-neutral-200 flex-shrink-0">
+                      <span className="text-neutral-600 font-black text-base select-none">$</span>
+                    </div>
+                    <input
+                      type="number"
+                      value={itemForm.price}
+                      onChange={e => setItemForm(f => ({ ...f, price: e.target.value }))}
+                      placeholder="0.00"
+                      step="0.01"
+                      min="0"
+                      className="flex-1 px-3 py-3 text-base focus:outline-none bg-white text-neutral-800 placeholder-neutral-300"
+                    />
                   </div>
                 </Field>
                 <Field label="Category">
