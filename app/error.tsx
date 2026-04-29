@@ -20,7 +20,7 @@ export default function Error({
         <div className="inline-flex items-center gap-1.5 mb-6">
           <span className="font-black text-brand-red text-2xl tracking-tight">HOT</span>
           <span className="font-black text-neutral-800 text-2xl tracking-tight">TRUCK</span>
-          <span className="font-black text-brand-orange text-2xl tracking-tight">MAPS</span>
+          <span className="font-black text-brand-orange text-2xl tracking-tight">MAP</span>
         </div>
 
         <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4">

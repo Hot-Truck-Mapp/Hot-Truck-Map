@@ -105,7 +105,7 @@ export default function AccountPage() {
               <span className="font-black text-brand-red text-2xl tracking-tight">HOT</span>
               <span className="font-black text-white text-2xl tracking-tight">TRUCK</span>
             </div>
-            <span className="font-black text-brand-orange text-2xl tracking-tight leading-none">MAPS</span>
+            <span className="font-black text-brand-orange text-2xl tracking-tight leading-none">MAP</span>
           </div>
         </div>
 

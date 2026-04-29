@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Hot Truck Maps",
+    name: "Hot Truck Map",
     short_name: "Hot Truck",
     description: "Real-time food truck discovery. Find the food truck. Skip the guesswork.",
     start_url: "/",

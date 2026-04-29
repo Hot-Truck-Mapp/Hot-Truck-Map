@@ -1,6 +1,5 @@
-"use client";
-import { useEffect } from "react";
-export default function MenuRedirect() {
-  useEffect(() => { window.location.replace("/dashboard"); }, []);
-  return null;
+import { redirect } from "next/navigation";
+
+export default function MenuPage() {
+  redirect("/dashboard");
 }

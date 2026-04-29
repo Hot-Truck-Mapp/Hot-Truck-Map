@@ -11,15 +11,27 @@ export default function ResetPasswordPage() {
   const [done, setDone]           = useState(false);
   const [error, setError]         = useState<string | null>(null);
   const [ready, setReady]         = useState(false);
+  const [timedOut, setTimedOut]   = useState(false);
   const router = useRouter();
 
   useEffect(() => {
-    // Supabase puts the recovery token in the URL hash — we need the session to be active
     const supabase = createClient();
+    let fired = false;
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") setReady(true);
+      if (event === "PASSWORD_RECOVERY") {
+        fired = true;
+        setReady(true);
+      }
     });
-    return () => subscription.unsubscribe();
+
+    const timeout = setTimeout(() => {
+      if (!fired) setTimedOut(true);
+    }, 15000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
   }, []);
 
   async function handleUpdate() {
@@ -50,7 +62,7 @@ export default function ResetPasswordPage() {
           <div className="inline-flex items-center gap-1.5 mb-2">
             <span className="font-black text-brand-red text-2xl tracking-tight">HOT</span>
             <span className="font-black text-neutral-800 text-2xl tracking-tight">TRUCK</span>
-            <span className="font-black text-brand-orange text-2xl tracking-tight">MAPS</span>
+            <span className="font-black text-brand-orange text-2xl tracking-tight">MAP</span>
           </div>
         </div>
 
@@ -65,14 +77,15 @@ export default function ResetPasswordPage() {
               <h1 className="text-xl font-black text-neutral-900 mb-2">Password updated!</h1>
               <p className="text-sm text-neutral-500">Taking you back to sign in...</p>
             </div>
+          ) : timedOut ? (
+            <div className="text-center py-4">
+              <p className="text-sm text-red-600 mb-3">This reset link has expired or is invalid.</p>
+              <a href="/forgot-password" className="text-brand-red font-semibold text-sm">Request a new link</a>
+            </div>
           ) : !ready ? (
             <div className="text-center py-4">
               <div className="w-8 h-8 border-[3px] border-brand-red border-t-transparent rounded-full animate-spin mx-auto mb-3" />
               <p className="text-sm text-neutral-500">Verifying your reset link...</p>
-              <p className="text-xs text-neutral-400 mt-2">
-                If nothing happens,{" "}
-                <a href="/forgot-password" className="text-brand-red font-semibold">request a new link</a>.
-              </p>
             </div>
           ) : (
             <>

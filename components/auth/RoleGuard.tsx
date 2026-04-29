@@ -19,7 +19,7 @@ export default function RoleGuard({ allowedRoles, children }: Props) {
     }
   }, [role, loading])
 
-  if (loading) return <div>Loading...</div>
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-[3px] border-brand-red border-t-transparent rounded-full animate-spin" /></div>
   if (!role || !allowedRoles.includes(role)) return null
 
   return <>{children}</>

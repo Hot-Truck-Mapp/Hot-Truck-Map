@@ -22,15 +22,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   if (!truck) {
     return {
-      title: "Food Truck | Hot Truck Maps",
-      description: "Find food trucks near you on Hot Truck Maps.",
+      title: "Food Truck | Hot Truck Map",
+      description: "Find food trucks near you on Hot Truck Map.",
     };
   }
 
-  const title = `${truck.name} | Hot Truck Maps`;
+  const title = `${truck.name} | Hot Truck Map`;
   const description =
     truck.description ||
-    `${truck.cuisine ? truck.cuisine + " food truck" : "Food truck"} — order ahead and pay at the truck. Find us on Hot Truck Maps.`;
+    `${truck.cuisine ? truck.cuisine + " food truck" : "Food truck"} — order ahead and pay at the truck. Find us on Hot Truck Map.`;
   const status = truck.is_live ? "🟢 Open Now · " : "";
   const fullDescription = status + description;
 
@@ -41,7 +41,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title: truck.name,
       description: fullDescription,
       type: "website",
-      siteName: "Hot Truck Maps",
+      siteName: "Hot Truck Map",
       ...(truck.profile_photo && {
         images: [
           {

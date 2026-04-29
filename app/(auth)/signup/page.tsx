@@ -56,17 +56,14 @@ export default function SignupPage() {
     }
 
     if (data.user) {
-      const { error: truckError } = await supabase.from("trucks").insert({
+      // Best-effort: create the truck record now. Fails silently if email
+      // confirmation is required first — dashboard handles the missing-truck state.
+      await supabase.from("trucks").insert({
         owner_id: data.user.id,
         name: truckName.trim(),
         cuisine: cuisine || null,
         is_live: false,
       });
-      if (truckError) {
-        // Truck creation can fail if email confirmation is required first.
-        // The dashboard will prompt them to fill in their profile on first login.
-        console.warn("Truck pre-create failed (will retry on first login):", truckError.message);
-      }
     }
 
     setOpLoading(false);
@@ -562,7 +559,7 @@ function Logo({ size = "md", dark = false }: { size?: "md" | "lg"; dark?: boolea
           <span className={`font-black text-brand-red ${textSize} tracking-tight`}>HOT</span>
           <span className={`font-black ${dark ? "text-white" : "text-neutral-800"} ${textSize} tracking-tight`}>TRUCK</span>
         </div>
-        <span className={`font-black text-brand-orange ${textSize} tracking-tight leading-none`}>MAPS</span>
+        <span className={`font-black text-brand-orange ${textSize} tracking-tight leading-none`}>MAP</span>
       </div>
     </div>
   );
