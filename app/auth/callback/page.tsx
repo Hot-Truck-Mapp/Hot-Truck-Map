@@ -1,27 +1,28 @@
 "use client";
 
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-/**
- * Landing page after Google OAuth.
- * Reads the user's role from metadata and routes:
- *   operator → /dashboard
- *   everyone else → /
- */
 export default function AuthCallback() {
+  const router = useRouter();
+
   useEffect(() => {
-    async function redirect() {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.user_metadata?.role === "operator") {
-        window.location.replace("/dashboard");
-      } else {
-        window.location.replace("/");
+    async function handleRedirect() {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.user_metadata?.role === "operator") {
+          router.replace("/dashboard");
+        } else {
+          router.replace("/");
+        }
+      } catch {
+        router.replace("/");
       }
     }
-    redirect();
-  }, []);
+    handleRedirect();
+  }, [router]);
 
   return (
     <div className="min-h-screen bg-neutral-50 flex items-center justify-center">

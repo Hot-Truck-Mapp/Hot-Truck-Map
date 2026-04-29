@@ -191,6 +191,16 @@ CREATE TABLE IF NOT EXISTS reviews (
 ALTER TABLE reviews ADD COLUMN IF NOT EXISTS comment text;
 
 
+-- ── CATERING MESSAGES ───────────────────────────────────────
+CREATE TABLE IF NOT EXISTS catering_messages (
+  id         uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+  request_id uuid REFERENCES catering_requests(id) ON DELETE CASCADE,
+  sender_id  uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  message    text NOT NULL,
+  created_at timestamptz DEFAULT now()
+);
+
+
 -- ── TRUCK VIEWS ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS truck_views (
   id         uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
@@ -211,7 +221,8 @@ ALTER TABLE orders            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE catering_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE catering_packages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reviews           ENABLE ROW LEVEL SECURITY;
-ALTER TABLE truck_views       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE truck_views         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE catering_messages   ENABLE ROW LEVEL SECURITY;
 
 -- Trucks: public read, owner write
 DROP POLICY IF EXISTS "trucks_public_read"  ON trucks;
@@ -333,4 +344,23 @@ DROP POLICY IF EXISTS "truck_views_owner_read"    ON truck_views;
 CREATE POLICY "truck_views_public_insert" ON truck_views FOR INSERT WITH CHECK (true);
 CREATE POLICY "truck_views_owner_read"    ON truck_views FOR SELECT USING (
   auth.uid() = (SELECT owner_id FROM trucks WHERE id = truck_id)
+);
+
+-- Catering messages: request participants (truck owner + customer) can read/insert
+DROP POLICY IF EXISTS "catering_msg_read"   ON catering_messages;
+DROP POLICY IF EXISTS "catering_msg_insert" ON catering_messages;
+CREATE POLICY "catering_msg_read" ON catering_messages FOR SELECT USING (
+  auth.uid() = sender_id
+  OR auth.uid() = (
+    SELECT owner_id FROM trucks t
+    JOIN catering_requests cr ON cr.truck_id = t.id
+    WHERE cr.id = request_id
+    LIMIT 1
+  )
+  OR auth.uid() = (
+    SELECT customer_id FROM catering_requests WHERE id = request_id
+  )
+);
+CREATE POLICY "catering_msg_insert" ON catering_messages FOR INSERT WITH CHECK (
+  auth.uid() = sender_id
 );
