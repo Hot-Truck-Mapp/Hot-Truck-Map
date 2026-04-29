@@ -20,13 +20,7 @@ export function useRole() {
         return;
       }
 
-      const { data } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .single();
-
-      setRole(data?.role ?? "customer");
+      setRole((user.user_metadata?.role as Role) ?? "customer");
       setLoading(false);
     };
 

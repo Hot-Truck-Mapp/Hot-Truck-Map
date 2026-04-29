@@ -191,6 +191,15 @@ CREATE TABLE IF NOT EXISTS reviews (
 ALTER TABLE reviews ADD COLUMN IF NOT EXISTS comment text;
 
 
+-- ── TRUCK VIEWS ─────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS truck_views (
+  id         uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+  truck_id   uuid REFERENCES trucks(id) ON DELETE CASCADE,
+  viewer_id  uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at timestamptz DEFAULT now()
+);
+
+
 -- ── ROW LEVEL SECURITY ──────────────────────────────────────
 -- Enable RLS on all tables
 ALTER TABLE trucks            ENABLE ROW LEVEL SECURITY;
@@ -202,6 +211,7 @@ ALTER TABLE orders            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE catering_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE catering_packages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reviews           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE truck_views       ENABLE ROW LEVEL SECURITY;
 
 -- Trucks: public read, owner write
 CREATE POLICY IF NOT EXISTS "trucks_public_read"  ON trucks FOR SELECT USING (true);
@@ -285,3 +295,9 @@ CREATE POLICY IF NOT EXISTS "catering_pkg_owner_delete" ON catering_packages FOR
 CREATE POLICY IF NOT EXISTS "reviews_public_read"  ON reviews FOR SELECT USING (true);
 CREATE POLICY IF NOT EXISTS "reviews_auth_insert"  ON reviews FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY IF NOT EXISTS "reviews_auth_delete"  ON reviews FOR DELETE USING (auth.uid() = user_id);
+
+-- Truck views: anyone can insert, truck owner can read
+CREATE POLICY IF NOT EXISTS "truck_views_public_insert" ON truck_views FOR INSERT WITH CHECK (true);
+CREATE POLICY IF NOT EXISTS "truck_views_owner_read"    ON truck_views FOR SELECT USING (
+  auth.uid() = (SELECT owner_id FROM trucks WHERE id = truck_id)
+);

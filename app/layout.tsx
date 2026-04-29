@@ -3,23 +3,25 @@ import "./globals.css";
 import { Analytics } from "@vercel/analytics/next";
 
 export const metadata: Metadata = {
-  title: "Hot Truck Maps - Find Food Trucks Near You",
+  metadataBase: new URL("https://hottruckmap.com"),
+  title: "Hot Truck Map - Find Food Trucks Near You",
   description: "Real-time food truck discovery. Find the food truck. Skip the guesswork.",
   openGraph: {
-    title: "Hot Truck Maps",
+    title: "Hot Truck Map",
     description: "Real-time food truck discovery. Find the food truck. Skip the guesswork.",
     type: "website",
-    siteName: "Hot Truck Maps",
+    siteName: "Hot Truck Map",
+    url: "https://hottruckmap.com",
   },
   twitter: {
     card: "summary",
-    title: "Hot Truck Maps",
+    title: "Hot Truck Map",
     description: "Real-time food truck discovery. Find the food truck. Skip the guesswork.",
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Hot Truck Maps",
+    title: "Hot Truck Map",
   },
 };
 
