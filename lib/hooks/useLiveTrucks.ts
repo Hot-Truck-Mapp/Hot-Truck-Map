@@ -33,6 +33,7 @@ export function useLiveTrucks(filters: MapFilters) {
             id, lat, lng, address, broadcasted_at
           )
         `)
+        .eq("is_live", true)
         .order("created_at", { ascending: false });
 
       if (!error && data) {

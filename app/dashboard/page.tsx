@@ -481,7 +481,7 @@ export default function Dashboard() {
         revenue: or.reduce((s, o) => s + (o.total ?? 0), 0),
       });
       setAnalyticsLoaded(true);
-    } catch (err) { console.error("analytics error", err); }
+    } catch { /* analytics unavailable — UI shows empty state */ }
     setAnalyticsLoading(false);
   }
 
