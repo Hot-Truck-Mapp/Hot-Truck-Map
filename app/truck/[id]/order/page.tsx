@@ -3,6 +3,7 @@
 import { useState, useEffect, use } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
 
 interface CartItem {
   id: string;
@@ -42,10 +43,8 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
       window.location.href = `/truck/${id}`;
     }
     // Get logged-in user for order attribution
-    import("@/lib/supabase/client").then(({ createClient }) => {
-      createClient().auth.getUser().then(({ data }) => {
-        setCustomerId(data.user?.id ?? null);
-      });
+    createClient().auth.getUser().then(({ data }) => {
+      setCustomerId(data.user?.id ?? null);
     });
   }, [id]);
 
@@ -95,8 +94,8 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
       if (!res.ok) throw new Error(data.error ?? "Failed to place order");
       localStorage.removeItem("hot-truck-cart");
       window.location.href = `/truck/${id}/order/confirmation?orderId=${data.orderId}&name=${encodeURIComponent(pickupName.trim())}`;
-    } catch (err: any) {
-      setError(err.message ?? "Something went wrong. Please try again.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
       setSubmitting(false);
     }
   }

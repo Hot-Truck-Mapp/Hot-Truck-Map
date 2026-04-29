@@ -62,11 +62,8 @@ export default function SignupPage() {
         cuisine: cuisine || null,
         is_live: false,
       });
-      if (truckError) {
-        // Truck creation can fail if email confirmation is required first.
-        // The dashboard will prompt them to fill in their profile on first login.
-        console.warn("Truck pre-create failed (will retry on first login):", truckError.message);
-      }
+      // Truck creation can fail if email confirmation is required before DB access.
+      // The dashboard handles the empty-truck state on first login.
     }
 
     setOpLoading(false);
