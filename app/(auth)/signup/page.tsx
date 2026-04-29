@@ -56,14 +56,14 @@ export default function SignupPage() {
     }
 
     if (data.user) {
-      const { error: truckError } = await supabase.from("trucks").insert({
+      // Best-effort: create the truck record now. Fails silently if email
+      // confirmation is required first — dashboard handles the missing-truck state.
+      await supabase.from("trucks").insert({
         owner_id: data.user.id,
         name: truckName.trim(),
         cuisine: cuisine || null,
         is_live: false,
       });
-      // Truck creation can fail if email confirmation is required before DB access.
-      // The dashboard handles the empty-truck state on first login.
     }
 
     setOpLoading(false);
