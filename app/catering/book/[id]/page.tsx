@@ -197,7 +197,7 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
               <span className="font-black text-brand-red text-sm">HOT</span>
               <span className="font-black text-white text-sm">TRUCK</span>
             </div>
-            <span className="font-black text-brand-orange text-sm leading-none">MAPS</span>
+            <span className="font-black text-brand-orange text-sm leading-none">MAP</span>
           </div>
         </Link>
         <Link

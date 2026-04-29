@@ -562,7 +562,7 @@ function Logo({ size = "md", dark = false }: { size?: "md" | "lg"; dark?: boolea
           <span className={`font-black text-brand-red ${textSize} tracking-tight`}>HOT</span>
           <span className={`font-black ${dark ? "text-white" : "text-neutral-800"} ${textSize} tracking-tight`}>TRUCK</span>
         </div>
-        <span className={`font-black text-brand-orange ${textSize} tracking-tight leading-none`}>MAPS</span>
+        <span className={`font-black text-brand-orange ${textSize} tracking-tight leading-none`}>MAP</span>
       </div>
     </div>
   );

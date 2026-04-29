@@ -172,7 +172,7 @@ export default function AdminPage() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-black text-brand-red text-sm">HOT TRUCK MAPS</span>
+              <span className="font-black text-brand-red text-sm">HOT TRUCK MAP</span>
               <span className="text-[10px] font-bold px-2 py-0.5 bg-brand-red/20 text-brand-red rounded-full border border-brand-red/30">
                 OWNER
               </span>

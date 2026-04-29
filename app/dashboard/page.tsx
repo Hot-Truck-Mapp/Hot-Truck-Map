@@ -663,7 +663,7 @@ export default function Dashboard() {
             ))}
           </div>
           <div className="p-3 border-t border-neutral-100">
-            <p className="text-[10px] text-neutral-300 font-medium px-4">HOT TRUCK MAPS</p>
+            <p className="text-[10px] text-neutral-300 font-medium px-4">HOT TRUCK MAP</p>
           </div>
         </aside>
 
@@ -820,7 +820,7 @@ export default function Dashboard() {
                     </svg>
                   </div>
                   <div>
-                    <p className="text-white font-black text-base leading-tight">Welcome to Hot Truck Maps!</p>
+                    <p className="text-white font-black text-base leading-tight">Welcome to Hot Truck Map!</p>
                     <p className="text-neutral-400 text-xs mt-0.5">Let&apos;s get your truck on the map — takes under 2 minutes.</p>
                   </div>
                 </div>

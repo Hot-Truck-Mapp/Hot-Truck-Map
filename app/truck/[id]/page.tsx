@@ -197,7 +197,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
               <span className="font-black text-brand-red text-sm tracking-tight">HOT</span>
               <span className="font-black text-white text-sm tracking-tight">TRUCK</span>
             </div>
-            <span className="font-black text-brand-orange text-sm tracking-tight leading-none">MAPS</span>
+            <span className="font-black text-brand-orange text-sm tracking-tight leading-none">MAP</span>
           </div>
         </div>
         <button
