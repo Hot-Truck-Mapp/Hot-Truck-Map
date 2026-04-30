@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "Hot Truck Map",
+    "slug": "hot-truck-map",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "hottruckmap",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#FF6B35"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.hottruckmap.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Hot Truck Map uses your location to show nearby food trucks.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Hot Truck Map uses your location to show nearby food trucks."
+      }
+    },
+    "android": {
+      "package": "com.hottruckmap.app",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Hot Truck Map to use your location to show nearby food trucks."
+        }
+      ],
+      "expo-notifications"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
