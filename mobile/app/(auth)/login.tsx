@@ -33,7 +33,7 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Hot Truck Map 🚚</Text>
+        <Text style={styles.title}>HOT TRUCK MAP</Text>
         <Text style={styles.subtitle}>Find food trucks near you</Text>
 
         <TextInput

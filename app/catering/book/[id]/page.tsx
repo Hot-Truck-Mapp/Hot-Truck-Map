@@ -39,33 +39,22 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
   }, []);
 
   async function loadData() {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    setUser(user);
-
-    const { data: truckData } = await supabase
-      .from("trucks")
-      .select("*")
-      .eq("id", id)
-      .single();
-
-    const { data: pkgData } = await supabase
-      .from("catering_packages")
-      .select("*")
-      .eq("truck_id", id)
-      .eq("is_active", true);
-
-    setTruck(truckData);
-    setPackages(pkgData ?? []);
-
-    if (user) {
-      setForm((f) => ({
-        ...f,
-        customer_email: user.email ?? "",
-      }));
+    try {
+      const supabase = createClient();
+      const [{ data: { user } }, { data: truckData }, { data: pkgData }] = await Promise.all([
+        supabase.auth.getUser(),
+        supabase.from("trucks").select("*").eq("id", id).maybeSingle(),
+        supabase.from("catering_packages").select("*").eq("truck_id", id).eq("is_active", true),
+      ]);
+      setUser(user ?? null);
+      setTruck(truckData ?? null);
+      setPackages(pkgData ?? []);
+      if (user) setForm((f) => ({ ...f, customer_email: user.email ?? "" }));
+    } catch {
+      // network error — truck stays null, page shows "not found"
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }
 
   async function handleSubmit() {

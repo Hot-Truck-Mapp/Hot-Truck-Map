@@ -46,36 +46,41 @@ export default function CateringPackagesPage() {
   }, []);
 
   async function loadPackages() {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-    const { data: truck } = await supabase
-      .from("trucks")
-      .select("id, catering_description, catering_starting_price, catering_min_guests")
-      .eq("owner_id", user.id)
-      .single();
+      const { data: truck } = await supabase
+        .from("trucks")
+        .select("id, catering_description, catering_starting_price, catering_min_guests")
+        .eq("owner_id", user.id)
+        .maybeSingle();
 
-    if (!truck) return;
-    setTruckId(truck.id);
-    setCateringInfo({
-      catering_description: truck.catering_description ?? "",
-      catering_starting_price: truck.catering_starting_price
-        ? String(truck.catering_starting_price)
-        : "",
-      catering_min_guests: truck.catering_min_guests
-        ? String(truck.catering_min_guests)
-        : "20",
-    });
+      if (!truck) return;
+      setTruckId(truck.id);
+      setCateringInfo({
+        catering_description: truck.catering_description ?? "",
+        catering_starting_price: truck.catering_starting_price
+          ? String(truck.catering_starting_price)
+          : "",
+        catering_min_guests: truck.catering_min_guests
+          ? String(truck.catering_min_guests)
+          : "20",
+      });
 
-    const { data } = await supabase
-      .from("catering_packages")
-      .select("*")
-      .eq("truck_id", truck.id)
-      .order("created_at", { ascending: true });
+      const { data } = await supabase
+        .from("catering_packages")
+        .select("*")
+        .eq("truck_id", truck.id)
+        .order("created_at", { ascending: true });
 
-    setPackages(data ?? []);
-    setLoading(false);
+      setPackages(data ?? []);
+    } catch {
+      // network error — keep empty state
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function saveCateringInfo() {

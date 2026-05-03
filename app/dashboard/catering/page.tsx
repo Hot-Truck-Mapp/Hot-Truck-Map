@@ -28,28 +28,28 @@ export default function CateringDashboardPage() {
   }, []);
 
   async function loadRequests() {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-    const { data: truck } = await supabase
-      .from("trucks")
-      .select("id, offers_catering")
-      .eq("owner_id", user.id)
-      .single();
+      const { data: truck } = await supabase
+        .from("trucks").select("id, offers_catering").eq("owner_id", user.id).maybeSingle();
 
-    if (!truck) return;
-    setTruckId(truck.id);
-    setCateringEnabled(truck.offers_catering ?? false);
+      if (!truck) return;
+      setTruckId(truck.id);
+      setCateringEnabled(truck.offers_catering ?? false);
 
-    const { data } = await supabase
-      .from("catering_requests")
-      .select("*")
-      .eq("truck_id", truck.id)
-      .order("created_at", { ascending: false });
+      const { data } = await supabase
+        .from("catering_requests").select("*").eq("truck_id", truck.id)
+        .order("created_at", { ascending: false });
 
-    setRequests(data ?? []);
-    setLoading(false);
+      setRequests(data ?? []);
+    } catch {
+      // network error — keep empty state
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function loadMessages(requestId: string) {

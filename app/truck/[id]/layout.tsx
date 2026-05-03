@@ -18,7 +18,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     .from("trucks")
     .select("name, description, cuisine, profile_photo, is_live")
     .eq("id", id)
-    .single();
+    .maybeSingle();
 
   if (!truck) {
     return {

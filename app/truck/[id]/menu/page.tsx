@@ -24,23 +24,19 @@ export default function MenuPage({ params }: { params: Promise<{ id: string }> }
   }, []);
 
   async function loadMenu() {
-    const supabase = createClient();
-
-    const { data: truckData } = await supabase
-      .from("trucks")
-      .select("*")
-      .eq("id", id)
-      .single();
-
-    const { data: menuData } = await supabase
-      .from("menu_items")
-      .select("*")
-      .eq("truck_id", id)
-      .order("created_at", { ascending: true });
-
-    setTruck(truckData);
-    setItems(menuData ?? []);
-    setLoading(false);
+    try {
+      const supabase = createClient();
+      const [{ data: truckData }, { data: menuData }] = await Promise.all([
+        supabase.from("trucks").select("*").eq("id", id).maybeSingle(),
+        supabase.from("menu_items").select("*").eq("truck_id", id).order("created_at", { ascending: true }),
+      ]);
+      setTruck(truckData ?? null);
+      setItems(menuData ?? []);
+    } catch {
+      // network error — truck stays null, renders "not found"
+    } finally {
+      setLoading(false);
+    }
   }
 
   const categories = ["ALL", ...Array.from(
