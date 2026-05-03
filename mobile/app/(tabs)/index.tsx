@@ -48,7 +48,7 @@ export default function MapTab() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Live Trucks</Text>
-        <Text style={styles.headerCount}>{trucks.length} near you</Text>
+        <Text style={styles.headerCount}>{trucks.length} live now</Text>
       </View>
       <TruckMap trucks={trucks} initialRegion={region} />
     </SafeAreaView>
