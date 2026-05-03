@@ -24,19 +24,27 @@ export default function MapboxMap({ trucks }: Props) {
       container: mapContainer.current!,
       style: "mapbox://styles/mapbox/streets-v12",
       center: [-74.006, 40.7128],
-      zoom: 12,
+      zoom: 4, // start zoomed out so users see context before flying to their location
     });
 
-    // Signal that the map is ready so markers can be placed
-    map.current.on("load", () => setMapReady(true));
+    const geolocate = new mapboxgl.GeolocateControl({
+      positionOptions: { enableHighAccuracy: true },
+      trackUserLocation: true,
+      showUserHeading: true,
+      fitBoundsOptions: { maxZoom: 13 },
+    });
 
     map.current.addControl(new mapboxgl.NavigationControl());
-    map.current.addControl(
-      new mapboxgl.GeolocateControl({
-        positionOptions: { enableHighAccuracy: true },
-        trackUserLocation: true,
-      })
-    );
+    map.current.addControl(geolocate);
+
+    // Signal that the map is ready so markers can be placed, then auto-fly to user
+    map.current.on("load", () => {
+      setMapReady(true);
+      // Small delay gives the control time to initialise before triggering
+      setTimeout(() => {
+        try { geolocate.trigger(); } catch { /* permission denied or unavailable — stays at default */ }
+      }, 300);
+    });
   }, []);
 
   // Re-run whenever trucks data changes OR map finishes loading
