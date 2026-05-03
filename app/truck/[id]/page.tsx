@@ -4,9 +4,11 @@ import { useState, useEffect, use } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export default function TruckPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const [truck, setTruck] = useState<any>(null);
   const [location, setLocation] = useState<any>(null);
   const [menuItems, setMenuItems] = useState<any[]>([]);
@@ -62,7 +64,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
       // localStorage unavailable (e.g. Safari private browsing) — proceed anyway,
       // the order page will redirect back if it can't read the cart
     }
-    window.location.href = `/truck/${id}/order`;
+    router.push(`/truck/${id}/order`);
   }
 
   useEffect(() => {
@@ -89,7 +91,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
         .from("trucks")
         .select("*")
         .eq("id", id)
-        .single();
+        .maybeSingle();
 
       if (!truckData) { setLoading(false); return; }
 
@@ -133,7 +135,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
   }
 
   async function toggleFollow() {
-    if (!userId) { window.location.href = "/login"; return; }
+    if (!userId) { router.push("/account"); return; }
     const supabase = createClient();
     if (following) {
       const { error } = await supabase.from("follows").delete().eq("truck_id", id).eq("user_id", userId);

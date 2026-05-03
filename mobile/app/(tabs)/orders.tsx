@@ -67,7 +67,7 @@ export default function OrdersTab() {
               </View>
             </View>
             <Text style={styles.items} numberOfLines={2}>
-              {item.items.map(i => `${i.quantity}× ${i.name}`).join(', ')}
+              {(item.items ?? []).map((i: { quantity: number; name: string }) => `${i.quantity}× ${i.name}`).join(', ')}
             </Text>
             <View style={styles.cardRow}>
               <Text style={styles.total}>${(item.total ?? 0).toFixed(2)}</Text>

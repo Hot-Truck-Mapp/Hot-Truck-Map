@@ -196,7 +196,7 @@ export default function AccountPage() {
 
         {/* Avatar */}
         <div className="relative">
-          <div className="w-20 h-20 rounded-full overflow-hidden bg-neutral-700 flex items-center justify-center">
+          <div className="w-20 h-20 rounded-full overflow-hidden bg-neutral-700 flex items-center justify-center relative">
             {avatarUrl ? (
               <Image src={avatarUrl} alt="Profile" fill className="object-cover" />
             ) : (
@@ -293,7 +293,7 @@ export default function AccountPage() {
                   Tap the ♥ on any food truck to save it here and get notified when it goes live
                 </p>
                 <Link
-                  href="/trucks"
+                  href="/"
                   className="inline-block mt-5 px-6 py-2.5 bg-brand-red text-white rounded-full text-sm font-bold"
                 >
                   Browse Trucks

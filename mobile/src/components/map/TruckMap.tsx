@@ -13,10 +13,10 @@ type Props = {
 };
 
 const DEFAULT_REGION: Region = {
-  latitude: 37.7749,
-  longitude: -122.4194,
-  latitudeDelta: 0.1,
-  longitudeDelta: 0.1,
+  latitude: 40.7128,
+  longitude: -74.0060,
+  latitudeDelta: 0.2,
+  longitudeDelta: 0.2,
 };
 
 export function TruckMap({ trucks, initialRegion }: Props) {
