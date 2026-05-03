@@ -1339,9 +1339,74 @@ export default function Dashboard() {
           <div className="flex flex-col gap-4 max-w-2xl mx-auto pb-10">
 
             {analyticsLoading ? (
-              <div className="p-8 flex flex-col items-center gap-3 py-20">
-                <div className="w-10 h-10 rounded-full border-4 border-brand-red border-t-transparent animate-spin"/>
-                <p className="text-neutral-400 text-sm">Loading your stats...</p>
+              /* ── Skeleton loader — mirrors the exact layout of the analytics tab ── */
+              <div className="flex flex-col gap-4 animate-pulse">
+
+                {/* All-time hero section */}
+                <div className="bg-neutral-900 px-5 pt-6 pb-5 flex flex-col gap-4">
+                  <div className="h-3 w-16 bg-neutral-700 rounded-full" />
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Followers card skeleton */}
+                    <div className="bg-neutral-800 rounded-2xl p-4 flex flex-col gap-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-xl bg-neutral-700" />
+                        <div className="h-3 w-16 bg-neutral-700 rounded-full" />
+                      </div>
+                      <div className="h-9 w-16 bg-neutral-700 rounded-lg" />
+                      <div className="h-2.5 w-28 bg-neutral-700 rounded-full" />
+                    </div>
+                    {/* Orders card skeleton */}
+                    <div className="bg-neutral-800 rounded-2xl p-4 flex flex-col gap-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-xl bg-neutral-700" />
+                        <div className="h-3 w-14 bg-neutral-700 rounded-full" />
+                      </div>
+                      <div className="h-9 w-12 bg-neutral-700 rounded-lg" />
+                      <div className="h-2.5 w-24 bg-neutral-700 rounded-full" />
+                    </div>
+                  </div>
+                  {/* Revenue banner skeleton */}
+                  <div className="bg-neutral-800 rounded-2xl px-4 py-3 flex items-center justify-between">
+                    <div className="h-4 w-28 bg-neutral-700 rounded-full" />
+                    <div className="h-6 w-20 bg-neutral-700 rounded-full" />
+                  </div>
+                </div>
+
+                {/* Period breakdown */}
+                <div className="px-4 flex flex-col gap-4">
+                  {/* Range selector skeleton */}
+                  <div className="bg-neutral-100 rounded-2xl p-1 flex gap-1">
+                    {[1,2,3].map(i => (
+                      <div key={i} className="flex-1 py-2.5 rounded-xl bg-neutral-200" />
+                    ))}
+                  </div>
+
+                  {/* Period stat cards skeleton */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {[1,2,3,4].map(i => (
+                      <div key={i} className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-neutral-100 flex flex-col gap-2">
+                        <div className="h-3 w-24 bg-neutral-100 rounded-full" />
+                        <div className="h-8 w-14 bg-neutral-100 rounded-lg" />
+                        <div className="h-2.5 w-20 bg-neutral-100 rounded-full" />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Chart skeleton */}
+                  <div className="bg-white rounded-2xl shadow-sm p-4">
+                    <div className="h-3 w-32 bg-neutral-100 rounded-full mb-4" />
+                    <div className="flex items-end justify-between gap-1 h-32">
+                      {[40,65,30,80,50,70,45].map((h, i) => (
+                        <div key={i} className="flex-1 bg-neutral-100 rounded-t-md" style={{ height: `${h}%` }} />
+                      ))}
+                    </div>
+                    <div className="flex justify-between mt-2">
+                      {[1,2,3,4,5,6,7].map(i => (
+                        <div key={i} className="h-2.5 w-6 bg-neutral-100 rounded-full" />
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
             ) : (
               <>
