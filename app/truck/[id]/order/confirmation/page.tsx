@@ -9,6 +9,18 @@ function ConfirmationContent({ id }: { id: string }) {
   const orderId = searchParams.get("orderId") ?? "";
   const name = searchParams.get("name") ?? "there";
 
+  // Guard: if no orderId the user navigated here directly — send them back
+  if (!orderId) {
+    return (
+      <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center gap-4 p-6">
+        <p className="text-neutral-600 font-semibold text-center">No order found.</p>
+        <a href={`/truck/${id}`} className="px-5 py-2.5 bg-brand-red text-white rounded-xl font-semibold text-sm">
+          Back to Truck
+        </a>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center px-6 pb-16">
       {/* Success icon */}
