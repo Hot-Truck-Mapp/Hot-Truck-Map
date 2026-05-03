@@ -200,7 +200,7 @@ export default function AccountPage() {
 
         {/* Avatar */}
         <div className="relative">
-          <div className="relative w-20 h-20 rounded-full overflow-hidden bg-neutral-700 flex items-center justify-center">
+          <div className="w-20 h-20 rounded-full overflow-hidden bg-neutral-700 flex items-center justify-center">
             {avatarUrl ? (
               <Image src={avatarUrl} alt="Profile" fill className="object-cover" />
             ) : (
