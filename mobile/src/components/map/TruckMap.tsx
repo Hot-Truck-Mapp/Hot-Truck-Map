@@ -12,11 +12,13 @@ type Props = {
   initialRegion?: Region;
 };
 
+// Fallback center — used only when location permission is denied.
+// Wide view of the continental US so trucks anywhere in the country are visible.
 const DEFAULT_REGION: Region = {
-  latitude: 40.7128,
-  longitude: -74.0060,
-  latitudeDelta: 0.2,
-  longitudeDelta: 0.2,
+  latitude: 39.5,
+  longitude: -98.35,
+  latitudeDelta: 55,
+  longitudeDelta: 55,
 };
 
 export function TruckMap({ trucks, initialRegion }: Props) {

@@ -30,7 +30,7 @@ function AuthGuard() {
 
 export default function RootLayout() {
   useEffect(() => {
-    setupNotifications();
+    setupNotifications().catch(() => { /* ignore — push notifications are non-critical */ });
     // Safety valve — always hide splash within 5 s even if auth hangs
     const t = setTimeout(() => SplashScreen.hideAsync(), 5000);
     return () => clearTimeout(t);

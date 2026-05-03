@@ -34,10 +34,23 @@ export async function setupNotifications(): Promise<string | null> {
     console.warn('EXPO_PUBLIC_EAS_PROJECT_ID not set — skipping push token registration');
     return null;
   }
-  const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
 
-  // Store token in user metadata — no extra table needed
-  await supabase.auth.updateUser({ data: { push_token: token } });
+  let token: string;
+  try {
+    const { data } = await Notifications.getExpoPushTokenAsync({ projectId });
+    token = data;
+  } catch (err) {
+    console.warn('Failed to get push token:', err);
+    return null;
+  }
+
+  // Only save token if the user is already signed in
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.auth.updateUser({ data: { push_token: token } });
+    }
+  } catch { /* ignore — token will be registered on next sign-in */ }
 
   return token;
 }

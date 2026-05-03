@@ -186,7 +186,7 @@ export default function Dashboard() {
         { event: "INSERT", schema: "public", table: "orders", filter: `truck_id=eq.${truckId}` },
         (payload) => {
           const order = payload.new as any;
-          setOrders((prev) => [order, ...prev]);
+          setOrders((prev) => [order, ...prev].slice(0, 100));
           setNewOrderCount((n) => n + 1);
           playNotificationSound();
         }
@@ -236,7 +236,7 @@ export default function Dashboard() {
           phone: profile.phone, instagram: profile.instagram,
           profile_photo: profile.profile_photo, is_live: false,
           dietary_tags: profile.dietary_tags,
-        }).select("id").single();
+        }).select("id").maybeSingle();
         if (error) throw new Error(error.message);
         if (newTruck) setTruckId(newTruck.id);
       }
@@ -297,7 +297,7 @@ export default function Dashboard() {
         photo: itemForm.photo,
       };
       if (editingItem) {
-        const { error } = await supabase.from("menu_items").update(payload).eq("id", editingItem.id);
+        const { error } = await supabase.from("menu_items").update(payload).eq("id", editingItem.id).eq("truck_id", truckId);
         if (error) throw new Error(error.message);
       } else {
         const { error } = await supabase.from("menu_items").insert(payload);
@@ -317,7 +317,7 @@ export default function Dashboard() {
     if (deletingMenuId !== id) { setDeletingMenuId(id); return; }
     setDeletingMenuId(null);
     const supabase = createClient();
-    const { error } = await supabase.from("menu_items").delete().eq("id", id);
+    const { error } = await supabase.from("menu_items").delete().eq("id", id).eq("truck_id", truckId!);
     if (!error) setMenuItems(items => items.filter(i => i.id !== id));
     else showToast("Delete failed: " + error.message);
   }
@@ -355,7 +355,7 @@ export default function Dashboard() {
       const supabase = createClient();
       const payload = { truck_id: truckId, ...schedForm };
       if (editingSched?.id) {
-        const { error } = await supabase.from("schedules").update(payload).eq("id", editingSched.id);
+        const { error } = await supabase.from("schedules").update(payload).eq("id", editingSched.id).eq("truck_id", truckId);
         if (error) throw new Error(error.message);
       } else {
         const { error } = await supabase.from("schedules").insert(payload);
@@ -373,7 +373,7 @@ export default function Dashboard() {
     if (deletingSchedId !== id) { setDeletingSchedId(id); return; }
     setDeletingSchedId(null);
     const supabase = createClient();
-    const { error } = await supabase.from("schedules").delete().eq("id", id);
+    const { error } = await supabase.from("schedules").delete().eq("id", id).eq("truck_id", truckId!);
     if (!error) setSchedule(s => s.filter(e => e.id !== id));
     else showToast("Delete failed: " + error.message);
   }
@@ -569,9 +569,16 @@ export default function Dashboard() {
   }
 
   // ── Order notifications ──────────────────────────────────────────────────────
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
   function playNotificationSound() {
     try {
-      const ctx = new AudioContext();
+      // Reuse a single AudioContext — browsers cap concurrent instances at ~6
+      if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
+        audioCtxRef.current = new AudioContext();
+      }
+      const ctx = audioCtxRef.current;
+      if (ctx.state === "suspended") ctx.resume();
       [[880, 0], [1100, 0.18]].forEach(([freq, delay]) => {
         const osc  = ctx.createOscillator();
         const gain = ctx.createGain();
@@ -588,7 +595,8 @@ export default function Dashboard() {
 
   async function updateOrderStatus(orderId: string, status: string) {
     const supabase = createClient();
-    const { error } = await supabase.from("orders").update({ status }).eq("id", orderId);
+    // Scope update to this operator's truck — prevents cross-operator order tampering
+    const { error } = await supabase.from("orders").update({ status }).eq("id", orderId).eq("truck_id", truckId!);
     if (!error) setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status } : o));
   }
 
