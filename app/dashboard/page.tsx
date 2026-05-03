@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
+import VerificationBanner from "@/components/auth/VerificationBanner";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
@@ -674,6 +675,9 @@ export default function Dashboard() {
           View Map
         </a>
       </div>
+
+      {/* Email verification reminder */}
+      <VerificationBanner />
 
       {/* ── Mobile Tab Bar (hidden on desktop) ── */}
       <div className="md:hidden bg-white border-b border-neutral-100 sticky top-[61px] z-10"

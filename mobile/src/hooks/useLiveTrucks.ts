@@ -11,22 +11,27 @@ export function useLiveTrucks() {
   const [loading, setLoading] = useState(true);
 
   const fetch = useCallback(async () => {
-    const cutoff = new Date(Date.now() - LIVE_WINDOW_MS).toISOString();
-    const { data } = await supabase
-      .from('trucks')
-      .select('*, locations!inner(*)')
-      .eq('is_live', true)
-      .gte('locations.broadcasted_at', cutoff);
+    try {
+      const cutoff = new Date(Date.now() - LIVE_WINDOW_MS).toISOString();
+      const { data } = await supabase
+        .from('trucks')
+        .select('*, locations!inner(*)')
+        .eq('is_live', true)
+        .gte('locations.broadcasted_at', cutoff);
 
-    if (data) {
-      setTrucks(
-        data.map(t => ({
-          ...t,
-          location: Array.isArray(t.locations) ? t.locations[0] : undefined,
-        }))
-      );
+      if (data) {
+        setTrucks(
+          data.map(t => ({
+            ...t,
+            location: Array.isArray(t.locations) ? t.locations[0] : undefined,
+          }))
+        );
+      }
+    } catch {
+      // network error — keep showing previously loaded trucks
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
