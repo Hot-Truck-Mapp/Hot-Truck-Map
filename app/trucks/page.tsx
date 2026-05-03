@@ -29,12 +29,16 @@ export default function TrucksListPage() {
   }, []);
 
   async function loadUser() {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    setUserId(user.id);
-    const { data } = await supabase.from("follows").select("truck_id").eq("user_id", user.id);
-    setFavorites(new Set((data ?? []).map((f: any) => f.truck_id)));
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      setUserId(user.id);
+      const { data } = await supabase.from("follows").select("truck_id").eq("user_id", user.id);
+      setFavorites(new Set((data ?? []).map((f: any) => f.truck_id)));
+    } catch {
+      // not signed in or network issue — favorites just won't show
+    }
   }
 
   async function toggleFavorite(e: React.MouseEvent, truckId: string) {
@@ -53,13 +57,18 @@ export default function TrucksListPage() {
   }
 
   async function loadTrucks() {
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("trucks")
-      .select("*, locations(*), follows(count)")
-      .order("is_live", { ascending: false });
-    setTrucks(data ?? []);
-    setLoading(false);
+    try {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("trucks")
+        .select("*, locations(*), follows(count)")
+        .order("is_live", { ascending: false });
+      setTrucks(data ?? []);
+    } catch {
+      // network error — show empty state with filters available
+    } finally {
+      setLoading(false);
+    }
   }
 
   const filtered = trucks.filter((t) => {

@@ -72,6 +72,7 @@ export default function SignupPage() {
 
   async function handleCustomerSignup() {
     if (!cuEmail || !cuPassword) return;
+    if (cuPassword.length < 6) { setCuError("Password must be at least 6 characters."); return; }
     setCuLoading(true);
     setCuError(null);
 

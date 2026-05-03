@@ -93,13 +93,17 @@ export default function AccountPage() {
   }
 
   async function unfollowTruck(truckId: string) {
+    setFollowed((prev) => prev.filter((f) => f.truck_id !== truckId)); // optimistic
     const supabase = createClient();
-    await supabase
+    const { error } = await supabase
       .from("follows")
       .delete()
       .eq("truck_id", truckId)
       .eq("user_id", user.id);
-    setFollowed(followed.filter((f) => f.truck_id !== truckId));
+    if (error) {
+      setFollowed((prev) => [...prev]); // revert — reload from server
+      loadAccount();
+    }
   }
 
   async function signOut() {

@@ -56,13 +56,18 @@ export default function HomePage() {
   }, []);
 
   async function loadTrucks() {
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("trucks")
-      .select("*, locations(*)")
-      .order("is_live", { ascending: false });
-    setTrucks(data ?? []);
-    setLoading(false);
+    try {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("trucks")
+        .select("*, locations(*)")
+        .order("is_live", { ascending: false });
+      setTrucks(data ?? []);
+    } catch {
+      // network error — keep showing whatever was loaded before
+    } finally {
+      setLoading(false);
+    }
   }
 
   const filtered = trucks.filter((t) => {
@@ -391,7 +396,7 @@ export default function HomePage() {
               <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-red" />
             </span>
             <p className="text-sm font-semibold text-neutral-800">
-              {filtered.filter((t) => t.is_live).length} truck{filtered.filter((t) => t.is_live).length !== 1 ? "s" : ""} live near you
+              {filtered.filter((t) => t.is_live).length} truck{filtered.filter((t) => t.is_live).length !== 1 ? "s" : ""} live now
             </p>
           </div>
         </div>

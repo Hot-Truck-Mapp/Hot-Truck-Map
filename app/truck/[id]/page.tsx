@@ -99,7 +99,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
         { data: reviewData },
         { count: followers },
       ] = await Promise.all([
-        supabase.from("locations").select("*").eq("truck_id", id).single(),
+        supabase.from("locations").select("*").eq("truck_id", id).order("broadcasted_at", { ascending: false }).limit(1).maybeSingle(),
         supabase.from("menu_items").select("*").eq("truck_id", id).order("created_at", { ascending: true }),
         supabase.from("reviews").select("*").eq("truck_id", id).order("created_at", { ascending: false }),
         supabase.from("follows").select("*", { count: "exact", head: true }).eq("truck_id", id),
