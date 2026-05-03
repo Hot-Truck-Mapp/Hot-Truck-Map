@@ -6,6 +6,11 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://hottruckmap.com"),
   title: "Hot Truck Map - Find Food Trucks Near You",
   description: "Real-time food truck discovery. Find the food truck. Skip the guesswork.",
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+    apple: "/favicon.svg",
+  },
   openGraph: {
     title: "Hot Truck Map",
     description: "Real-time food truck discovery. Find the food truck. Skip the guesswork.",

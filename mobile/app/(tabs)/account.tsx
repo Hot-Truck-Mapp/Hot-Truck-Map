@@ -137,11 +137,11 @@ export default function AccountTab() {
         <View style={[styles.row, styles.rowLast]}>
           <Text style={styles.rowText}>Push Notifications</Text>
           <Switch
-            value={true}
+            value={false}
             onValueChange={() =>
-              Alert.alert('Coming soon', 'Granular notification settings are coming soon.')
+              Alert.alert('Coming Soon', 'Push notification settings are coming soon.')
             }
-            trackColor={{ true: Colors.primary }}
+            trackColor={{ true: Colors.primary, false: Colors.border }}
           />
         </View>
       </View>

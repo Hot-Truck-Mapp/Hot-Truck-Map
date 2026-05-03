@@ -27,7 +27,8 @@ export default function TrucksTab() {
   const filtered = query
     ? trucks.filter(t => {
         const q = query.toLowerCase();
-        return t.name.toLowerCase().includes(q) || t.cuisine.toLowerCase().includes(q);
+        return (t.name?.toLowerCase() ?? '').includes(q) ||
+               (t.cuisine?.toLowerCase() ?? '').includes(q);
       })
     : trucks;
 
