@@ -17,11 +17,20 @@ export const metadata: Metadata = {
     type: "website",
     siteName: "Hot Truck Map",
     url: "https://hottruckmap.com",
+    images: [
+      {
+        url: "https://hottruckmap.com/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Hot Truck Map — Find food trucks near you",
+      },
+    ],
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: "Hot Truck Map",
     description: "Real-time food truck discovery. Find the food truck. Skip the guesswork.",
+    images: ["https://hottruckmap.com/og-image.png"],
   },
   appleWebApp: {
     capable: true,

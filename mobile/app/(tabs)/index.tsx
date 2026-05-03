@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { StyleSheet, View, ActivityIndicator, Text, Alert } from 'react-native';
+import { useEffect, useState, useCallback } from 'react';
+import { StyleSheet, View, ActivityIndicator, Text, Alert, ScrollView, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import type { Region } from 'react-native-maps';
@@ -8,8 +8,9 @@ import { useLiveTrucks } from '@/hooks/useLiveTrucks';
 import { Colors } from '@/constants/colors';
 
 export default function MapTab() {
-  const { trucks, loading } = useLiveTrucks();
+  const { trucks, loading, refetch } = useLiveTrucks();
   const [region, setRegion] = useState<Region | undefined>();
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -36,6 +37,12 @@ export default function MapTab() {
     })();
   }, []);
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  }, [refetch]);
+
   if (loading) {
     return (
       <View style={styles.loading}>
@@ -50,7 +57,22 @@ export default function MapTab() {
         <Text style={styles.headerTitle}>Live Trucks</Text>
         <Text style={styles.headerCount}>{trucks.length} live now</Text>
       </View>
-      <TruckMap trucks={trucks} initialRegion={region} />
+      {/* ScrollView wrapper gives the map a pull-to-refresh gesture zone in the header */}
+      <View style={styles.mapWrapper}>
+        <ScrollView
+          style={StyleSheet.absoluteFill}
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={Colors.primary}
+            />
+          }
+          scrollEnabled={false}
+        />
+        <TruckMap trucks={trucks} initialRegion={region} />
+      </View>
     </SafeAreaView>
   );
 }
@@ -69,4 +91,6 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 18, fontWeight: '700', color: Colors.text },
   headerCount: { fontSize: 14, color: Colors.textSecondary },
+  mapWrapper: { flex: 1, position: 'relative' },
+  scrollContent: { flex: 1 },
 });

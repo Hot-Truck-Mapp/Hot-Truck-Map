@@ -16,9 +16,11 @@ function AuthGuard() {
 
     const inAuthGroup = segments[0] === '(auth)';
 
-    if (!session && !inAuthGroup) {
-      router.replace('/(auth)/login');
-    } else if (session && inAuthGroup) {
+    // Allow unauthenticated users to browse the map, truck list, and truck detail.
+    // Only redirect to login if they are in a route that isn't public.
+    // Currently all (tabs) routes and truck/[id] are public — auth is
+    // enforced at action level (follow, order) inside those screens.
+    if (session && inAuthGroup) {
       router.replace('/(tabs)');
     }
 
