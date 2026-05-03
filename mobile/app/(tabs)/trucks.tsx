@@ -12,16 +12,16 @@ export default function TrucksTab() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase
-      .from('trucks')
-      .select('*')
-      .order('name')
-      .then(({ data, error }) => {
+    async function load() {
+      try {
+        const { data, error } = await supabase.from('trucks').select('*').order('name');
         if (error) console.warn('Failed to load trucks:', error.message);
         if (data) setTrucks(data);
+      } catch { /* network error — keep empty list */ } finally {
         setLoading(false);
-      })
-      .catch(() => setLoading(false));
+      }
+    }
+    load();
   }, []);
 
   const filtered = query

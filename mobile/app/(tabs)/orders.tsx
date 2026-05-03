@@ -17,22 +17,22 @@ export default function OrdersTab() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getUser()
-      .then(({ data: { user }, error: authErr }) => {
-        if (authErr || !user) { setLoading(false); return; }
-        supabase
+    async function load() {
+      try {
+        const { data: { user }, error: authErr } = await supabase.auth.getUser();
+        if (authErr || !user) return;
+        const { data, error } = await supabase
           .from('orders')
           .select('*')
           .eq('customer_id', user.id)
-          .order('created_at', { ascending: false })
-          .then(({ data, error }) => {
-            if (error) console.warn('Failed to load orders:', error.message);
-            if (data) setOrders(data);
-            setLoading(false);
-          })
-          .catch(() => setLoading(false));
-      })
-      .catch(() => setLoading(false));
+          .order('created_at', { ascending: false });
+        if (error) console.warn('Failed to load orders:', error.message);
+        if (data) setOrders(data);
+      } catch { /* network error — keep empty list */ } finally {
+        setLoading(false);
+      }
+    }
+    load();
   }, []);
 
   if (loading) {
