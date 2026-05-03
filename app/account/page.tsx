@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
@@ -17,6 +17,35 @@ export default function AccountPage() {
     weeklyDigest: false,
   });
   const [savingNotif, setSavingNotif] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string>("");
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarToast, setAvatarToast] = useState<string | null>(null);
+  const avatarRef = useRef<HTMLInputElement>(null);
+
+  function showAvatarToast(msg: string) {
+    setAvatarToast(msg);
+    setTimeout(() => setAvatarToast(null), 3500);
+  }
+
+  async function uploadAvatar(file: File) {
+    if (file.size > 5 * 1024 * 1024) { showAvatarToast("Photo must be under 5 MB"); return; }
+    if (!user) return;
+    setAvatarUploading(true);
+    try {
+      const supabase = createClient();
+      const ext = file.name.split(".").pop();
+      const path = `customers/${user.id}.${ext}`;
+      const { error: uploadErr } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
+      if (uploadErr) throw new Error(uploadErr.message);
+      const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+      if (!data?.publicUrl) throw new Error("Could not get photo URL — try again.");
+      const { error: updateErr } = await supabase.auth.updateUser({ data: { avatar_url: data.publicUrl } });
+      if (updateErr) throw new Error("Photo uploaded but failed to save: " + updateErr.message);
+      setAvatarUrl(data.publicUrl);
+      showAvatarToast("Profile photo updated!");
+    } catch (err: any) { showAvatarToast(err?.message ?? "Photo upload failed"); }
+    setAvatarUploading(false);
+  }
 
   useEffect(() => {
     loadAccount();
@@ -30,6 +59,7 @@ export default function AccountPage() {
       return; // show sign-in prompt instead of redirecting
     }
     setUser(userData);
+    setAvatarUrl(userData.user_metadata?.avatar_url ?? "");
 
     const { data: follows } = await supabase
       .from("follows")
@@ -148,24 +178,69 @@ export default function AccountPage() {
     <div className="min-h-screen bg-neutral-50">
 
       {/* Header */}
-      <div className="bg-neutral-900 px-4 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="bg-neutral-900 px-4 pt-4 pb-6 flex flex-col items-center gap-3 relative">
+        {/* Back + Sign out row */}
+        <div className="w-full flex items-center justify-between mb-1">
           <Link href="/" className="w-8 h-8 rounded-full bg-neutral-800 flex items-center justify-center text-neutral-400 hover:text-white transition-colors">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
               <path d="M19 12H5M12 5l-7 7 7 7"/>
             </svg>
           </Link>
-          <div>
-            <h1 className="font-black text-white text-base">My Account</h1>
-            <p className="text-neutral-500 text-xs truncate max-w-[200px]">{user?.email}</p>
-          </div>
+          <button
+            onClick={signOut}
+            className="text-xs font-semibold text-neutral-400 hover:text-white border border-neutral-700 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            Sign Out
+          </button>
         </div>
-        <button
-          onClick={signOut}
-          className="text-xs font-semibold text-neutral-400 hover:text-white border border-neutral-700 px-3 py-1.5 rounded-lg transition-colors"
-        >
-          Sign Out
-        </button>
+
+        {/* Avatar */}
+        <div className="relative">
+          <div className="w-20 h-20 rounded-full overflow-hidden bg-neutral-700 flex items-center justify-center">
+            {avatarUrl ? (
+              <Image src={avatarUrl} alt="Profile" fill className="object-cover" />
+            ) : (
+              <span className="text-3xl font-black text-white">
+                {(user?.email ?? "?")[0].toUpperCase()}
+              </span>
+            )}
+          </div>
+          {/* Upload button overlay */}
+          <button
+            onClick={() => avatarRef.current?.click()}
+            disabled={avatarUploading}
+            className="absolute bottom-0 right-0 w-7 h-7 bg-brand-red rounded-full flex items-center justify-center shadow-lg border-2 border-neutral-900 hover:bg-red-600 transition-colors"
+            title="Change profile photo"
+          >
+            {avatarUploading ? (
+              <div className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
+            ) : (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+            )}
+          </button>
+          <input
+            ref={avatarRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadAvatar(f); e.target.value = ""; }}
+          />
+        </div>
+
+        <div className="text-center">
+          <h1 className="font-black text-white text-base">My Account</h1>
+          <p className="text-neutral-500 text-xs truncate max-w-[200px]">{user?.email}</p>
+        </div>
+
+        {/* Avatar toast */}
+        {avatarToast && (
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-neutral-700 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-lg whitespace-nowrap">
+            {avatarToast}
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
@@ -314,7 +389,7 @@ export default function AccountPage() {
                   <div className="flex items-start justify-between mb-2">
                     <div>
                       <p className="font-semibold text-neutral-800">
-                        {order.trucks?.name}
+                        {order.trucks?.name ?? "Deleted Truck"}
                       </p>
                       <p className="text-xs text-neutral-400 mt-0.5">
                         {new Date(order.created_at).toLocaleDateString()}
@@ -337,11 +412,14 @@ export default function AccountPage() {
                       </span>
                     </div>
                   </div>
-                  {order.items?.map((item: any, i: number) => (
-                    <p key={i} className="text-xs text-neutral-400">
-                      x{item.quantity} {item.name}
-                    </p>
-                  ))}
+                  {order.items?.length > 0
+                    ? order.items.map((item: any, i: number) => (
+                        <p key={i} className="text-xs text-neutral-400">
+                          x{item.quantity} {item.name}
+                        </p>
+                      ))
+                    : <p className="text-xs text-neutral-400">No items</p>
+                  }
                 </div>
               ))
             )}

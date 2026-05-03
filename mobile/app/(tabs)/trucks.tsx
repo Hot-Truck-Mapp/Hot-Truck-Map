@@ -16,10 +16,12 @@ export default function TrucksTab() {
       .from('trucks')
       .select('*')
       .order('name')
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) console.warn('Failed to load trucks:', error.message);
         if (data) setTrucks(data);
         setLoading(false);
-      });
+      })
+      .catch(() => setLoading(false));
   }, []);
 
   const filtered = query

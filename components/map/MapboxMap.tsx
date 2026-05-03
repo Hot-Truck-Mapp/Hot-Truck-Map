@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 
@@ -14,6 +14,7 @@ export default function MapboxMap({ trucks }: Props) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markers = useRef<mapboxgl.Marker[]>([]);
+  const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
     if (map.current) return;
@@ -26,6 +27,9 @@ export default function MapboxMap({ trucks }: Props) {
       zoom: 12,
     });
 
+    // Signal that the map is ready so markers can be placed
+    map.current.on("load", () => setMapReady(true));
+
     map.current.addControl(new mapboxgl.NavigationControl());
     map.current.addControl(
       new mapboxgl.GeolocateControl({
@@ -35,8 +39,9 @@ export default function MapboxMap({ trucks }: Props) {
     );
   }, []);
 
+  // Re-run whenever trucks data changes OR map finishes loading
   useEffect(() => {
-    if (!map.current) return;
+    if (!map.current || !mapReady) return;
 
     // Remove old markers
     markers.current.forEach((m) => m.remove());
@@ -45,7 +50,7 @@ export default function MapboxMap({ trucks }: Props) {
     trucks.forEach((truck) => {
       // Support both truck.location (single) and truck.locations (array)
       const loc = truck.locations?.[0] ?? truck.location ?? null;
-      if (!loc?.lat || !loc?.lng) return;
+      if (loc?.lat == null || loc?.lng == null) return;
 
       const el = document.createElement("div");
       el.style.cssText = `
@@ -99,7 +104,7 @@ export default function MapboxMap({ trucks }: Props) {
 
       markers.current.push(marker);
     });
-  }, [trucks]);
+  }, [trucks, mapReady]);
 
   if (!process.env.NEXT_PUBLIC_MAPBOX_TOKEN) {
     return (

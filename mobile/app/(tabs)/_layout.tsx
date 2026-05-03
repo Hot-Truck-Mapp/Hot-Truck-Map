@@ -1,12 +1,25 @@
 import { Tabs } from 'expo-router';
+import { Platform, View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
-function tabIcon(name: IoniconsName) {
-  return ({ color, size }: { color: string; size: number }) => (
-    <Ionicons name={name} size={size} color={color} />
+function TabIcon({
+  name,
+  activeName,
+  color,
+  focused,
+}: {
+  name: IoniconsName;
+  activeName: IoniconsName;
+  color: string;
+  focused: boolean;
+}) {
+  return (
+    <View style={[styles.iconWrapper, focused && styles.iconWrapperActive]}>
+      <Ionicons name={focused ? activeName : name} size={22} color={color} />
+    </View>
   );
 }
 
@@ -14,28 +27,76 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.textSecondary,
-        tabBarStyle: { borderTopColor: Colors.border },
         headerShown: false,
+        tabBarActiveTintColor: Colors.primary,
+        tabBarInactiveTintColor: Colors.textMuted,
+        tabBarStyle: {
+          backgroundColor: Colors.dark,
+          borderTopColor: Colors.borderDark,
+          borderTopWidth: 1,
+          height: Platform.OS === 'ios' ? 84 : 64,
+          paddingBottom: Platform.OS === 'ios' ? 24 : 8,
+          paddingTop: 8,
+          elevation: 0,
+        },
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: '700',
+          letterSpacing: 0.4,
+          textTransform: 'uppercase',
+          marginTop: 2,
+        },
       }}
     >
       <Tabs.Screen
         name="index"
-        options={{ title: 'Map', tabBarIcon: tabIcon('map') }}
+        options={{
+          title: 'Map',
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name="map-outline" activeName="map" color={color} focused={focused} />
+          ),
+        }}
       />
       <Tabs.Screen
         name="trucks"
-        options={{ title: 'Trucks', tabBarIcon: tabIcon('fast-food') }}
+        options={{
+          title: 'Trucks',
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name="fast-food-outline" activeName="fast-food" color={color} focused={focused} />
+          ),
+        }}
       />
       <Tabs.Screen
         name="orders"
-        options={{ title: 'Orders', tabBarIcon: tabIcon('receipt') }}
+        options={{
+          title: 'Orders',
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name="receipt-outline" activeName="receipt" color={color} focused={focused} />
+          ),
+        }}
       />
       <Tabs.Screen
         name="account"
-        options={{ title: 'Account', tabBarIcon: tabIcon('person') }}
+        options={{
+          title: 'Account',
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name="person-outline" activeName="person" color={color} focused={focused} />
+          ),
+        }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  iconWrapper: {
+    width: 36,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+  },
+  iconWrapperActive: {
+    backgroundColor: 'rgba(232, 72, 28, 0.15)', // brand-red at 15% opacity
+  },
+});

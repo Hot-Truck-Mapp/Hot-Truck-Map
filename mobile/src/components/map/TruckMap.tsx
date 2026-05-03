@@ -34,7 +34,7 @@ export function TruckMap({ trucks, initialRegion }: Props) {
       showsMyLocationButton
     >
       {trucks
-        .filter(t => t.location)
+        .filter(t => t.location?.lat != null && t.location?.lng != null)
         .map(truck => (
           <Marker
             key={truck.id}

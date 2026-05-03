@@ -528,7 +528,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
                       {new Date(review.created_at).toLocaleDateString()}
                     </span>
                   </div>
-                  <p className="text-sm text-neutral-600">{review.body}</p>
+                  <p className="text-sm text-neutral-600">{review.comment}</p>
                 </div>
               ))
             )}

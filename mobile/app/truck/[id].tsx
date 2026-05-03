@@ -22,27 +22,32 @@ export default function TruckScreen() {
 
   useEffect(() => {
     async function load() {
-      const [truckRes, menuRes, locationRes] = await Promise.all([
-        supabase.from('trucks').select('*').eq('id', id).single(),
-        supabase.from('menu_items').select('*').eq('truck_id', id).eq('is_sold_out', false),
-        supabase
-          .from('locations')
-          .select('*')
-          .eq('truck_id', id)
-          .order('broadcasted_at', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-      ]);
+      try {
+        const [truckRes, menuRes, locationRes] = await Promise.all([
+          supabase.from('trucks').select('*').eq('id', id).single(),
+          supabase.from('menu_items').select('*').eq('truck_id', id).eq('is_sold_out', false),
+          supabase
+            .from('locations')
+            .select('*')
+            .eq('truck_id', id)
+            .order('broadcasted_at', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+        ]);
 
-      if (truckRes.data) {
-        navigation.setOptions({ title: truckRes.data.name });
-        setTruck({
-          ...truckRes.data,
-          menu_items: menuRes.data ?? [],
-          location: locationRes.data ?? undefined,
-        });
+        if (truckRes.data) {
+          navigation.setOptions({ title: truckRes.data.name });
+          setTruck({
+            ...truckRes.data,
+            menu_items: menuRes.data ?? [],
+            location: locationRes.data ?? undefined,
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to load truck:', err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
     load();
   }, [id]);
@@ -65,11 +70,13 @@ export default function TruckScreen() {
     if (!user) { Alert.alert('Sign in required', 'Please sign in to follow trucks.'); return; }
 
     if (following) {
-      await supabase.from('follows').delete().eq('user_id', user.id).eq('truck_id', id);
-      setFollowing(false);
+      setFollowing(false); // optimistic
+      const { error } = await supabase.from('follows').delete().eq('user_id', user.id).eq('truck_id', id);
+      if (error) { setFollowing(true); Alert.alert('Error', 'Could not unfollow. Please try again.'); }
     } else {
-      await supabase.from('follows').insert({ user_id: user.id, truck_id: id });
-      setFollowing(true);
+      setFollowing(true); // optimistic
+      const { error } = await supabase.from('follows').insert({ user_id: user.id, truck_id: id });
+      if (error) { setFollowing(false); Alert.alert('Error', 'Could not follow. Please try again.'); }
     }
   }
 
@@ -137,7 +144,7 @@ export default function TruckScreen() {
         {(truck.menu_items?.length ?? 0) > 0 && (
           <>
             <Text style={styles.menuHeading}>Menu</Text>
-            {truck.menu_items!.map(item => (
+            {truck.menu_items?.map(item => (
               <View key={item.id} style={styles.menuItem}>
                 <View style={styles.menuItemInfo}>
                   <Text style={styles.menuItemName}>{item.name}</Text>
