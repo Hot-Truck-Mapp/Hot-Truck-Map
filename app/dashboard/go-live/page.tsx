@@ -22,9 +22,9 @@ export default function GoLivePage() {
       .from("trucks")
       .select("id")
       .eq("owner_id", user.id)
-      .single();
+      .maybeSingle();
 
-    if (!truck) throw new Error("No truck found");
+    if (!truck) throw new Error("No truck found — finish setting up your profile first.");
 
     const { error: upsertError } = await supabase.from("locations").upsert(
       {
@@ -124,7 +124,7 @@ export default function GoLivePage() {
       .from("trucks")
       .select("id")
       .eq("owner_id", user.id)
-      .single();
+      .maybeSingle();
 
     if (truck) {
       const { error } = await supabase

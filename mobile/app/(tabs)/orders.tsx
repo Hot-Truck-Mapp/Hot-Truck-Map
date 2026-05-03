@@ -70,7 +70,7 @@ export default function OrdersTab() {
               {item.items.map(i => `${i.quantity}× ${i.name}`).join(', ')}
             </Text>
             <View style={styles.cardRow}>
-              <Text style={styles.total}>${item.total.toFixed(2)}</Text>
+              <Text style={styles.total}>${(item.total ?? 0).toFixed(2)}</Text>
               <Text style={styles.date}>{new Date(item.created_at).toLocaleDateString()}</Text>
             </View>
           </View>

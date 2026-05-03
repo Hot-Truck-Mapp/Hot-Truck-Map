@@ -168,9 +168,9 @@ export default function Dashboard() {
     }
   }
 
-  // ── Tab switch — load analytics lazily ─────────────────────────────────────
+  // ── Tab switch — always reload analytics to keep data fresh ────────────────
   useEffect(() => {
-    if (activeTab === "analytics" && !analyticsLoaded && truckId) {
+    if (activeTab === "analytics" && truckId) {
       loadAnalytics(truckId, analyticsRange);
     }
   }, [activeTab, truckId]); // eslint-disable-line
@@ -527,29 +527,36 @@ export default function Dashboard() {
         }
       }
 
-      const [followsRes, ordersRes, viewsRes, totalFollowsRes, allOrdersRes] = await Promise.all([
+      const [followsRes, ordersRes, viewsRes, totalFollowsRes, allOrdersRes, allRevenueRes] = await Promise.all([
         supabase.from("follows").select("created_at").eq("truck_id", id).gte("created_at", startDate.toISOString()),
-        supabase.from("orders").select("created_at,total").eq("truck_id", id).gte("created_at", startDate.toISOString()),
+        // All orders in period (for order count chart)
+        supabase.from("orders").select("created_at,total,status").eq("truck_id", id).gte("created_at", startDate.toISOString()),
         supabase.from("truck_views").select("created_at").eq("truck_id", id).gte("created_at", startDate.toISOString()),
         supabase.from("follows").select("*",{count:"exact",head:true}).eq("truck_id", id),
-        supabase.from("orders").select("total").eq("truck_id", id),
+        // All-time order count (any status)
+        supabase.from("orders").select("id",{count:"exact",head:true}).eq("truck_id", id),
+        // All-time revenue = only picked_up (completed) orders
+        supabase.from("orders").select("total").eq("truck_id", id).eq("status", "picked_up"),
       ]);
 
       const fw = followsRes.data ?? [], or = ordersRes.data ?? [], vw = viewsRes.data ?? [];
-      const allOrders = allOrdersRes.data ?? [];
+      const allRevenue = allRevenueRes.data ?? [];
 
       setTotalFollowers(totalFollowsRes.count ?? 0);
-      setAllTimeOrders(allOrders.length);
-      setAllTimeRevenue(allOrders.reduce((s, o) => s + (o.total ?? 0), 0));
+      setAllTimeOrders(allOrdersRes.count ?? 0);
+      setAllTimeRevenue(allRevenue.reduce((s, o) => s + (o.total ?? 0), 0));
       setChartData(buckets.map(({ label, start, end }) => ({
         label,
         followers: fw.filter(f => { const d = new Date(f.created_at); return d >= start && d <= end; }).length,
         orders:    or.filter(o => { const d = new Date(o.created_at); return d >= start && d <= end; }).length,
         views:     vw.filter(v => { const d = new Date(v.created_at); return d >= start && d <= end; }).length,
       })));
+      const completedOrders = or.filter(o => o.status === "picked_up");
       setPeriodStats({
-        followers: fw.length, orders: or.length, views: vw.length,
-        revenue: or.reduce((s, o) => s + (o.total ?? 0), 0),
+        followers: fw.length,
+        orders: or.length,
+        views: vw.length,
+        revenue: completedOrders.reduce((s, o) => s + (o.total ?? 0), 0),
       });
       setAnalyticsLoaded(true);
     } catch { /* analytics unavailable — UI shows empty state */ }

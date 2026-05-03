@@ -1,6 +1,6 @@
 import { useRef } from 'react';
-import { StyleSheet, View, Text, Platform } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE, type Region } from 'react-native-maps';
+import { StyleSheet, View, Text } from 'react-native';
+import MapView, { Marker, type Region } from 'react-native-maps';
 import { useRouter } from 'expo-router';
 import { Colors } from '@/constants/colors';
 import type { Truck, Location } from '@shared/types';
@@ -27,8 +27,10 @@ export function TruckMap({ trucks, initialRegion }: Props) {
     <MapView
       ref={mapRef}
       style={styles.map}
-      // Use Google Maps on Android; Apple Maps on iOS (no API key required)
-      provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+      // provider omitted — uses Apple Maps on iOS, Google Maps on Android via
+      // the device's built-in tile service. If you want to pin a specific
+      // Google Maps API key, add android.config.googleMaps.apiKey to app.json
+      // and restore: provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
       initialRegion={initialRegion ?? DEFAULT_REGION}
       showsUserLocation
       showsMyLocationButton
