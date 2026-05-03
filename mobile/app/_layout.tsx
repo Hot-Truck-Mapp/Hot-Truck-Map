@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useAuth } from '@/hooks/useAuth';
@@ -31,6 +31,9 @@ function AuthGuard() {
 export default function RootLayout() {
   useEffect(() => {
     setupNotifications();
+    // Safety valve — always hide splash within 5 s even if auth hangs
+    const t = setTimeout(() => SplashScreen.hideAsync(), 5000);
+    return () => clearTimeout(t);
   }, []);
 
   return (

@@ -19,12 +19,15 @@ export default function LoginScreen() {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    setLoading(false);
-    if (error) {
-      Alert.alert('Login failed', error.message);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (error) Alert.alert('Login failed', error.message);
+      // Navigation handled by AuthGuard in _layout
+    } catch {
+      Alert.alert('Login failed', 'Network error — please check your connection and try again.');
+    } finally {
+      setLoading(false);
     }
-    // Navigation handled by AuthGuard in _layout
   }
 
   return (

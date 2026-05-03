@@ -3,6 +3,7 @@
 import { useState, useEffect, use } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 interface CartItem {
@@ -21,6 +22,7 @@ interface CartData {
 
 export default function OrderPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const [cart, setCart] = useState<CartData | null>(null);
   const [pickupName, setPickupName] = useState("");
   const [notes, setNotes] = useState("");
@@ -35,12 +37,12 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
       if (raw) {
         const data: CartData = JSON.parse(raw);
         if (data.truckId === id && Array.isArray(data.items) && data.items.length > 0) setCart(data);
-        else window.location.href = `/truck/${id}`;
+        else router.replace(`/truck/${id}`);
       } else {
-        window.location.href = `/truck/${id}`;
+        router.replace(`/truck/${id}`);
       }
     } catch {
-      window.location.href = `/truck/${id}`;
+      router.replace(`/truck/${id}`);
     }
     // Get logged-in user for order attribution
     createClient().auth.getUser().then(({ data }) => {
@@ -57,7 +59,7 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
       .filter((item) => item.quantity > 0);
     if (updated.length === 0) {
       localStorage.removeItem("hot-truck-cart");
-      window.location.href = `/truck/${id}`;
+      router.replace(`/truck/${id}`);
       return;
     }
     const newCart = { ...cart, items: updated };
@@ -93,7 +95,7 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to place order");
       localStorage.removeItem("hot-truck-cart");
-      window.location.href = `/truck/${id}/order/confirmation?orderId=${data.orderId}&name=${encodeURIComponent(pickupName.trim())}`;
+      router.replace(`/truck/${id}/order/confirmation?orderId=${data.orderId}&name=${encodeURIComponent(pickupName.trim())}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
       setSubmitting(false);

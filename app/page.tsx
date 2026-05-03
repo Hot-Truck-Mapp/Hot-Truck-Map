@@ -368,7 +368,7 @@ export default function HomePage() {
                     ))}
                     {searchResults.length > 8 && (
                       <Link
-                        href={`/trucks`}
+                        href={`/`}
                         onClick={() => setSearch("")}
                         className="flex items-center justify-center gap-1.5 px-4 py-3 border-t border-neutral-50 text-xs font-bold text-brand-red hover:bg-red-50 transition-colors"
                       >

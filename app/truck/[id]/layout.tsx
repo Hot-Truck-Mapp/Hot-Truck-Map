@@ -31,7 +31,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const description =
     truck.description ||
     `${truck.cuisine ? truck.cuisine + " food truck" : "Food truck"} — order ahead and pay at the truck. Find us on Hot Truck Map.`;
-  const status = truck.is_live ? "🟢 Open Now · " : "";
+  const status = truck.is_live ? "Open Now · " : "";
   const fullDescription = status + description;
 
   return {

@@ -196,17 +196,12 @@ export default function MenuPage({ params }: { params: Promise<{ id: string }> }
 }
 
 function getDietaryBadges(item: any): string[] {
-  const badges: string[] = [];
-  const allergens: string[] = item.allergens ?? [];
-
-  if (!allergens.includes("Gluten")) badges.push("GF");
-  if (!allergens.includes("Dairy") && !allergens.includes("Eggs")) badges.push("Vegan");
-
-  // Explicit tags from dietary_tags field if present
   const tags: string[] = item.dietary_tags ?? [];
+  const badges: string[] = [];
+  if (tags.includes("GF") || tags.includes("Gluten-Free")) badges.push("GF");
+  if (tags.includes("Vegan")) badges.push("Vegan");
   if (tags.includes("Halal")) badges.push("Halal");
   if (tags.includes("Spicy")) badges.push("Spicy");
-
   return badges;
 }
 

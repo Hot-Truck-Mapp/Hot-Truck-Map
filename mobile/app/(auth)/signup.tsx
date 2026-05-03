@@ -28,20 +28,25 @@ export default function SignupScreen() {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: { data: { role: 'customer' } },
-    });
-    setLoading(false);
-    if (error) {
-      Alert.alert('Sign up failed', error.message);
-    } else {
-      Alert.alert(
-        'Check your email',
-        'We sent you a confirmation link. Verify your email then sign in.',
-        [{ text: 'OK', onPress: () => router.replace('/(auth)/login') }]
-      );
+    try {
+      const { error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: { data: { role: 'customer' } },
+      });
+      if (error) {
+        Alert.alert('Sign up failed', error.message);
+      } else {
+        Alert.alert(
+          'Check your email',
+          'We sent you a confirmation link. Verify your email then sign in.',
+          [{ text: 'OK', onPress: () => router.replace('/(auth)/login') }]
+        );
+      }
+    } catch {
+      Alert.alert('Sign up failed', 'Network error — please check your connection and try again.');
+    } finally {
+      setLoading(false);
     }
   }
 
