@@ -108,7 +108,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
       let isFollowing = false;
       if (user) {
         const { data: follow } = await supabase
-          .from("follows").select("id").eq("truck_id", id).eq("user_id", user.id).maybeSingle();
+          .from("follows").select("user_id").eq("truck_id", id).eq("user_id", user.id).maybeSingle();
         isFollowing = !!follow;
       }
 

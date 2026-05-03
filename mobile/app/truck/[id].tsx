@@ -24,7 +24,7 @@ export default function TruckScreen() {
     async function load() {
       try {
         const [truckRes, menuRes, locationRes] = await Promise.all([
-          supabase.from('trucks').select('*').eq('id', id).single(),
+          supabase.from('trucks').select('*').eq('id', id).maybeSingle(),
           supabase.from('menu_items').select('*').eq('truck_id', id).eq('is_sold_out', false),
           supabase
             .from('locations')
@@ -119,7 +119,7 @@ export default function TruckScreen() {
           )}
         </View>
 
-        <Text style={styles.cuisine}>{truck.cuisine}</Text>
+        {truck.cuisine ? <Text style={styles.cuisine}>{truck.cuisine}</Text> : null}
 
         {truck.description ? (
           <Text style={styles.description}>{truck.description}</Text>

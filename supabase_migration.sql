@@ -176,6 +176,7 @@ CREATE TABLE IF NOT EXISTS catering_packages (
 ALTER TABLE catering_packages ADD COLUMN IF NOT EXISTS description     text;
 ALTER TABLE catering_packages ADD COLUMN IF NOT EXISTS includes        text[] DEFAULT '{}';
 ALTER TABLE catering_packages ADD COLUMN IF NOT EXISTS photo           text;
+ALTER TABLE catering_packages ADD COLUMN IF NOT EXISTS is_active       boolean DEFAULT true;
 
 
 -- ── REVIEWS ─────────────────────────────────────────────────
@@ -283,10 +284,16 @@ CREATE POLICY "schedules_owner_delete" ON schedules FOR DELETE USING (
 );
 
 -- Follows: auth users read/write their own
-DROP POLICY IF EXISTS "follows_read"   ON follows;
-DROP POLICY IF EXISTS "follows_insert" ON follows;
-DROP POLICY IF EXISTS "follows_delete" ON follows;
-CREATE POLICY "follows_read"   ON follows FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "follows_read"        ON follows;
+DROP POLICY IF EXISTS "follows_owner_read"  ON follows;
+DROP POLICY IF EXISTS "follows_insert"      ON follows;
+DROP POLICY IF EXISTS "follows_delete"      ON follows;
+-- Followers can read their own follow rows
+CREATE POLICY "follows_read"       ON follows FOR SELECT USING (auth.uid() = user_id);
+-- Truck owners can read ALL follow rows for their trucks (needed for analytics)
+CREATE POLICY "follows_owner_read" ON follows FOR SELECT USING (
+  auth.uid() = (SELECT owner_id FROM trucks WHERE id = truck_id LIMIT 1)
+);
 CREATE POLICY "follows_insert" ON follows FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "follows_delete" ON follows FOR DELETE USING (auth.uid() = user_id);
 
