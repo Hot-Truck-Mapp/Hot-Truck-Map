@@ -21,7 +21,14 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
 
   // Cart state: maps menu item id → quantity
   const [cart, setCart] = useState<Record<string, number>>({});
-  const [cartConflict, setCartConflict] = useState<string | null>(null); // name of truck with existing cart
+  const [cartConflict, setCartConflict] = useState<string | null>(null);
+
+  // Review form
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewHover, setReviewHover] = useState(0);
+  const [reviewText, setReviewText] = useState("");
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewSuccess, setReviewSuccess] = useState(false);
 
   // Computed cart values
   const cartEntries = Object.entries(cart).filter(([, qty]) => qty > 0);
@@ -114,11 +121,15 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
         isFollowing = !!follow;
       }
 
-      // Track view for ALL visitors — logged-in users get viewer_id, anonymous get null
+      // Track view — deduplicated per session so refreshes don't inflate counts
       try {
-        const viewPayload: Record<string, string> = { truck_id: id };
-        if (user) viewPayload.viewer_id = user.id;
-        await supabase.from("truck_views").insert(viewPayload);
+        const viewKey = `viewed_${id}`;
+        if (!sessionStorage.getItem(viewKey)) {
+          const viewPayload: Record<string, string> = { truck_id: id };
+          if (user) viewPayload.viewer_id = user.id;
+          await supabase.from("truck_views").insert(viewPayload);
+          sessionStorage.setItem(viewKey, "1");
+        }
       } catch { /* ignore — view tracking is non-critical */ }
 
       setTruck(truckData);
@@ -143,6 +154,29 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
     } else {
       const { error } = await supabase.from("follows").insert({ truck_id: id, user_id: userId });
       if (!error) { setFollowing(true); setFollowerCount((c) => c + 1); }
+    }
+  }
+
+  async function submitReview() {
+    if (!userId) { router.push("/account"); return; }
+    if (!reviewRating) return;
+    setReviewSubmitting(true);
+    const supabase = createClient();
+    const { error } = await supabase.from("reviews").insert({
+      truck_id: id,
+      user_id: userId,
+      rating: reviewRating,
+      comment: reviewText.trim() || null,
+    });
+    setReviewSubmitting(false);
+    if (!error) {
+      setReviewSuccess(true);
+      setReviewRating(0);
+      setReviewText("");
+      // Reload reviews
+      const { data } = await supabase.from("reviews").select("*").eq("truck_id", id).order("created_at", { ascending: false });
+      setReviews(data ?? []);
+      setTimeout(() => setReviewSuccess(false), 3000);
     }
   }
 
@@ -507,33 +541,89 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
 
         {/* ── REVIEWS TAB ── */}
         {activeTab === "reviews" && (
-          <div className="divide-y divide-neutral-50">
-            {reviews.length === 0 ? (
-              <div className="py-12 text-center">
-                <p className="text-neutral-400 text-sm">No reviews yet</p>
-                <p className="text-neutral-300 text-xs mt-1">Be the first!</p>
-              </div>
-            ) : (
-              reviews.map((review) => (
-                <div key={review.id} className="p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="flex gap-0.5">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <svg key={star} width="12" height="12" viewBox="0 0 24 24"
-                          fill={star <= review.rating ? "#F5A623" : "#e5e7eb"}
-                          stroke={star <= review.rating ? "#F5A623" : "#e5e7eb"} strokeWidth="1">
+          <div>
+            {/* Submit form */}
+            <div className="p-4 border-b border-neutral-100">
+              <p className="text-xs font-black text-neutral-500 uppercase tracking-widest mb-3">
+                Leave a Review
+              </p>
+              {reviewSuccess ? (
+                <div className="flex items-center gap-2 py-3 px-4 bg-green-50 rounded-xl">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                  <p className="text-sm font-semibold text-green-700">Thanks for your review!</p>
+                </div>
+              ) : (
+                <>
+                  {/* Star picker */}
+                  <div className="flex gap-1 mb-3">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        onClick={() => setReviewRating(star)}
+                        onMouseEnter={() => setReviewHover(star)}
+                        onMouseLeave={() => setReviewHover(0)}
+                        className="transition-transform active:scale-90"
+                      >
+                        <svg width="28" height="28" viewBox="0 0 24 24"
+                          fill={star <= (reviewHover || reviewRating) ? "#F5A623" : "none"}
+                          stroke={star <= (reviewHover || reviewRating) ? "#F5A623" : "#d1d5db"}
+                          strokeWidth="1.5">
                           <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
                         </svg>
-                      ))}
-                    </div>
-                    <span className="text-xs text-neutral-400">
-                      {new Date(review.created_at).toLocaleDateString()}
-                    </span>
+                      </button>
+                    ))}
                   </div>
-                  <p className="text-sm text-neutral-600">{review.comment}</p>
+                  <textarea
+                    value={reviewText}
+                    onChange={(e) => setReviewText(e.target.value)}
+                    placeholder={userId ? "Share your experience (optional)..." : "Sign in to leave a review"}
+                    disabled={!userId}
+                    rows={3}
+                    className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-300 focus:outline-none focus:border-brand-red resize-none transition-colors disabled:bg-neutral-50 disabled:cursor-not-allowed"
+                  />
+                  <button
+                    onClick={submitReview}
+                    disabled={reviewSubmitting || !reviewRating}
+                    className="mt-2 w-full py-2.5 bg-brand-red text-white rounded-xl font-black text-sm uppercase tracking-wide disabled:opacity-40 hover:bg-brand-red-dark transition-colors active:scale-95"
+                  >
+                    {!userId ? "Sign in to Review" : reviewSubmitting ? "Submitting..." : "Submit Review"}
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* Reviews list */}
+            <div className="divide-y divide-neutral-50">
+              {reviews.length === 0 ? (
+                <div className="py-10 text-center">
+                  <p className="text-neutral-400 text-sm">No reviews yet — be the first!</p>
                 </div>
-              ))
-            )}
+              ) : (
+                reviews.map((review) => (
+                  <div key={review.id} className="p-4">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <div className="flex gap-0.5">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <svg key={star} width="12" height="12" viewBox="0 0 24 24"
+                            fill={star <= review.rating ? "#F5A623" : "#e5e7eb"}
+                            stroke={star <= review.rating ? "#F5A623" : "#e5e7eb"} strokeWidth="1">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                          </svg>
+                        ))}
+                      </div>
+                      <span className="text-xs text-neutral-400">
+                        {new Date(review.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                    {review.comment && (
+                      <p className="text-sm text-neutral-600 leading-relaxed">{review.comment}</p>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         )}
 

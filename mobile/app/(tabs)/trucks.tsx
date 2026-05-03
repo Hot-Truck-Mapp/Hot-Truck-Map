@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { StyleSheet, View, FlatList, TextInput, ActivityIndicator, Text } from 'react-native';
+import { useState, useEffect, useCallback } from 'react';
+import { StyleSheet, View, FlatList, TextInput, ActivityIndicator, Text, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TruckCard } from '@/components/TruckCard';
 import { supabase } from '@/lib/supabase';
@@ -10,19 +10,28 @@ export default function TrucksTab() {
   const [trucks, setTrucks] = useState<Truck[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const { data, error } = await supabase.from('trucks').select('*').order('name');
-        if (error) console.warn('Failed to load trucks:', error.message);
-        if (data) setTrucks(data);
-      } catch { /* network error — keep empty list */ } finally {
-        setLoading(false);
-      }
+  const loadTrucks = useCallback(async () => {
+    try {
+      const { data } = await supabase
+        .from('trucks')
+        .select('*')
+        .order('name')
+        .limit(200);
+      if (data) setTrucks(data);
+    } catch { /* network error — keep existing list */ } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
-    load();
   }, []);
+
+  useEffect(() => { loadTrucks(); }, []);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadTrucks();
+  }, [loadTrucks]);
 
   const filtered = query
     ? trucks.filter(t => {
@@ -57,8 +66,17 @@ export default function TrucksTab() {
         keyExtractor={item => item.id}
         renderItem={({ item }) => <TruckCard truck={item} />}
         contentContainerStyle={styles.list}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={Colors.primary}
+          />
+        }
         ListEmptyComponent={
-          <Text style={styles.empty}>No trucks found</Text>
+          <Text style={styles.empty}>
+            {query ? 'No trucks match your search' : 'No trucks yet'}
+          </Text>
         }
       />
     </SafeAreaView>
@@ -68,7 +86,7 @@ export default function TrucksTab() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  searchContainer: { padding: 16 },
+  searchContainer: { padding: 16, paddingBottom: 8 },
   search: {
     backgroundColor: Colors.card,
     borderRadius: 10,
@@ -79,6 +97,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  list: { paddingBottom: 16 },
+  list: { paddingHorizontal: 16, paddingBottom: 32 },
   empty: { textAlign: 'center', color: Colors.textSecondary, marginTop: 48, fontSize: 16 },
 });
