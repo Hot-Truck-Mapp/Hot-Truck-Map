@@ -99,6 +99,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "One or more items are sold out" }, { status: 400 });
     }
 
+    // Validate quantities — must be positive integers, max 99 each
+    for (const item of items) {
+      if (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 99) {
+        return NextResponse.json({ error: "Invalid item quantity" }, { status: 400 });
+      }
+    }
+
     // Recalculate total server-side to prevent price tampering
     const serverTotal = items.reduce((sum: number, item: any) => {
       const db = dbItems.find((d) => d.id === item.menu_item_id);
@@ -118,7 +125,7 @@ export async function POST(req: NextRequest) {
         ...(customer_id ? { customer_id } : {}),
       })
       .select("id")
-      .single();
+      .maybeSingle();
 
     if (orderErr || !order) {
       console.error("Order insert error:", orderErr);
@@ -131,7 +138,7 @@ export async function POST(req: NextRequest) {
         .from("trucks")
         .select("name, phone")
         .eq("id", truck_id)
-        .single()
+        .maybeSingle()
         .then(({ data: truck }) => {
           if (truck?.phone) {
             notifyOperatorBySMS(truck.phone, truck.name, pickup_name, items, serverTotal);
@@ -179,7 +186,7 @@ export async function GET(req: NextRequest) {
       .select("id")
       .eq("id", truck_id)
       .eq("owner_id", user.id)
-      .single();
+      .maybeSingle();
 
     if (truckErr || !truck) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });

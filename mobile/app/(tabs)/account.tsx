@@ -134,16 +134,10 @@ export default function AccountTab() {
           <Text style={styles.rowText}>My Orders</Text>
           <Text style={styles.chevron}>›</Text>
         </TouchableOpacity>
-        <View style={[styles.row, styles.rowLast]}>
-          <Text style={styles.rowText}>Push Notifications</Text>
-          <Switch
-            value={false}
-            onValueChange={() =>
-              Alert.alert('Coming Soon', 'Push notification settings are coming soon.')
-            }
-            trackColor={{ true: Colors.primary, false: Colors.border }}
-          />
-        </View>
+        <TouchableOpacity style={[styles.row, styles.rowLast]} onPress={() => router.push('/(tabs)/orders')}>
+          <Text style={styles.rowText}>Order History</Text>
+          <Text style={styles.chevron}>›</Text>
+        </TouchableOpacity>
       </View>
 
       <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
