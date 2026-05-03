@@ -1,6 +1,8 @@
-import { StyleSheet, View, Text, TouchableOpacity, Alert, Switch } from 'react-native';
+import { useState, useEffect } from 'react';
+import { StyleSheet, View, Text, TouchableOpacity, Alert, Switch, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/colors';
@@ -8,6 +10,14 @@ import { Colors } from '@/constants/colors';
 export default function AccountTab() {
   const { session } = useAuth();
   const router = useRouter();
+  const [avatarUrl, setAvatarUrl] = useState<string>('');
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    if (session?.user) {
+      setAvatarUrl(session.user.user_metadata?.avatar_url ?? '');
+    }
+  }, [session]);
 
   async function handleSignOut() {
     Alert.alert('Sign out', 'Are you sure?', [
@@ -16,9 +26,65 @@ export default function AccountTab() {
         text: 'Sign out',
         style: 'destructive',
         onPress: () => supabase.auth.signOut(),
-        // Navigation handled by AuthGuard after session clears
       },
     ]);
+  }
+
+  async function pickAndUploadAvatar() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Please allow photo access to change your profile picture.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (result.canceled || !result.assets[0]) return;
+
+    const asset = result.assets[0];
+    if (!session?.user) return;
+
+    // Check size (5 MB limit)
+    if (asset.fileSize && asset.fileSize > 5 * 1024 * 1024) {
+      Alert.alert('File too large', 'Please choose a photo under 5 MB.');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const ext = asset.uri.split('.').pop() ?? 'jpg';
+      const path = `customers/${session.user.id}.${ext}`;
+
+      // Fetch the image as a blob
+      const response = await fetch(asset.uri);
+      if (!response.ok) throw new Error('Could not read photo from device.');
+      const blob = await response.blob();
+
+      const { error: uploadErr } = await supabase.storage
+        .from('avatars')
+        .upload(path, blob, { upsert: true, contentType: `image/${ext}` });
+
+      if (uploadErr) throw new Error(uploadErr.message);
+
+      const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+      if (!data?.publicUrl) throw new Error('Could not get photo URL — try again.');
+
+      const { error: updateErr } = await supabase.auth.updateUser({
+        data: { avatar_url: data.publicUrl },
+      });
+      if (updateErr) throw new Error('Photo uploaded but failed to save: ' + updateErr.message);
+
+      setAvatarUrl(data.publicUrl);
+      Alert.alert('', 'Profile photo updated!');
+    } catch (err: any) {
+      Alert.alert('Upload failed', err?.message ?? 'Please try again.');
+    }
+    setUploading(false);
   }
 
   if (!session) {
@@ -34,13 +100,29 @@ export default function AccountTab() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Avatar */}
       <View style={styles.header}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>
-            {(session.user.email ?? '?')[0].toUpperCase()}
-          </Text>
-        </View>
+        <TouchableOpacity style={styles.avatarWrapper} onPress={pickAndUploadAvatar} disabled={uploading}>
+          {avatarUrl ? (
+            <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Text style={styles.avatarText}>
+                {(session.user.email ?? '?')[0].toUpperCase()}
+              </Text>
+            </View>
+          )}
+          {/* Camera badge */}
+          <View style={styles.cameraBadge}>
+            {uploading ? (
+              <ActivityIndicator size={10} color="#fff" />
+            ) : (
+              <Text style={styles.cameraIcon}>📷</Text>
+            )}
+          </View>
+        </TouchableOpacity>
         <Text style={styles.email}>{session.user.email}</Text>
+        <Text style={styles.avatarHint}>Tap photo to change</Text>
       </View>
 
       <View style={styles.section}>
@@ -75,14 +157,24 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background, padding: 24 },
   centered: { justifyContent: 'center', alignItems: 'center', gap: 16 },
   header: { alignItems: 'center', marginBottom: 32 },
-  avatar: {
+  avatarWrapper: { position: 'relative', marginBottom: 12 },
+  avatarImage: { width: 80, height: 80, borderRadius: 40 },
+  avatarPlaceholder: {
     width: 80, height: 80, borderRadius: 40,
     backgroundColor: Colors.primary,
     justifyContent: 'center', alignItems: 'center',
-    marginBottom: 12,
   },
   avatarText: { fontSize: 32, fontWeight: '700', color: '#fff' },
+  cameraBadge: {
+    position: 'absolute', bottom: 0, right: 0,
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: Colors.primary,
+    borderWidth: 2, borderColor: Colors.background,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  cameraIcon: { fontSize: 10 },
   email: { fontSize: 16, color: Colors.text },
+  avatarHint: { fontSize: 12, color: Colors.textSecondary, marginTop: 4 },
   section: {
     backgroundColor: Colors.card,
     borderRadius: 12,

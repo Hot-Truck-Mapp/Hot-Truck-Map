@@ -22,8 +22,8 @@ export function TruckCard({ truck }: Props) {
         <View style={[styles.image, styles.imagePlaceholder]} />
       )}
       <View style={styles.info}>
-        <Text style={styles.name} numberOfLines={1}>{truck.name}</Text>
-        <Text style={styles.cuisine}>{truck.cuisine}</Text>
+        <Text style={styles.name} numberOfLines={1}>{truck.name ?? 'Unknown Truck'}</Text>
+        <Text style={styles.cuisine}>{truck.cuisine ?? 'Food Truck'}</Text>
         {truck.is_live && (
           <View style={styles.liveBadge}>
             <View style={styles.liveDot} />

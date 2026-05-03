@@ -12,7 +12,14 @@ export default function AuthCallback() {
       try {
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
-        if (user?.user_metadata?.role === "operator") {
+        if (!user) { router.replace("/"); return; }
+
+        // OAuth signups (Google) don't set a role — assign "customer" by default
+        if (!user.user_metadata?.role) {
+          await supabase.auth.updateUser({ data: { role: "customer" } });
+        }
+
+        if (user.user_metadata?.role === "operator") {
           router.replace("/dashboard");
         } else {
           router.replace("/");

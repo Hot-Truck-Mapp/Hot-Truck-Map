@@ -28,7 +28,11 @@ export default function SignupScreen() {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.signUp({ email: email.trim(), password });
+    const { error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: { data: { role: 'customer' } },
+    });
     setLoading(false);
     if (error) {
       Alert.alert('Sign up failed', error.message);

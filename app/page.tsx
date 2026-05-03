@@ -38,11 +38,17 @@ export default function HomePage() {
     setMounted(true);
     loadTrucks();
 
-    // Real-time: refresh truck list whenever any truck goes live/offline
+    // Real-time: refresh whenever a truck goes live/offline OR updates its location
     const supabase = createClient();
     const channel = supabase
       .channel("home-trucks-live")
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "trucks" }, () => {
+        loadTrucks();
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "locations" }, () => {
+        loadTrucks();
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "locations" }, () => {
         loadTrucks();
       })
       .subscribe();

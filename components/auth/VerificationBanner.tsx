@@ -53,7 +53,7 @@ export default function VerificationBanner() {
       </div>
       <button
         onClick={resendEmail}
-        disabled={resent || sending}
+        disabled={(resent && !error) || sending}
         className="flex-shrink-0 px-3 py-1.5 bg-brand-red text-white text-xs font-semibold rounded-full disabled:opacity-40"
       >
         {sending ? "Sending..." : resent ? "Sent ✓" : "Resend"}

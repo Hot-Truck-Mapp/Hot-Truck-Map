@@ -17,18 +17,22 @@ export default function OrdersTab() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) { setLoading(false); return; }
-      supabase
-        .from('orders')
-        .select('*')
-        .eq('customer_id', user.id)
-        .order('created_at', { ascending: false })
-        .then(({ data }) => {
-          if (data) setOrders(data);
-          setLoading(false);
-        });
-    });
+    supabase.auth.getUser()
+      .then(({ data: { user }, error: authErr }) => {
+        if (authErr || !user) { setLoading(false); return; }
+        supabase
+          .from('orders')
+          .select('*')
+          .eq('customer_id', user.id)
+          .order('created_at', { ascending: false })
+          .then(({ data, error }) => {
+            if (error) console.warn('Failed to load orders:', error.message);
+            if (data) setOrders(data);
+            setLoading(false);
+          })
+          .catch(() => setLoading(false));
+      })
+      .catch(() => setLoading(false));
   }, []);
 
   if (loading) {
@@ -56,8 +60,8 @@ export default function OrdersTab() {
           <View style={styles.card}>
             <View style={styles.cardRow}>
               <Text style={styles.orderId}>Order #{item.id.slice(0, 8).toUpperCase()}</Text>
-              <View style={[styles.badge, { backgroundColor: STATUS_COLOR[item.status] + '22' }]}>
-                <Text style={[styles.badgeText, { color: STATUS_COLOR[item.status] }]}>
+              <View style={[styles.badge, { backgroundColor: (STATUS_COLOR[item.status] ?? Colors.textSecondary) + '22' }]}>
+                <Text style={[styles.badgeText, { color: STATUS_COLOR[item.status] ?? Colors.textSecondary }]}>
                   {item.status.replace('_', ' ')}
                 </Text>
               </View>

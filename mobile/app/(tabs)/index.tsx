@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, View, ActivityIndicator, Text } from 'react-native';
+import { StyleSheet, View, ActivityIndicator, Text, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import type { Region } from 'react-native-maps';
@@ -14,14 +14,25 @@ export default function MapTab() {
   useEffect(() => {
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
-      const loc = await Location.getCurrentPositionAsync({});
-      setRegion({
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
-      });
+      if (status !== 'granted') {
+        Alert.alert(
+          'Location Access',
+          'Enable location in your device settings to see trucks near you. Showing all live trucks instead.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      try {
+        const loc = await Location.getCurrentPositionAsync({});
+        setRegion({
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+          latitudeDelta: 0.05,
+          longitudeDelta: 0.05,
+        });
+      } catch {
+        // Silently fall back to default region — map still shows all trucks
+      }
     })();
   }, []);
 

@@ -77,11 +77,13 @@ export default function Dashboard() {
   const [deletingSchedId, setDeletingSchedId] = useState<string | null>(null);
 
   // Go Live
-  const [liveStatus, setLiveStatus]   = useState<"idle"|"locating"|"live"|"error">("idle");
-  const [liveAddress, setLiveAddress] = useState<string | null>(null);
-  const [liveError, setLiveError]     = useState<string | null>(null);
-  const [manualAddr, setManualAddr]   = useState("");
-  const [showManual, setShowManual]   = useState(false);
+  const [liveStatus, setLiveStatus]     = useState<"idle"|"locating"|"live"|"error">("idle");
+  const [liveAddress, setLiveAddress]   = useState<string | null>(null);
+  const [liveError, setLiveError]       = useState<string | null>(null);
+  const [manualAddr, setManualAddr]     = useState("");
+  const [showManual, setShowManual]     = useState(false);
+  const watchIdRef                      = useRef<number | null>(null);
+  const locationIntervalRef             = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Analytics
   const [analyticsLoaded, setAnalyticsLoaded]   = useState(false);
@@ -194,14 +196,22 @@ export default function Dashboard() {
 
   // ── Profile ─────────────────────────────────────────────────────────────────
   async function uploadProfilePhoto(file: File) {
+    if (file.size > 5 * 1024 * 1024) { showToast("Photo must be under 5 MB"); return; }
     setPhotoUploading(true);
     try {
       const supabase = createClient();
-      const path = `trucks/${Date.now()}.${file.name.split(".").pop()}`;
-      await supabase.storage.from("avatars").upload(path, file, { upsert: true });
+      const ext = file.name.split(".").pop();
+      const path = `trucks/${Date.now()}.${ext}`;
+      const { error: uploadErr } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
+      if (uploadErr) throw new Error(uploadErr.message);
       const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+      if (!data?.publicUrl) throw new Error("Could not get photo URL — try again.");
       setProfile(p => ({ ...p, profile_photo: data.publicUrl }));
-    } catch { showToast("Photo upload failed"); }
+      if (truckId) {
+        const { error: saveErr } = await supabase.from("trucks").update({ profile_photo: data.publicUrl }).eq("id", truckId);
+        if (saveErr) throw new Error("Photo uploaded but failed to save: " + saveErr.message);
+      }
+    } catch (err: any) { showToast(err?.message ?? "Photo upload failed"); }
     setPhotoUploading(false);
   }
 
@@ -237,14 +247,23 @@ export default function Dashboard() {
 
   // ── Menu ────────────────────────────────────────────────────────────────────
   async function uploadMenuPhoto(file: File) {
+    if (file.size > 5 * 1024 * 1024) { showToast("Photo must be under 5 MB"); return; }
     setMenuUploading(true);
     try {
       const supabase = createClient();
-      const path = `menu/${Date.now()}.${file.name.split(".").pop()}`;
-      await supabase.storage.from("menu-photos").upload(path, file, { upsert: true });
+      const ext = file.name.split(".").pop();
+      const path = `menu/${Date.now()}.${ext}`;
+      const { error: uploadErr } = await supabase.storage.from("menu-photos").upload(path, file, { upsert: true });
+      if (uploadErr) throw new Error(uploadErr.message);
       const { data } = supabase.storage.from("menu-photos").getPublicUrl(path);
+      if (!data?.publicUrl) throw new Error("Could not get photo URL — try again.");
       setItemForm(f => ({ ...f, photo: data.publicUrl }));
-    } catch { showToast("Photo upload failed"); }
+      if (editingItem) {
+        const { error: saveErr } = await supabase.from("menu_items").update({ photo: data.publicUrl }).eq("id", editingItem.id);
+        if (saveErr) throw new Error("Photo uploaded but failed to save: " + saveErr.message);
+        setMenuItems(items => items.map(i => i.id === editingItem.id ? { ...i, photo: data.publicUrl } : i));
+      }
+    } catch (err: any) { showToast(err?.message ?? "Photo upload failed"); }
     setMenuUploading(false);
   }
 
@@ -285,6 +304,7 @@ export default function Dashboard() {
       }
       const { data } = await supabase.from("menu_items").select("*").eq("truck_id", truckId).order("created_at");
       setMenuItems(data ?? []);
+      showToast(editingItem ? "Item updated!" : "Item added!", false);
       setMenuModal(false);
     } catch (err: any) {
       showToast("Save failed: " + (err?.message ?? "Please try again."));
@@ -325,7 +345,10 @@ export default function Dashboard() {
   }
 
   async function saveSchedEntry() {
-    if (!truckId || !schedForm.location) return;
+    if (!truckId || !schedForm.location.trim()) return;
+    const openIdx  = HOURS.indexOf(schedForm.open_time);
+    const closeIdx = HOURS.indexOf(schedForm.close_time);
+    if (closeIdx <= openIdx) { showToast("Closing time must be after opening time"); return; }
     setSchedSaving(true);
     try {
       const supabase = createClient();
@@ -339,6 +362,7 @@ export default function Dashboard() {
       }
       const { data } = await supabase.from("schedules").select("*").eq("truck_id", truckId).order("day_of_week");
       setSchedule(data ?? []);
+      showToast("Schedule saved!", false);
       setSchedModal(false);
     } catch (err: any) { showToast("Save failed: " + (err?.message ?? "Please try again.")); }
     setSchedSaving(false);
@@ -379,22 +403,64 @@ export default function Dashboard() {
     } catch { return `${lat.toFixed(5)}, ${lng.toFixed(5)}`; }
   }
 
-  async function goLiveGPS() {
+  // Stop watching GPS and clear the auto-refresh interval
+  function stopLocationTracking() {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    if (locationIntervalRef.current !== null) {
+      clearInterval(locationIntervalRef.current);
+      locationIntervalRef.current = null;
+    }
+  }
+
+  // Start watching GPS — broadcasts initial location then auto-refreshes every 5 min
+  async function startLocationTracking() {
     if (!truckId) { showToast("Save your truck profile first."); setActiveTab("profile"); return; }
     if (!profile.description || !profile.phone) { showToast("Complete your profile (description + phone) before going live."); setActiveTab("profile"); return; }
     if (menuItems.length === 0) { showToast("Add at least one menu item before going live."); setActiveTab("menu"); return; }
+    if (!navigator.geolocation) { setLiveError("Your browser doesn't support location. Use the address option below."); setShowManual(true); return; }
+
     setLiveStatus("locating");
     setLiveError(null);
-    navigator.geolocation.getCurrentPosition(
-      async pos => {
-        try {
-          const place = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
-          await broadcastLocation(pos.coords.latitude, pos.coords.longitude, place);
-        } catch (e: any) { setLiveError(e.message); setLiveStatus("error"); }
+
+    // Try fast low-accuracy GPS first (gets a position quickly), then refine
+    const tryBroadcast = async (pos: GeolocationPosition) => {
+      try {
+        const place = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
+        await broadcastLocation(pos.coords.latitude, pos.coords.longitude, place);
+      } catch (e: any) {
+        setLiveError(e.message);
+        setLiveStatus("error");
+        stopLocationTracking();
+      }
+    };
+
+    // Use watchPosition so the pin auto-updates as the truck moves
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      tryBroadcast,
+      (err) => {
+        stopLocationTracking();
+        if (err.code === err.PERMISSION_DENIED) {
+          setLiveError("Location access denied. Enable location in your browser settings, or enter your address below.");
+        } else {
+          setLiveError("Could not get your location. Enter your address below.");
+        }
+        setLiveStatus("idle");
+        setShowManual(true);
       },
-      () => { setLiveStatus("idle"); setShowManual(true); setLiveError("Could not get your location."); },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
     );
+
+    // Also force a precise update every 5 minutes while live
+    locationIntervalRef.current = setInterval(() => {
+      navigator.geolocation.getCurrentPosition(
+        tryBroadcast,
+        () => { /* silent — keep showing current pin if refresh fails */ },
+        { enableHighAccuracy: true, timeout: 15000 }
+      );
+    }, 5 * 60 * 1000);
   }
 
   async function goLiveManual() {
@@ -415,12 +481,16 @@ export default function Dashboard() {
 
   async function goOffline() {
     if (!truckId) return;
+    stopLocationTracking();
     const supabase = createClient();
     const { error } = await supabase.from("trucks").update({ is_live: false }).eq("id", truckId);
     if (error) { showToast("Could not go offline: " + error.message); return; }
     setLiveStatus("idle"); setIsLive(false); setLiveAddress(null);
     setManualAddr(""); setShowManual(false);
   }
+
+  // Clean up GPS watch when component unmounts
+  useEffect(() => () => stopLocationTracking(), []);
 
   // ── Analytics ───────────────────────────────────────────────────────────────
   async function loadAnalytics(id: string, r: AnalyticsRange) {
@@ -738,11 +808,11 @@ export default function Dashboard() {
                     const readyToLive = !!profile.description && !!profile.phone && menuItems.length > 0;
                     return (
                       <>
-                        <button onClick={goLiveGPS}
+                        <button onClick={startLocationTracking}
                           className={`w-52 h-52 rounded-full text-white flex flex-col items-center justify-center gap-2 transition-all ${readyToLive ? "bg-brand-red active:scale-95" : "bg-neutral-300 cursor-not-allowed"}`}
                           style={readyToLive ? { boxShadow: "0 8px 40px rgba(217,79,61,0.35)" } : {}}>
                           <span className="text-2xl font-black">Go Live</span>
-                          <span className="text-sm opacity-80">at my location</span>
+                          <span className="text-sm opacity-80">auto-detects location</span>
                         </button>
                         {!readyToLive && (
                           <p className="text-xs text-neutral-400 text-center -mt-1">Complete the checklist above to go live</p>
@@ -750,8 +820,8 @@ export default function Dashboard() {
                       </>
                     );
                   })()}
-                  <button onClick={() => setShowManual(!showManual)} className="text-sm text-neutral-400">
-                    {showManual ? "Hide manual entry" : "GPS not working? Enter address"}
+                  <button onClick={() => setShowManual(!showManual)} className="text-sm text-neutral-400 underline underline-offset-2">
+                    {showManual ? "Hide address entry" : "Location not working? Enter address manually"}
                   </button>
                   {showManual && (
                     <div className="w-full flex flex-col gap-2">
@@ -783,6 +853,7 @@ export default function Dashboard() {
                     </span>
                     <span className="text-xl font-black">You&apos;re Live!</span>
                     {liveAddress && <span className="text-xs opacity-80 text-center px-6">{liveAddress}</span>}
+                    <span className="text-[10px] opacity-60 text-center px-6">📍 Location updates automatically</span>
                   </div>
                   <button onClick={goOffline}
                     className="px-6 py-3 rounded-full border-2 border-neutral-300 text-neutral-600 font-semibold text-sm">
