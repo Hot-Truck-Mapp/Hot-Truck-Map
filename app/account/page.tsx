@@ -52,35 +52,31 @@ export default function AccountPage() {
   }, []);
 
   async function loadAccount() {
-    const supabase = createClient();
-    const { data: { user: userData } } = await supabase.auth.getUser();
-    if (!userData) {
+    try {
+      const supabase = createClient();
+      const { data: { user: userData } } = await supabase.auth.getUser();
+      if (!userData) return; // show sign-in prompt instead of redirecting
+
+      setUser(userData);
+      setAvatarUrl(userData.user_metadata?.avatar_url ?? "");
+
+      const [{ data: follows }, { data: orderData }] = await Promise.all([
+        supabase.from("follows").select("truck_id, trucks(*)").eq("user_id", userData.id),
+        supabase.from("orders").select("*, trucks(name)").eq("customer_id", userData.id)
+          .order("created_at", { ascending: false }).limit(20),
+      ]);
+
+      setFollowed(follows ?? []);
+      setOrders(orderData ?? []);
+
+      // Load saved notification preferences from user metadata
+      const saved = userData.user_metadata?.notifications;
+      if (saved) setNotifications(saved);
+    } catch {
+      // network error — show sign-in prompt
+    } finally {
       setLoading(false);
-      return; // show sign-in prompt instead of redirecting
     }
-    setUser(userData);
-    setAvatarUrl(userData.user_metadata?.avatar_url ?? "");
-
-    const { data: follows } = await supabase
-      .from("follows")
-      .select("truck_id, trucks(*)")
-      .eq("user_id", userData.id);
-
-    const { data: orderData } = await supabase
-      .from("orders")
-      .select("*, trucks(name)")
-      .eq("customer_id", userData.id)
-      .order("created_at", { ascending: false })
-      .limit(20);
-
-    setFollowed(follows ?? []);
-    setOrders(orderData ?? []);
-
-    // Load saved notification preferences from user metadata
-    const saved = userData.user_metadata?.notifications;
-    if (saved) setNotifications(saved);
-
-    setLoading(false);
   }
 
   async function updateNotification(key: keyof typeof notifications, value: boolean) {

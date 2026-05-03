@@ -14,15 +14,19 @@ export default function CateringPage() {
   }, []);
 
   async function loadCateringTrucks() {
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("trucks")
-      .select("*, catering_packages(*)")
-      .eq("offers_catering", true)
-      .order("created_at", { ascending: false });
-
-    setTrucks(data ?? []);
-    setLoading(false);
+    try {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("trucks")
+        .select("*, catering_packages(*)")
+        .eq("offers_catering", true)
+        .order("created_at", { ascending: false });
+      setTrucks(data ?? []);
+    } catch {
+      // network error — show empty state
+    } finally {
+      setLoading(false);
+    }
   }
 
   const filtered = trucks.filter((t) =>
