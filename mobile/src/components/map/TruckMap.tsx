@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { RefObject } from 'react';
 import { StyleSheet, View, Text } from 'react-native';
 import MapView, { Marker, type Region } from 'react-native-maps';
 import { useRouter } from 'expo-router';
@@ -9,21 +9,12 @@ export type TruckWithLocation = Truck & { location?: Location };
 
 type Props = {
   trucks: TruckWithLocation[];
-  initialRegion?: Region;
+  initialRegion: Region;
+  mapRef?: RefObject<MapView>;
 };
 
-// Fallback center — used only when location permission is denied.
-// Wide view of the continental US so trucks anywhere in the country are visible.
-const DEFAULT_REGION: Region = {
-  latitude: 39.5,
-  longitude: -98.35,
-  latitudeDelta: 55,
-  longitudeDelta: 55,
-};
-
-export function TruckMap({ trucks, initialRegion }: Props) {
+export function TruckMap({ trucks, initialRegion, mapRef }: Props) {
   const router = useRouter();
-  const mapRef = useRef<MapView>(null);
 
   return (
     <MapView
@@ -33,7 +24,7 @@ export function TruckMap({ trucks, initialRegion }: Props) {
       // the device's built-in tile service. If you want to pin a specific
       // Google Maps API key, add android.config.googleMaps.apiKey to app.json
       // and restore: provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-      initialRegion={initialRegion ?? DEFAULT_REGION}
+      initialRegion={initialRegion}
       showsUserLocation
       showsMyLocationButton
     >

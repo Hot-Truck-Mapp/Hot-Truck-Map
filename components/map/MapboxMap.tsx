@@ -10,6 +10,12 @@ type Props = {
   trucks: any[];
 };
 
+// Fallback center: middle of the continental US — shown only if geolocation
+// is denied/unavailable. Never defaults to any single city.
+const US_CENTER: [number, number] = [-98.35, 39.5];
+const US_ZOOM = 4;
+const USER_ZOOM = 13;
+
 export default function MapboxMap({ trucks }: Props) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -17,34 +23,55 @@ export default function MapboxMap({ trucks }: Props) {
   const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
-    if (map.current) return;
-    if (!mapboxgl.accessToken) return;
+    if (map.current || !mapboxgl.accessToken || !mapContainer.current) return;
 
-    map.current = new mapboxgl.Map({
-      container: mapContainer.current!,
-      style: "mapbox://styles/mapbox/streets-v12",
-      center: [-74.006, 40.7128],
-      zoom: 4, // start zoomed out so users see context before flying to their location
-    });
+    function buildMap(center: [number, number], zoom: number) {
+      map.current = new mapboxgl.Map({
+        container: mapContainer.current!,
+        style: "mapbox://styles/mapbox/streets-v12",
+        center,
+        zoom,
+      });
 
-    const geolocate = new mapboxgl.GeolocateControl({
-      positionOptions: { enableHighAccuracy: true },
-      trackUserLocation: true,
-      showUserHeading: true,
-      fitBoundsOptions: { maxZoom: 13 },
-    });
+      const geolocate = new mapboxgl.GeolocateControl({
+        positionOptions: { enableHighAccuracy: true },
+        trackUserLocation: true,
+        showUserHeading: true,
+        fitBoundsOptions: { maxZoom: USER_ZOOM },
+      });
 
-    map.current.addControl(new mapboxgl.NavigationControl());
-    map.current.addControl(geolocate);
+      map.current!.addControl(new mapboxgl.NavigationControl());
+      map.current!.addControl(geolocate);
 
-    // Signal that the map is ready so markers can be placed, then auto-fly to user
-    map.current.on("load", () => {
-      setMapReady(true);
-      // Small delay gives the control time to initialise before triggering
-      setTimeout(() => {
-        try { geolocate.trigger(); } catch { /* permission denied or unavailable — stays at default */ }
-      }, 300);
-    });
+      map.current!.on("load", () => {
+        setMapReady(true);
+        // Only auto-trigger the geolocate control when we fell back to the
+        // US-wide view — i.e. when we didn't already start at the user's spot.
+        if (zoom < USER_ZOOM) {
+          setTimeout(() => {
+            try { geolocate.trigger(); } catch { /* permission denied — stays at US view */ }
+          }, 300);
+        }
+      });
+    }
+
+    // Ask for location immediately. Use a 5 s timeout and accept cached
+    // positions up to 60 s old so returning visitors get instant centering.
+    if (typeof navigator !== "undefined" && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          buildMap([pos.coords.longitude, pos.coords.latitude], USER_ZOOM);
+        },
+        () => {
+          // Denied or timed out — start at wide US view and let the
+          // GeolocateControl button give users a second chance.
+          buildMap(US_CENTER, US_ZOOM);
+        },
+        { timeout: 5000, maximumAge: 60_000, enableHighAccuracy: false }
+      );
+    } else {
+      buildMap(US_CENTER, US_ZOOM);
+    }
   }, []);
 
   // Re-run whenever trucks data changes OR map finishes loading
