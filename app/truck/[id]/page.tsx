@@ -222,9 +222,9 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
     );
   }
 
-  const avgRating = reviews.length > 0
-    ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
-    : 0;
+  // Use the DB-maintained denormalized columns for instant display (no wait for reviews to load)
+  const avgRating: number = truck.avg_rating ?? 0;
+  const reviewCount: number = truck.review_count ?? reviews.length;
 
   const mapsUrl = location
     ? "https://maps.google.com/?q=" + location.lat + "," + location.lng
@@ -340,13 +340,13 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
 
         {/* Stats row */}
         <div className="flex items-center gap-3 mb-3 text-sm">
-          {reviews.length > 0 && (
+          {avgRating > 0 && (
             <div className="flex items-center gap-1">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="#F5A623" stroke="#F5A623" strokeWidth="1">
                 <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
               </svg>
               <span className="font-bold text-neutral-800">{avgRating.toFixed(1)}</span>
-              <span className="text-neutral-400">({reviews.length})</span>
+              <span className="text-neutral-400">({reviewCount})</span>
             </div>
           )}
           {followerCount > 0 && (

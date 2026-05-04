@@ -171,15 +171,20 @@ export default function CateringPackagesPage() {
   }
 
   async function savePackage() {
-    if (!truckId || !form.name || !form.price_per_person) return;
+    if (!truckId || !form.name.trim() || !form.price_per_person) return;
+    const price = parseFloat(form.price_per_person);
+    if (isNaN(price) || price <= 0) {
+      showToast("Please enter a valid price per person.");
+      return;
+    }
     setSaving(true);
 
     const supabase = createClient();
     const payload = {
       truck_id: truckId,
-      name: form.name,
+      name: form.name.trim(),
       description: form.description,
-      price_per_person: parseFloat(form.price_per_person) || 0,
+      price_per_person: price,
       minimum_guests: parseInt(form.minimum_guests) || 1,
       maximum_guests: parseInt(form.maximum_guests) || 500,
       includes: form.includes,
@@ -215,15 +220,22 @@ export default function CateringPackagesPage() {
   }
 
   async function toggleActive(pkg: any) {
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("catering_packages")
-      .update({ is_active: !pkg.is_active })
-      .eq("id", pkg.id)
-      .eq("truck_id", truckId!);
-    if (!error) setPackages(packages.map((p) =>
+    const snapshot = packages; // save for rollback
+    setPackages(packages.map((p) => // optimistic
       p.id === pkg.id ? { ...p, is_active: !p.is_active } : p
     ));
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("catering_packages")
+        .update({ is_active: !pkg.is_active })
+        .eq("id", pkg.id)
+        .eq("truck_id", truckId!);
+      if (error) throw new Error(error.message);
+    } catch {
+      setPackages(snapshot); // revert on failure
+      showToast("Failed to update package — please try again.");
+    }
   }
 
   if (loading) {

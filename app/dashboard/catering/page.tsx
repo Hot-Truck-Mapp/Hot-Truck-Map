@@ -24,6 +24,12 @@ export default function CateringDashboardPage() {
   const [sending, setSending] = useState(false);
   const [cateringEnabled, setCateringEnabled] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3500);
+  }
 
   useEffect(() => {
     loadRequests();
@@ -79,24 +85,27 @@ export default function CateringDashboardPage() {
   async function updateStatus(requestId: string, status: string) {
     if (!truckId) return;
     setUpdating(true);
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("catering_requests")
-      .update({ status })
-      .eq("id", requestId)
-      .eq("truck_id", truckId);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("catering_requests")
+        .update({ status })
+        .eq("id", requestId)
+        .eq("truck_id", truckId);
 
-    if (!error) {
+      if (error) throw new Error(error.message);
+
       setRequests(requests.map((r) =>
         r.id === requestId ? { ...r, status } : r
       ));
-
       if (selected?.id === requestId) {
         setSelected({ ...selected, status });
       }
+    } catch {
+      showToast("Failed to update status — please try again.");
+    } finally {
+      setUpdating(false);
     }
-
-    setUpdating(false);
   }
 
   async function sendMessage() {
@@ -104,21 +113,25 @@ export default function CateringDashboardPage() {
     // Verify the selected request belongs to this operator's truck
     if (selected.truck_id !== truckId) return;
     setSending(true);
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
 
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase.from("catering_messages").insert({
+        request_id: selected.id,
+        sender_id: user?.id,
+        message: message.trim(),
+      });
 
-    const { error } = await supabase.from("catering_messages").insert({
-      request_id: selected.id,
-      sender_id: user?.id,
-      message: message.trim(),
-    });
+      if (error) throw new Error(error.message);
 
-    if (!error) {
       setMessage("");
       await loadMessages(selected.id);
+    } catch {
+      showToast("Failed to send message — please try again.");
+    } finally {
+      setSending(false);
     }
-    setSending(false);
   }
 
   async function toggleCatering() {
@@ -511,6 +524,13 @@ export default function CateringDashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-neutral-900 text-white text-sm font-semibold px-5 py-3 rounded-2xl shadow-xl whitespace-nowrap">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }

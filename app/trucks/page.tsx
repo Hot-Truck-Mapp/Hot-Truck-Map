@@ -394,10 +394,21 @@ export default function TrucksListPage() {
                     </div>
                   </div>
 
-                  {/* Cuisine */}
-                  <p className="text-xs font-bold text-brand-red mb-1.5">
-                    {truck.cuisine ?? "Food Truck"}
-                  </p>
+                  {/* Cuisine + Rating */}
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <p className="text-xs font-bold text-brand-red">
+                      {truck.cuisine ?? "Food Truck"}
+                    </p>
+                    {(truck.avg_rating ?? 0) > 0 && (
+                      <div className="flex items-center gap-0.5">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="#F5A623" stroke="#F5A623" strokeWidth="1">
+                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                        </svg>
+                        <span className="text-[11px] font-bold text-neutral-700">{Number(truck.avg_rating).toFixed(1)}</span>
+                        <span className="text-[11px] text-neutral-400">({truck.review_count ?? 0})</span>
+                      </div>
+                    )}
+                  </div>
 
                   {/* Description */}
                   {truck.description && (

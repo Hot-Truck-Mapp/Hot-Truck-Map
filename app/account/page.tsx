@@ -80,25 +80,36 @@ export default function AccountPage() {
   }
 
   async function updateNotification(key: keyof typeof notifications, value: boolean) {
+    const prev = notifications;
     const updated = { ...notifications, [key]: value };
     setNotifications(updated);
     setSavingNotif(true);
-    const supabase = createClient();
-    await supabase.auth.updateUser({ data: { notifications: updated } });
-    setSavingNotif(false);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.updateUser({ data: { notifications: updated } });
+      if (error) throw new Error(error.message);
+    } catch {
+      setNotifications(prev); // revert optimistic update on failure
+      showAvatarToast("Could not save preference — please try again.");
+    } finally {
+      setSavingNotif(false);
+    }
   }
 
   async function unfollowTruck(truckId: string) {
     const snapshot = followed; // save before optimistic update
     setFollowed((prev) => prev.filter((f) => f.truck_id !== truckId)); // optimistic
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("follows")
-      .delete()
-      .eq("truck_id", truckId)
-      .eq("user_id", user.id);
-    if (error) {
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("follows")
+        .delete()
+        .eq("truck_id", truckId)
+        .eq("user_id", user.id);
+      if (error) throw new Error(error.message);
+    } catch {
       setFollowed(snapshot); // restore the pre-update list on failure
+      showAvatarToast("Could not remove favorite — please try again.");
     }
   }
 

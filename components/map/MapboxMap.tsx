@@ -118,10 +118,18 @@ export default function MapboxMap({ trucks }: Props) {
         </div>
       `;
 
+      const ratingHtml = (truck.avg_rating ?? 0) > 0
+        ? `<p style="margin:0 0 6px;font-size:11px;color:#555;display:flex;align-items:center;gap:3px">
+            <span style="color:#F5A623">★</span>
+            <span style="font-weight:700">${Number(truck.avg_rating).toFixed(1)}</span>
+            <span style="color:#aaa">(${truck.review_count ?? 0})</span>
+           </p>`
+        : "";
       const popup = new mapboxgl.Popup({ offset: 28, closeButton: false }).setHTML(
         `<div style="font-family:sans-serif;padding:4px 2px;min-width:140px">
           <p style="font-weight:800;margin:0 0 2px;font-size:14px;text-transform:uppercase;letter-spacing:0.02em">${truck.name ?? ""}</p>
-          <p style="color:#E8481C;margin:0 0 8px;font-size:12px;font-weight:600">${truck.cuisine ?? "Food Truck"}</p>
+          <p style="color:#E8481C;margin:0 0 4px;font-size:12px;font-weight:600">${truck.cuisine ?? "Food Truck"}</p>
+          ${ratingHtml}
           ${truck.is_live ? '<p style="color:#16a34a;font-size:11px;font-weight:700;margin:0 0 6px">● OPEN NOW</p>' : ""}
           <a href="/truck/${truck.id}" style="display:block;background:#E8481C;color:white;text-align:center;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700;text-decoration:none;">View Profile</a>
         </div>`
