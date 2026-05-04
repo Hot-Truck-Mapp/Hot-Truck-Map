@@ -102,6 +102,7 @@ export default function CateringPackagesPage() {
       })
       .eq("id", truckId);
     if (error) showToast("Save failed: " + error.message);
+    else showToast("Catering info saved!");
     setSavingInfo(false);
   }
 
@@ -109,9 +110,10 @@ export default function CateringPackagesPage() {
     const supabase = createClient();
     const ext = file.name.split(".").pop();
     const path = "catering/" + Date.now() + "." + ext;
-    await supabase.storage
+    const { error: uploadErr } = await supabase.storage
       .from("menu-photos")
       .upload(path, file, { upsert: true });
+    if (uploadErr) throw new Error(uploadErr.message);
     const { data } = supabase.storage
       .from("menu-photos")
       .getPublicUrl(path);

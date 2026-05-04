@@ -81,8 +81,8 @@ export default function OrdersTab() {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    loadOrders();
-  }, [loadOrders]);
+    loadOrders(userId ?? undefined);
+  }, [loadOrders, userId]);
 
   if (loading) {
     return (

@@ -48,7 +48,7 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
     createClient().auth.getUser().then(({ data }) => {
       setCustomerId(data.user?.id ?? null);
     });
-  }, [id]);
+  }, [id, router]);
 
   function updateQty(itemId: string, delta: number) {
     if (!cart) return;

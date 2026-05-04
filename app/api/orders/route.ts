@@ -78,6 +78,12 @@ export async function POST(req: NextRequest) {
     if (!truck_id || !pickup_name || !items?.length || total == null) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
+    if (typeof pickup_name !== "string" || pickup_name.trim().length > 100) {
+      return NextResponse.json({ error: "Pickup name must be 100 characters or fewer" }, { status: 400 });
+    }
+    if (notes != null && (typeof notes !== "string" || notes.length > 500)) {
+      return NextResponse.json({ error: "Notes must be 500 characters or fewer" }, { status: 400 });
+    }
 
     const supabase = getAdminClient();
 

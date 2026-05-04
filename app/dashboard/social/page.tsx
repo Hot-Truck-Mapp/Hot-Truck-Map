@@ -19,7 +19,7 @@ const PLATFORMS: Platform[] = [
     icon: "📸",
     color: "#E1306C",
     connected: false,
-    comingSoon: false,
+    comingSoon: true,
     description: "Post your location automatically when you go live",
   },
   {

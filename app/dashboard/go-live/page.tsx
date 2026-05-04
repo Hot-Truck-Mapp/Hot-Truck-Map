@@ -1,17 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 
 type Status = "idle" | "locating" | "live" | "error";
 
 export default function GoLivePage() {
+  const router = useRouter();
   const [status, setStatus] = useState<Status>("idle");
   const [address, setAddress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [manualAddress, setManualAddress] = useState("");
   const [showManual, setShowManual] = useState(false);
+
+  // Auth guard — operators only
+  useEffect(() => {
+    createClient().auth.getUser().then(({ data: { user } }) => {
+      if (!user || user.user_metadata?.role !== "operator") {
+        router.replace("/");
+      }
+    });
+  }, [router]);
 
   async function broadcastLocation(lat: number, lng: number, place: string) {
     const supabase = createClient();
@@ -133,6 +144,7 @@ export default function GoLivePage() {
         .eq("id", truck.id);
       if (error) {
         setError(error.message);
+        setStatus("error");
         return;
       }
     }
@@ -149,7 +161,7 @@ export default function GoLivePage() {
       {/* Back button */}
       <div className="absolute top-4 left-4">
         <button
-          onClick={() => window.history.back()}
+          onClick={() => router.push("/dashboard")}
           className="flex items-center gap-1.5 text-neutral-500 hover:text-neutral-800 text-sm font-medium transition-colors"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
