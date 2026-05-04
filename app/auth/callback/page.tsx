@@ -26,9 +26,7 @@ export default function AuthCallback() {
         // OAuth signups (Google) don't carry a role — assign "customer" by default
         if (!user.user_metadata?.role) {
           await supabase.auth.updateUser({ data: { role: "customer" } });
-          // Re-read user so we have the refreshed metadata for the redirect decision
-          const { data: { user: refreshed } } = await supabase.auth.getUser();
-          router.replace(refreshed?.user_metadata?.role === "operator" ? "/dashboard" : "/");
+          router.replace("/");
           return;
         }
 

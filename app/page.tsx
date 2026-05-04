@@ -367,16 +367,12 @@ export default function HomePage() {
                       </Link>
                     ))}
                     {searchResults.length > 8 && (
-                      <Link
-                        href={`/`}
-                        onClick={() => setSearch("")}
-                        className="flex items-center justify-center gap-1.5 px-4 py-3 border-t border-neutral-50 text-xs font-bold text-brand-red hover:bg-red-50 transition-colors"
+                      <button
+                        onClick={() => { setSearch(""); }}
+                        className="flex items-center justify-center gap-1.5 px-4 py-3 border-t border-neutral-50 text-xs font-bold text-brand-red hover:bg-red-50 transition-colors w-full"
                       >
-                        View all {searchResults.length} results
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                          <path d="M5 12h14M12 5l7 7-7 7"/>
-                        </svg>
-                      </Link>
+                        Showing top 8 of {searchResults.length} results
+                      </button>
                     )}
                   </>
                 )}

@@ -122,7 +122,7 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
       {/* Header */}
       <div className="bg-neutral-900 px-5 py-4 flex items-center gap-4 sticky top-0 z-10">
         <button
-          onClick={() => window.history.back()}
+          onClick={() => router.push(`/truck/${id}`)}
           className="text-neutral-400 hover:text-white transition-colors"
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">

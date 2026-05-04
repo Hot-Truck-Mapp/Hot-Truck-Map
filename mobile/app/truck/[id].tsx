@@ -19,6 +19,7 @@ export default function TruckScreen() {
   const [truck, setTruck] = useState<TruckDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [following, setFollowing] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -55,6 +56,7 @@ export default function TruckScreen() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
+      setUserId(user.id);
       supabase
         .from('follows')
         .select('truck_id')
@@ -66,16 +68,15 @@ export default function TruckScreen() {
   }, [id]);
 
   async function toggleFollow() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { Alert.alert('Sign in required', 'Please sign in to follow trucks.'); return; }
+    if (!userId) { Alert.alert('Sign in required', 'Please sign in to follow trucks.'); return; }
 
     if (following) {
       setFollowing(false); // optimistic
-      const { error } = await supabase.from('follows').delete().eq('user_id', user.id).eq('truck_id', id);
+      const { error } = await supabase.from('follows').delete().eq('user_id', userId).eq('truck_id', id);
       if (error) { setFollowing(true); Alert.alert('Error', 'Could not unfollow. Please try again.'); }
     } else {
       setFollowing(true); // optimistic
-      const { error } = await supabase.from('follows').insert({ user_id: user.id, truck_id: id });
+      const { error } = await supabase.from('follows').insert({ user_id: userId, truck_id: id });
       if (error) { setFollowing(false); Alert.alert('Error', 'Could not follow. Please try again.'); }
     }
   }

@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
     const itemIds = items.map((i: any) => i.menu_item_id);
     const { data: dbItems, error: itemErr } = await supabase
       .from("menu_items")
-      .select("id, price, is_sold_out")
+      .select("id, name, price, is_sold_out")
       .in("id", itemIds)
       .eq("truck_id", truck_id);
 
@@ -122,6 +122,10 @@ export async function POST(req: NextRequest) {
       return sum + (db?.price ?? 0) * item.quantity;
     }, 0);
 
+    if (serverTotal <= 0) {
+      return NextResponse.json({ error: "Order total must be greater than zero" }, { status: 400 });
+    }
+
     // Insert the order
     const { data: order, error: orderErr } = await supabase
       .from("orders")
@@ -143,6 +147,11 @@ export async function POST(req: NextRequest) {
     }
 
     // Notify operator by SMS (non-blocking — runs in background)
+    // Build SMS item list using server-validated names (not user-supplied strings)
+    const smsItems = items.map((i: any) => ({
+      quantity: i.quantity,
+      name: dbItems.find((d) => d.id === i.menu_item_id)?.name ?? "Item",
+    }));
     Promise.resolve(
       supabase
         .from("trucks")
@@ -151,7 +160,7 @@ export async function POST(req: NextRequest) {
         .maybeSingle()
         .then(({ data: truck }) => {
           if (truck?.phone) {
-            notifyOperatorBySMS(truck.phone, truck.name, pickup_name, items, serverTotal);
+            notifyOperatorBySMS(truck.phone, truck.name, pickup_name, smsItems, serverTotal);
           }
         })
     ).catch((err) => console.error("SMS notification truck fetch error:", err));

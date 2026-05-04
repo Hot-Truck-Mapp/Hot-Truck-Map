@@ -130,12 +130,8 @@ export default function AccountTab() {
           <Text style={styles.rowText}>Browse Trucks</Text>
           <Text style={styles.chevron}>›</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.row} onPress={() => router.push('/(tabs)/orders')}>
-          <Text style={styles.rowText}>My Orders</Text>
-          <Text style={styles.chevron}>›</Text>
-        </TouchableOpacity>
         <TouchableOpacity style={[styles.row, styles.rowLast]} onPress={() => router.push('/(tabs)/orders')}>
-          <Text style={styles.rowText}>Order History</Text>
+          <Text style={styles.rowText}>My Orders</Text>
           <Text style={styles.chevron}>›</Text>
         </TouchableOpacity>
       </View>

@@ -59,6 +59,6 @@ export type Review = {
   truck_id: string;
   user_id: string;
   rating: number;
-  body: string;
+  comment: string;
   created_at: string;
 };
