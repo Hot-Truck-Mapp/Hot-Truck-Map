@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import VerificationBanner from "@/components/auth/VerificationBanner";
 import {
@@ -28,6 +29,7 @@ type AnalyticsRange = "weekly" | "monthly" | "yearly";
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function Dashboard() {
+  const router = useRouter();
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("live");
@@ -110,12 +112,12 @@ export default function Dashboard() {
       const { data: { user }, error: authErr } = await supabase.auth.getUser();
 
       if (authErr || !user) {
-        window.location.href = "/login";
+        router.replace("/login");
         return;
       }
       // Redirect non-operators back to home
       if (user.user_metadata?.role !== "operator") {
-        window.location.href = "/";
+        router.replace("/");
         return;
       }
       setUserId(user.id);
@@ -1027,7 +1029,7 @@ export default function Dashboard() {
                 </span>
               </p>
               <input value={profile.phone} onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))}
-                placeholder="(201) 555-0123" type="tel"
+                placeholder="(201) 555-0123" type="tel" maxLength={20}
                 className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red bg-white"/>
               <p className="text-xs text-neutral-400 mt-1.5 flex items-center gap-1">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6.29 6.29l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
@@ -1748,13 +1750,13 @@ export default function Dashboard() {
 
               <Field label="Item Name *">
                 <input value={itemForm.name} onChange={e => setItemForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="e.g. Al Pastor Taco"
+                  placeholder="e.g. Al Pastor Taco" maxLength={100}
                   className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red"/>
               </Field>
 
               <Field label="Description">
                 <textarea value={itemForm.description} onChange={e => setItemForm(f => ({ ...f, description: e.target.value }))}
-                  placeholder="Marinated pork, pineapple, cilantro..." rows={2}
+                  placeholder="Marinated pork, pineapple, cilantro..." rows={2} maxLength={500}
                   className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red resize-none"/>
               </Field>
 
@@ -1874,7 +1876,7 @@ export default function Dashboard() {
               <p className="text-xs font-black text-neutral-400 uppercase tracking-widest mb-3">Location</p>
               <label className="block text-sm font-semibold text-neutral-700 mb-1.5">Address or Intersection <span className="text-brand-red">*</span></label>
               <input value={schedForm.location} onChange={e => setSchedForm(f => ({ ...f, location: e.target.value }))}
-                placeholder="e.g. Main St & 5th Ave, Newark NJ"
+                placeholder="e.g. Main St & 5th Ave, Newark NJ" maxLength={200}
                 className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red bg-white"/>
             </div>
 
@@ -1884,7 +1886,7 @@ export default function Dashboard() {
                 Notes <span className="text-neutral-400 font-normal">(optional)</span>
               </label>
               <input value={schedForm.notes} onChange={e => setSchedForm(f => ({ ...f, notes: e.target.value }))}
-                placeholder="e.g. Near the farmers market entrance"
+                placeholder="e.g. Near the farmers market entrance" maxLength={200}
                 className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red bg-white"/>
             </div>
 

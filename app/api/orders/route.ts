@@ -158,18 +158,17 @@ export async function POST(req: NextRequest) {
       quantity: i.quantity,
       name: dbItems.find((d) => d.id === i.menu_item_id)?.name ?? "Item",
     }));
-    Promise.resolve(
-      supabase
-        .from("trucks")
-        .select("name, phone")
-        .eq("id", truck_id)
-        .maybeSingle()
-        .then(({ data: truck }) => {
-          if (truck?.phone) {
-            notifyOperatorBySMS(truck.phone, truck.name, pickup_name, smsItems, serverTotal);
-          }
-        })
-    ).catch((err) => console.error("SMS notification truck fetch error:", err));
+    (async () => {
+      try {
+        const { data: truck } = await supabase
+          .from("trucks").select("name, phone").eq("id", truck_id).maybeSingle();
+        if (truck?.phone) {
+          await notifyOperatorBySMS(truck.phone, truck.name, pickup_name, smsItems, serverTotal);
+        }
+      } catch (err) {
+        console.error("SMS notification error:", err);
+      }
+    })();
 
     return NextResponse.json({ orderId: order.id, total: serverTotal });
   } catch (err) {
