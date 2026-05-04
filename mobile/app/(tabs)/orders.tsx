@@ -94,7 +94,7 @@ export default function OrdersTab() {
 
   if (!userId) {
     return (
-      <SafeAreaView style={[styles.container, styles.loading]} edges={['top']}>
+      <SafeAreaView style={[styles.container, styles.loading]} edges={['top', 'bottom']}>
         <Text style={styles.emptyTitle}>Sign in to see your orders</Text>
         <Text style={[styles.emptyBody, { marginBottom: 24 }]}>Create an account to place and track orders</Text>
         <TouchableOpacity

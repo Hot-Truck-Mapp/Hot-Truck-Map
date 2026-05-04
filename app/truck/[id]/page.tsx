@@ -29,6 +29,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
   const [reviewText, setReviewText] = useState("");
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewSuccess, setReviewSuccess] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
 
   // Computed cart values
   const cartEntries = Object.entries(cart).filter(([, qty]) => qty > 0);
@@ -131,7 +132,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
         if (!sessionStorage.getItem(viewKey)) {
           const viewPayload: Record<string, string> = { truck_id: id };
           if (user) viewPayload.viewer_id = user.id;
-          supabase.from("truck_views").insert(viewPayload).then(() => {});
+          void supabase.from("truck_views").insert(viewPayload);
           sessionStorage.setItem(viewKey, "1");
         }
       } catch { /* ignore — view tracking is non-critical */ }
@@ -165,29 +166,34 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
     if (!userId) { router.push("/account"); return; }
     if (!reviewRating) return;
     setReviewSubmitting(true);
+    setReviewError(null);
     const supabase = createClient();
-    // Prevent duplicate reviews — check if user already reviewed this truck
-    const { data: existing } = await supabase
-      .from("reviews").select("id").eq("truck_id", id).eq("user_id", userId).maybeSingle();
-    if (existing) {
-      setReviewSubmitting(false);
-      return;
-    }
-    const { error } = await supabase.from("reviews").insert({
-      truck_id: id,
-      user_id: userId,
-      rating: reviewRating,
-      comment: reviewText.trim() || null,
-    });
-    setReviewSubmitting(false);
-    if (!error) {
+    try {
+      // Prevent duplicate reviews — check if user already reviewed this truck
+      const { data: existing } = await supabase
+        .from("reviews").select("id").eq("truck_id", id).eq("user_id", userId).maybeSingle();
+      if (existing) {
+        setReviewError("You've already reviewed this truck.");
+        setReviewSubmitting(false);
+        return;
+      }
+      const { error } = await supabase.from("reviews").insert({
+        truck_id: id,
+        user_id: userId,
+        rating: reviewRating,
+        comment: reviewText.trim() || null,
+      });
+      if (error) throw new Error(error.message);
       setReviewSuccess(true);
       setReviewRating(0);
       setReviewText("");
-      // Reload reviews
       const { data } = await supabase.from("reviews").select("*").eq("truck_id", id).order("created_at", { ascending: false }).limit(50);
       setReviews(data ?? []);
       setTimeout(() => setReviewSuccess(false), 3000);
+    } catch (err: any) {
+      setReviewError(err?.message ?? "Could not submit review. Please try again.");
+    } finally {
+      setReviewSubmitting(false);
     }
   }
 
@@ -594,6 +600,9 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
                     rows={3}
                     className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-300 focus:outline-none focus:border-brand-red resize-none transition-colors disabled:bg-neutral-50 disabled:cursor-not-allowed"
                   />
+                  {reviewError && (
+                    <p className="mt-2 text-xs text-red-500 font-semibold">{reviewError}</p>
+                  )}
                   <button
                     onClick={submitReview}
                     disabled={reviewSubmitting || !reviewRating}

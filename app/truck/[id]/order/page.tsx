@@ -92,8 +92,11 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
           ...(customerId ? { customer_id: customerId } : {}),
         }),
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error((errData as { error?: string }).error ?? "Failed to place order. Please try again.");
+      }
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to place order");
       localStorage.removeItem("hot-truck-cart");
       router.replace(`/truck/${id}/order/confirmation?orderId=${data.orderId}&name=${encodeURIComponent(pickupName.trim())}`);
     } catch (err) {

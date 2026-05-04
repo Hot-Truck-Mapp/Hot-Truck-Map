@@ -46,5 +46,5 @@ export function useLiveTrucks() {
     return () => { supabase.removeChannel(channel); };
   }, [fetchTrucks]);
 
-  return { trucks, loading, refetchTrucks: fetchTrucks };
+  return { trucks, loading, refetch: fetchTrucks };
 }

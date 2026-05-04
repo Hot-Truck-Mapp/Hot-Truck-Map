@@ -25,7 +25,13 @@ export default function AccountTab() {
       {
         text: 'Sign out',
         style: 'destructive',
-        onPress: () => supabase.auth.signOut(),
+        onPress: async () => {
+          try {
+            await supabase.auth.signOut();
+          } catch {
+            Alert.alert('Error', 'Could not sign out. Please try again.');
+          }
+        },
       },
     ]);
   }
@@ -99,12 +105,12 @@ export default function AccountTab() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Avatar */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.avatarWrapper} onPress={pickAndUploadAvatar} disabled={uploading}>
           {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+            <Image source={{ uri: avatarUrl }} style={styles.avatarImage} resizeMode="cover" />
           ) : (
             <View style={styles.avatarPlaceholder}>
               <Text style={styles.avatarText}>
@@ -126,17 +132,17 @@ export default function AccountTab() {
       </View>
 
       <View style={styles.section}>
-        <TouchableOpacity style={styles.row} onPress={() => router.push('/(tabs)/trucks')}>
+        <TouchableOpacity activeOpacity={0.7} style={styles.row} onPress={() => router.push('/(tabs)/trucks')}>
           <Text style={styles.rowText}>Browse Trucks</Text>
           <Text style={styles.chevron}>›</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.row, styles.rowLast]} onPress={() => router.push('/(tabs)/orders')}>
+        <TouchableOpacity activeOpacity={0.7} style={[styles.row, styles.rowLast]} onPress={() => router.push('/(tabs)/orders')}>
           <Text style={styles.rowText}>My Orders</Text>
           <Text style={styles.chevron}>›</Text>
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+      <TouchableOpacity activeOpacity={0.7} style={styles.signOutButton} onPress={handleSignOut}>
         <Text style={styles.signOutText}>Sign Out</Text>
       </TouchableOpacity>
     </SafeAreaView>
