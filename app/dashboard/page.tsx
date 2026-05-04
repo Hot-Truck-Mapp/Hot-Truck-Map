@@ -606,6 +606,7 @@ export default function Dashboard() {
     // Scope update to this operator's truck — prevents cross-operator order tampering
     const { error } = await supabase.from("orders").update({ status }).eq("id", orderId).eq("truck_id", truckId!);
     if (!error) setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status } : o));
+    else showToast("Failed to update order status — please try again");
   }
 
   // ── Render ───────────────────────────────────────────────────────────────────

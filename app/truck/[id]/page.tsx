@@ -248,7 +248,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
           </div>
         </div>
         <button
-          onClick={() => window.history.back()}
+          onClick={() => router.back()}
           className="flex items-center gap-2 text-neutral-400 hover:text-white transition-colors"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
