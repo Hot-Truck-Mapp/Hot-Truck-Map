@@ -21,7 +21,7 @@ export default function MenuPage({ params }: { params: Promise<{ id: string }> }
 
   useEffect(() => {
     loadMenu();
-  }, []);
+  }, [id]);
 
   async function loadMenu() {
     try {

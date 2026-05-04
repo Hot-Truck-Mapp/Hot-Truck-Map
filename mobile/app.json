@@ -6,6 +6,11 @@
     "orientation": "portrait",
     "scheme": "hottruckmap",
     "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
+    "adaptiveIcon": {
+      "foregroundImage": "./assets/icon.png",
+      "backgroundColor": "#FF6B35"
+    },
     "newArchEnabled": true,
     "splash": {
       "backgroundColor": "#FF6B35"

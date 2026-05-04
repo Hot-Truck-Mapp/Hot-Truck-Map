@@ -81,6 +81,16 @@ export async function POST(req: NextRequest) {
 
     const supabase = getAdminClient();
 
+    // Verify the truck is currently live before accepting orders
+    const { data: truckCheck } = await supabase
+      .from("trucks")
+      .select("is_live")
+      .eq("id", truck_id)
+      .maybeSingle();
+    if (!truckCheck?.is_live) {
+      return NextResponse.json({ error: "This truck is not currently accepting orders" }, { status: 409 });
+    }
+
     // Validate all items belong to this truck
     const itemIds = items.map((i: any) => i.menu_item_id);
     const { data: dbItems, error: itemErr } = await supabase

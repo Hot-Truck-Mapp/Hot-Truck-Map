@@ -86,7 +86,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
       }
     } catch { /* ignore */ }
     loadTruck();
-  }, []);
+  }, [id]);
 
   async function loadTruck() {
     try {
@@ -110,7 +110,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
       ] = await Promise.all([
         supabase.from("locations").select("*").eq("truck_id", id).order("broadcasted_at", { ascending: false }).limit(1).maybeSingle(),
         supabase.from("menu_items").select("*").eq("truck_id", id).order("created_at", { ascending: true }),
-        supabase.from("reviews").select("*").eq("truck_id", id).order("created_at", { ascending: false }),
+        supabase.from("reviews").select("*").eq("truck_id", id).order("created_at", { ascending: false }).limit(50),
         supabase.from("follows").select("*", { count: "exact", head: true }).eq("truck_id", id),
       ]);
 
@@ -162,6 +162,13 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
     if (!reviewRating) return;
     setReviewSubmitting(true);
     const supabase = createClient();
+    // Prevent duplicate reviews — check if user already reviewed this truck
+    const { data: existing } = await supabase
+      .from("reviews").select("id").eq("truck_id", id).eq("user_id", userId).maybeSingle();
+    if (existing) {
+      setReviewSubmitting(false);
+      return;
+    }
     const { error } = await supabase.from("reviews").insert({
       truck_id: id,
       user_id: userId,
@@ -174,7 +181,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
       setReviewRating(0);
       setReviewText("");
       // Reload reviews
-      const { data } = await supabase.from("reviews").select("*").eq("truck_id", id).order("created_at", { ascending: false });
+      const { data } = await supabase.from("reviews").select("*").eq("truck_id", id).order("created_at", { ascending: false }).limit(50);
       setReviews(data ?? []);
       setTimeout(() => setReviewSuccess(false), 3000);
     }
