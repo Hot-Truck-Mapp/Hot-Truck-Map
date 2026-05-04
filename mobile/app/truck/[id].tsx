@@ -121,7 +121,16 @@ export default function TruckScreen() {
           )}
         </View>
 
-        {truck.cuisine ? <Text style={styles.cuisine}>{truck.cuisine}</Text> : null}
+        <View style={styles.metaRow}>
+          {truck.cuisine ? <Text style={styles.cuisine}>{truck.cuisine}</Text> : null}
+          {(truck.avg_rating ?? 0) > 0 && (
+            <View style={styles.ratingRow}>
+              <Text style={styles.ratingStar}>★</Text>
+              <Text style={styles.ratingValue}>{Number(truck.avg_rating).toFixed(1)}</Text>
+              <Text style={styles.ratingCount}>({truck.review_count ?? 0} review{(truck.review_count ?? 0) !== 1 ? 's' : ''})</Text>
+            </View>
+          )}
+        </View>
 
         {truck.description ? (
           <Text style={styles.description}>{truck.description}</Text>
@@ -177,7 +186,12 @@ const styles = StyleSheet.create({
   liveBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.success + '22', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.success },
   liveText: { fontSize: 12, fontWeight: '600', color: Colors.success },
-  cuisine: { fontSize: 16, color: Colors.textSecondary, marginBottom: 12 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 12 },
+  cuisine: { fontSize: 16, color: Colors.textSecondary },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  ratingStar: { fontSize: 14, color: '#F5A623' },
+  ratingValue: { fontSize: 14, fontWeight: '700', color: Colors.text },
+  ratingCount: { fontSize: 13, color: Colors.textSecondary },
   description: { fontSize: 15, color: Colors.text, lineHeight: 22, marginBottom: 16 },
   locationBox: { backgroundColor: Colors.card, borderRadius: 10, padding: 14, marginBottom: 16 },
   locationLabel: { fontSize: 12, color: Colors.textSecondary, marginBottom: 4 },

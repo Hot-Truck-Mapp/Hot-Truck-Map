@@ -535,9 +535,19 @@ export default function HomePage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-brand-red font-semibold mt-0.5">
-                      {truck.cuisine ?? "Food Truck"}
-                    </p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <p className="text-xs text-brand-red font-semibold">
+                        {truck.cuisine ?? "Food Truck"}
+                      </p>
+                      {(truck.avg_rating ?? 0) > 0 && (
+                        <div className="flex items-center gap-0.5">
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="#F5A623" stroke="#F5A623" strokeWidth="1">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                          </svg>
+                          <span className="text-[10px] font-bold text-neutral-600">{Number(truck.avg_rating).toFixed(1)}</span>
+                        </div>
+                      )}
+                    </div>
                     {truck.locations?.[0]?.address && (
                       <div className="flex items-center gap-1 mt-1">
                         <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#E8481C" strokeWidth="2.5" strokeLinecap="round" className="flex-shrink-0">
@@ -643,7 +653,17 @@ export default function HomePage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-brand-red font-semibold mt-0.5">{truck.cuisine ?? "Food Truck"}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <p className="text-xs text-brand-red font-semibold">{truck.cuisine ?? "Food Truck"}</p>
+                      {(truck.avg_rating ?? 0) > 0 && (
+                        <div className="flex items-center gap-0.5">
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="#F5A623" stroke="#F5A623" strokeWidth="1">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                          </svg>
+                          <span className="text-[10px] font-bold text-neutral-600">{Number(truck.avg_rating).toFixed(1)}</span>
+                        </div>
+                      )}
+                    </div>
                     {truck.locations?.[0]?.address && (
                       <p className="text-xs text-neutral-400 mt-0.5 truncate">{truck.locations[0].address}</p>
                     )}

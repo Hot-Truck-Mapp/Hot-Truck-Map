@@ -8,6 +8,8 @@ export type Truck = {
   profile_photo: string;
   owner_id: string;
   is_live: boolean;
+  avg_rating: number;
+  review_count: number;
   created_at: string;
 };
 
