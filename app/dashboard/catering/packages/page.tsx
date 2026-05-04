@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 
@@ -17,6 +18,7 @@ const EMPTY_PACKAGE = {
 };
 
 export default function CateringPackagesPage() {
+  const router = useRouter();
   const [packages, setPackages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [truckId, setTruckId] = useState<string | null>(null);
@@ -49,7 +51,7 @@ export default function CateringPackagesPage() {
     try {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) { router.replace("/"); return; }
 
       const { data: truck } = await supabase
         .from("trucks")
@@ -188,7 +190,8 @@ export default function CateringPackagesPage() {
       ({ error } = await supabase
         .from("catering_packages")
         .update(payload)
-        .eq("id", editing.id));
+        .eq("id", editing.id)
+        .eq("truck_id", truckId!));
     } else {
       ({ error } = await supabase.from("catering_packages").insert(payload));
     }
@@ -204,7 +207,7 @@ export default function CateringPackagesPage() {
     if (deletingId !== id) { setDeletingId(id); return; }
     setDeletingId(null);
     const supabase = createClient();
-    const { error } = await supabase.from("catering_packages").delete().eq("id", id);
+    const { error } = await supabase.from("catering_packages").delete().eq("id", id).eq("truck_id", truckId!);
     if (!error) setPackages(packages.filter((p) => p.id !== id));
     else showToast("Delete failed: " + error.message);
   }
@@ -214,7 +217,8 @@ export default function CateringPackagesPage() {
     const { error } = await supabase
       .from("catering_packages")
       .update({ is_active: !pkg.is_active })
-      .eq("id", pkg.id);
+      .eq("id", pkg.id)
+      .eq("truck_id", truckId!);
     if (!error) setPackages(packages.map((p) =>
       p.id === pkg.id ? { ...p, is_active: !p.is_active } : p
     ));

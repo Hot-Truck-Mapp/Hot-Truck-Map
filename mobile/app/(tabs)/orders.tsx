@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { StyleSheet, View, FlatList, Text, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
@@ -24,6 +24,7 @@ export default function OrdersTab() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const loadOrders = useCallback(async (uid?: string) => {
     const id = uid ?? userId;
@@ -33,7 +34,8 @@ export default function OrdersTab() {
         .from('orders')
         .select('*, trucks(name)')
         .eq('customer_id', id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50);
       if (data) setOrders(data);
     } catch { /* network error — keep existing list */ } finally {
       setLoading(false);
@@ -50,7 +52,7 @@ export default function OrdersTab() {
         await loadOrders(user.id);
 
         // Realtime — update order card immediately when operator changes status
-        const channel = supabase
+        channelRef.current = supabase
           .channel(`customer-orders-${user.id}`)
           .on(
             'postgres_changes',
@@ -67,11 +69,12 @@ export default function OrdersTab() {
             }
           )
           .subscribe();
-
-        return () => { supabase.removeChannel(channel); };
       } catch { setLoading(false); }
     }
     init();
+    return () => {
+      if (channelRef.current) supabase.removeChannel(channelRef.current);
+    };
   }, []);
 
   const onRefresh = useCallback(() => {
