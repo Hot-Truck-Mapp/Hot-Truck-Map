@@ -1,19 +1,32 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { StyleSheet, View, ActivityIndicator, Text, Alert, ScrollView, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import type { Region } from 'react-native-maps';
+import MapView from 'react-native-maps';
 import { TruckMap } from '@/components/map/TruckMap';
 import { useLiveTrucks } from '@/hooks/useLiveTrucks';
 import { Colors } from '@/constants/colors';
+
+// Fallback: center of the continental US (never a single city)
+const US_REGION: Region = {
+  latitude: 39.5,
+  longitude: -98.35,
+  latitudeDelta: 55,
+  longitudeDelta: 55,
+};
+
+const USER_DELTA = 0.05; // ~3-mile radius around the user
 
 export default function MapTab() {
   const { trucks, loading, refetch } = useLiveTrucks();
   const [region, setRegion] = useState<Region | undefined>();
   const [refreshing, setRefreshing] = useState(false);
+  const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
     (async () => {
+      // Request permission
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert(
@@ -23,16 +36,36 @@ export default function MapTab() {
         );
         return;
       }
+
+      // 1. Try the last known position first — it's instant and good enough
+      //    to start the map at the right city while the accurate fix loads.
       try {
-        const loc = await Location.getCurrentPositionAsync({});
-        setRegion({
+        const last = await Location.getLastKnownPositionAsync({});
+        if (last) {
+          const r: Region = {
+            latitude: last.coords.latitude,
+            longitude: last.coords.longitude,
+            latitudeDelta: USER_DELTA,
+            longitudeDelta: USER_DELTA,
+          };
+          setRegion(r);
+          mapRef.current?.animateToRegion(r, 400);
+        }
+      } catch { /* no cached position yet */ }
+
+      // 2. Get the accurate current position and re-center if meaningfully different
+      try {
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const r: Region = {
           latitude: loc.coords.latitude,
           longitude: loc.coords.longitude,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
-        });
+          latitudeDelta: USER_DELTA,
+          longitudeDelta: USER_DELTA,
+        };
+        setRegion(r);
+        mapRef.current?.animateToRegion(r, 400);
       } catch {
-        // Silently fall back to default region — map still shows all trucks
+        // Already set from last known position — no further action needed
       }
     })();
   }, []);
@@ -71,7 +104,7 @@ export default function MapTab() {
           }
           scrollEnabled={false}
         />
-        <TruckMap trucks={trucks} initialRegion={region} />
+        <TruckMap trucks={trucks} initialRegion={region ?? US_REGION} mapRef={mapRef} />
       </View>
     </SafeAreaView>
   );
