@@ -1,5 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { StyleSheet, View, ActivityIndicator, Text, Alert, ScrollView, RefreshControl } from 'react-native';
+import {
+  StyleSheet, View, ActivityIndicator, Text,
+  TouchableOpacity, Linking, ScrollView, RefreshControl,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import type { Region } from 'react-native-maps';
@@ -18,57 +21,79 @@ const US_REGION: Region = {
 
 const USER_DELTA = 0.05; // ~3-mile radius around the user
 
+type LocationStatus = 'requesting' | 'granted' | 'denied';
+
 export default function MapTab() {
   const { trucks, loading, refetch } = useLiveTrucks();
   const [region, setRegion] = useState<Region | undefined>();
+  const [locationStatus, setLocationStatus] = useState<LocationStatus>('requesting');
   const [refreshing, setRefreshing] = useState(false);
   const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
     (async () => {
-      // Request permission
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert(
-          'Location Access',
-          'Enable location in your device settings to see trucks near you. Showing all live trucks instead.',
-          [{ text: 'OK' }]
-        );
+      // Check existing permission first (no prompt if already granted/denied)
+      const { status: existing } = await Location.getForegroundPermissionsAsync();
+
+      if (existing === 'granted') {
+        setLocationStatus('granted');
+        await locateUser();
         return;
       }
 
-      // 1. Try the last known position first — it's instant and good enough
-      //    to start the map at the right city while the accurate fix loads.
-      try {
-        const last = await Location.getLastKnownPositionAsync({});
-        if (last) {
-          const r: Region = {
-            latitude: last.coords.latitude,
-            longitude: last.coords.longitude,
-            latitudeDelta: USER_DELTA,
-            longitudeDelta: USER_DELTA,
-          };
-          setRegion(r);
-          mapRef.current?.animateToRegion(r, 400);
-        }
-      } catch { /* no cached position yet */ }
+      if (existing === 'denied') {
+        // Already permanently denied — show the in-app banner instead of
+        // a system dialog that won't appear.
+        setLocationStatus('denied');
+        return;
+      }
 
-      // 2. Get the accurate current position and re-center if meaningfully different
-      try {
-        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      // Permission is 'undetermined' — show the system prompt now.
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        setLocationStatus('granted');
+        await locateUser();
+      } else {
+        setLocationStatus('denied');
+      }
+    })();
+  }, []);
+
+  async function locateUser() {
+    // 1. Last-known position — instant if the OS has a cached fix.
+    try {
+      const last = await Location.getLastKnownPositionAsync({});
+      if (last) {
         const r: Region = {
-          latitude: loc.coords.latitude,
-          longitude: loc.coords.longitude,
+          latitude: last.coords.latitude,
+          longitude: last.coords.longitude,
           latitudeDelta: USER_DELTA,
           longitudeDelta: USER_DELTA,
         };
         setRegion(r);
         mapRef.current?.animateToRegion(r, 400);
-      } catch {
-        // Already set from last known position — no further action needed
       }
-    })();
-  }, []);
+    } catch { /* no cached fix */ }
+
+    // 2. Accurate current position — animates to it when ready.
+    try {
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      const r: Region = {
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+        latitudeDelta: USER_DELTA,
+        longitudeDelta: USER_DELTA,
+      };
+      setRegion(r);
+      mapRef.current?.animateToRegion(r, 400);
+    } catch { /* keep last-known position */ }
+  }
+
+  function openSettings() {
+    Linking.openSettings();
+  }
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -84,13 +109,43 @@ export default function MapTab() {
     );
   }
 
+  // ── Location permission denied — show a full-screen prompt ──────────────────
+  if (locationStatus === 'denied') {
+    return (
+      <SafeAreaView style={[styles.container, styles.permissionScreen]} edges={['top']}>
+        {/* Pin icon */}
+        <View style={styles.permissionIconWrap}>
+          <View style={styles.permissionIconBg}>
+            <Text style={styles.permissionIconEmoji}>📍</Text>
+          </View>
+        </View>
+
+        <Text style={styles.permissionTitle}>Allow Location Access</Text>
+        <Text style={styles.permissionBody}>
+          Hot Truck Map needs your location to show food trucks near you.
+          {'\n\n'}
+          Open your device Settings and enable Location for this app, then come back.
+        </Text>
+
+        <TouchableOpacity style={styles.settingsButton} onPress={openSettings}>
+          <Text style={styles.settingsButtonText}>Open Settings</Text>
+        </TouchableOpacity>
+
+        {/* Still let them browse the full map */}
+        <TouchableOpacity style={styles.skipButton} onPress={() => setLocationStatus('granted')}>
+          <Text style={styles.skipButtonText}>Browse all trucks instead</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Live Trucks</Text>
         <Text style={styles.headerCount}>{trucks.length} live now</Text>
       </View>
-      {/* ScrollView wrapper gives the map a pull-to-refresh gesture zone in the header */}
+
       <View style={styles.mapWrapper}>
         <ScrollView
           style={StyleSheet.absoluteFill}
@@ -113,6 +168,52 @@ export default function MapTab() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  // Permission denied screen
+  permissionScreen: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    gap: 0,
+  },
+  permissionIconWrap: { marginBottom: 24 },
+  permissionIconBg: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: Colors.primary + '1A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  permissionIconEmoji: { fontSize: 40 },
+  permissionTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Colors.text,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  permissionBody: {
+    fontSize: 15,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 32,
+  },
+  settingsButton: {
+    backgroundColor: Colors.primary,
+    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 40,
+    marginBottom: 12,
+    width: '100%',
+    alignItems: 'center',
+  },
+  settingsButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  skipButton: { paddingVertical: 12 },
+  skipButtonText: { color: Colors.textSecondary, fontSize: 14 },
+
+  // Map screen
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
