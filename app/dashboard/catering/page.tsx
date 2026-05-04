@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 
@@ -12,6 +13,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function CateringDashboardPage() {
+  const router = useRouter();
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [truckId, setTruckId] = useState<string | null>(null);
@@ -31,7 +33,10 @@ export default function CateringDashboardPage() {
     try {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user || user.user_metadata?.role !== "operator") {
+        router.replace("/");
+        return;
+      }
 
       const { data: truck } = await supabase
         .from("trucks").select("id, offers_catering").eq("owner_id", user.id).maybeSingle();
@@ -53,14 +58,17 @@ export default function CateringDashboardPage() {
   }
 
   async function loadMessages(requestId: string) {
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("catering_messages")
-      .select("*")
-      .eq("request_id", requestId)
-      .order("created_at", { ascending: true });
-
-    setMessages(data ?? []);
+    try {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("catering_messages")
+        .select("*")
+        .eq("request_id", requestId)
+        .order("created_at", { ascending: true });
+      setMessages(data ?? []);
+    } catch {
+      // network error — keep existing messages
+    }
   }
 
   async function selectRequest(request: any) {
@@ -167,7 +175,7 @@ export default function CateringDashboardPage() {
           </div>
         </div>
         <button
-          onClick={() => window.history.back()}
+          onClick={() => router.push("/dashboard")}
           className="flex items-center gap-2 text-neutral-400 hover:text-white transition-colors text-sm"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

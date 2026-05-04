@@ -174,7 +174,7 @@ export default function Dashboard() {
     if (activeTab === "analytics" && truckId) {
       loadAnalytics(truckId, analyticsRange);
     }
-  }, [activeTab, truckId]); // eslint-disable-line
+  }, [activeTab, truckId, analyticsRange]); // eslint-disable-line
 
   // ── Real-time order notifications ───────────────────────────────────────────
   useEffect(() => {
@@ -571,6 +571,13 @@ export default function Dashboard() {
 
   // ── Order notifications ──────────────────────────────────────────────────────
   const audioCtxRef = useRef<AudioContext | null>(null);
+
+  // Close AudioContext on unmount to avoid resource leak
+  useEffect(() => {
+    return () => {
+      audioCtxRef.current?.close().catch(() => {});
+    };
+  }, []);
 
   function playNotificationSound() {
     try {

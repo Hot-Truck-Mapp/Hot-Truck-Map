@@ -61,7 +61,8 @@ export default function HomePage() {
       const { data } = await supabase
         .from("trucks")
         .select("*, locations(*)")
-        .order("is_live", { ascending: false });
+        .order("is_live", { ascending: false })
+        .limit(200);
       setTrucks(data ?? []);
     } catch {
       // network error — keep showing whatever was loaded before

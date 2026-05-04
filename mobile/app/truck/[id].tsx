@@ -102,7 +102,7 @@ export default function TruckScreen() {
     : false;
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       {truck.profile_photo ? (
         <Image source={{ uri: truck.profile_photo }} style={styles.hero} />
       ) : (
@@ -165,6 +165,7 @@ export default function TruckScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  scrollContent: { paddingBottom: 100 },
   loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   errorText: { color: Colors.textSecondary, fontSize: 16 },
   hero: { width: '100%', height: 220 },

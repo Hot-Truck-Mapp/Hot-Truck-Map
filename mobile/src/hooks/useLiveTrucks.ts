@@ -10,7 +10,7 @@ export function useLiveTrucks() {
   const [trucks, setTrucks] = useState<TruckWithLocation[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetch = useCallback(async () => {
+  const fetchTrucks = useCallback(async () => {
     try {
       const cutoff = new Date(Date.now() - LIVE_WINDOW_MS).toISOString();
       const { data } = await supabase
@@ -35,16 +35,16 @@ export function useLiveTrucks() {
   }, []);
 
   useEffect(() => {
-    fetch();
+    fetchTrucks();
 
     const channel = supabase
       .channel('live-trucks')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'trucks' }, fetch)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'locations' }, fetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'trucks' }, fetchTrucks)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'locations' }, fetchTrucks)
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [fetch]);
+  }, [fetchTrucks]);
 
-  return { trucks, loading, refetch: fetch };
+  return { trucks, loading, refetchTrucks: fetchTrucks };
 }

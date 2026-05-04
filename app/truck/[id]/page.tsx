@@ -52,6 +52,10 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
   }
 
   function goToOrder() {
+    if (!truck?.is_live) {
+      alert("This truck is not currently accepting orders.");
+      return;
+    }
     const items = cartEntries.map(([itemId, qty]) => {
       const item = menuItems.find((m) => m.id === itemId);
       return {
@@ -121,13 +125,13 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
         isFollowing = !!follow;
       }
 
-      // Track view — deduplicated per session so refreshes don't inflate counts
+      // Track view — deduplicated per session so refreshes don't inflate counts (fire-and-forget)
       try {
         const viewKey = `viewed_${id}`;
         if (!sessionStorage.getItem(viewKey)) {
           const viewPayload: Record<string, string> = { truck_id: id };
           if (user) viewPayload.viewer_id = user.id;
-          await supabase.from("truck_views").insert(viewPayload);
+          supabase.from("truck_views").insert(viewPayload).then(() => {});
           sessionStorage.setItem(viewKey, "1");
         }
       } catch { /* ignore — view tracking is non-critical */ }
