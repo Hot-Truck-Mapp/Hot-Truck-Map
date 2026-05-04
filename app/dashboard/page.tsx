@@ -402,6 +402,7 @@ export default function Dashboard() {
     if (!token) return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
     try {
       const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${token}`);
+      if (!res.ok) return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
       const data = await res.json();
       return data.features?.[0]?.place_name ?? `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
     } catch { return `${lat.toFixed(5)}, ${lng.toFixed(5)}`; }
@@ -475,6 +476,7 @@ export default function Dashboard() {
     if (!token) { setLiveError("Map service not configured."); setLiveStatus("idle"); return; }
     try {
       const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(manualAddr)}.json?access_token=${token}`);
+      if (!res.ok) throw new Error(`Location service error (${res.status}) — please try again.`);
       const data = await res.json();
       const feature = data.features?.[0];
       if (!feature) throw new Error("Address not found. Try being more specific.");
@@ -857,7 +859,7 @@ export default function Dashboard() {
                     <div className="w-full flex flex-col gap-2">
                       <input value={manualAddr} onChange={e => setManualAddr(e.target.value)}
                         onKeyDown={e => e.key === "Enter" && goLiveManual()}
-                        placeholder="e.g. 123 Main St, Newark NJ"
+                        placeholder="e.g. 123 Main St, Newark NJ" maxLength={200}
                         className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red"/>
                       <button onClick={goLiveManual} disabled={!manualAddr.trim()}
                         className="w-full py-3 rounded-xl bg-brand-red text-white font-bold text-sm disabled:opacity-40">
