@@ -69,12 +69,14 @@ export default function CateringDashboardPage() {
   }
 
   async function updateStatus(requestId: string, status: string) {
+    if (!truckId) return;
     setUpdating(true);
     const supabase = createClient();
     const { error } = await supabase
       .from("catering_requests")
       .update({ status })
-      .eq("id", requestId);
+      .eq("id", requestId)
+      .eq("truck_id", truckId);
 
     if (!error) {
       setRequests(requests.map((r) =>
@@ -90,7 +92,9 @@ export default function CateringDashboardPage() {
   }
 
   async function sendMessage() {
-    if (!message.trim() || !selected) return;
+    if (!message.trim() || !selected || !truckId) return;
+    // Verify the selected request belongs to this operator's truck
+    if (selected.truck_id !== truckId) return;
     setSending(true);
 
     const supabase = createClient();

@@ -422,7 +422,7 @@ export default function CateringPackagesPage() {
                           )}
                         </div>
                         <p className="text-brand-red font-black text-lg flex-shrink-0">
-                          ${pkg.price_per_person}
+                          ${Number(pkg.price_per_person).toFixed(2)}
                           <span className="text-xs font-normal text-neutral-400">/person</span>
                         </p>
                       </div>

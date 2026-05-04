@@ -89,6 +89,7 @@ export default function AccountPage() {
   }
 
   async function unfollowTruck(truckId: string) {
+    const snapshot = followed; // save before optimistic update
     setFollowed((prev) => prev.filter((f) => f.truck_id !== truckId)); // optimistic
     const supabase = createClient();
     const { error } = await supabase
@@ -97,8 +98,7 @@ export default function AccountPage() {
       .eq("truck_id", truckId)
       .eq("user_id", user.id);
     if (error) {
-      setFollowed((prev) => [...prev]); // revert — reload from server
-      loadAccount();
+      setFollowed(snapshot); // restore the pre-update list on failure
     }
   }
 

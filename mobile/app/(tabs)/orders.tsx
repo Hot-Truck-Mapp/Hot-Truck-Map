@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { StyleSheet, View, FlatList, Text, ActivityIndicator, RefreshControl } from 'react-native';
+import { StyleSheet, View, FlatList, Text, ActivityIndicator, RefreshControl, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/colors';
 import type { Order } from '@shared/types';
@@ -20,6 +21,7 @@ const STATUS_LABEL: Record<Order['status'], string> = {
 };
 
 export default function OrdersTab() {
+  const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -87,6 +89,21 @@ export default function OrdersTab() {
       <View style={styles.loading}>
         <ActivityIndicator size="large" color={Colors.primary} />
       </View>
+    );
+  }
+
+  if (!userId) {
+    return (
+      <SafeAreaView style={[styles.container, styles.loading]} edges={['top']}>
+        <Text style={styles.emptyTitle}>Sign in to see your orders</Text>
+        <Text style={[styles.emptyBody, { marginBottom: 24 }]}>Create an account to place and track orders</Text>
+        <TouchableOpacity
+          style={styles.signInButton}
+          onPress={() => router.push('/(auth)/login')}
+        >
+          <Text style={styles.signInButtonText}>Sign In</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
     );
   }
 
@@ -158,4 +175,6 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', marginTop: 80, gap: 8 },
   emptyTitle: { fontSize: 18, fontWeight: '600', color: Colors.text },
   emptyBody: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center' },
+  signInButton: { backgroundColor: Colors.primary, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 12 },
+  signInButtonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
 });
