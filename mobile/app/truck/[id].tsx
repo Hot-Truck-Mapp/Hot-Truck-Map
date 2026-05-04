@@ -22,6 +22,7 @@ export default function TruckScreen() {
   const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!id) { setLoading(false); return; }
     async function load() {
       try {
         const [truckRes, menuRes, locationRes] = await Promise.all([
@@ -44,8 +45,8 @@ export default function TruckScreen() {
             location: locationRes.data ?? undefined,
           });
         }
-      } catch (err) {
-        console.warn('Failed to load truck:', err);
+      } catch {
+        // network error — "Truck not found" state will show
       } finally {
         setLoading(false);
       }

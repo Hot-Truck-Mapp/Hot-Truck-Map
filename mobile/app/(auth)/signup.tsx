@@ -87,6 +87,7 @@ export default function SignupScreen() {
           value={confirm}
           onChangeText={setConfirm}
           secureTextEntry
+          autoComplete="new-password"
           returnKeyType="done"
           onSubmitEditing={handleSignup}
         />
