@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 
@@ -13,6 +14,7 @@ const CUISINES = [
 const DIETARY = ["Vegan", "Gluten-Free", "Halal", "Vegetarian"];
 
 export default function TrucksListPage() {
+  const router = useRouter();
   const [trucks, setTrucks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -44,7 +46,7 @@ export default function TrucksListPage() {
   async function toggleFavorite(e: React.MouseEvent, truckId: string) {
     e.preventDefault();
     e.stopPropagation();
-    if (!userId) { window.location.href = "/login"; return; }
+    if (!userId) { router.push("/login"); return; }
     const supabase = createClient();
     const isFaved = favorites.has(truckId);
     if (isFaved) {
