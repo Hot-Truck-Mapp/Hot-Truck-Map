@@ -68,6 +68,7 @@ export default function GoLivePage() {
       const res = await fetch(
         `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${token}`
       );
+      if (!res.ok) return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
       const data = await res.json();
       return data.features?.[0]?.place_name ?? `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
     } catch {
@@ -81,6 +82,7 @@ export default function GoLivePage() {
     const res = await fetch(
       `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${token}`
     );
+    if (!res.ok) throw new Error(`Location service error (${res.status}) — please try again.`);
     const data = await res.json();
     const feature = data.features?.[0];
     if (!feature) throw new Error("Address not found. Try being more specific.");
@@ -208,6 +210,7 @@ export default function GoLivePage() {
                 onChange={(e) => setManualAddress(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && goLiveManual()}
                 placeholder="e.g. 123 Main St, Newark, NJ"
+                maxLength={200}
                 className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-brand-red transition-colors bg-white"
               />
               <button
