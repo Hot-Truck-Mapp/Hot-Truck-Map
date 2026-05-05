@@ -10,9 +10,11 @@ function AuthGuard() {
   const { session, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const splashHidden = useRef(false);
 
   useEffect(() => {
-    if (loading) return;
+    // Wait for auth to resolve and for the router to settle its initial segments
+    if (loading || segments.length === 0) return;
 
     const inAuthGroup = segments[0] === '(auth)';
 
@@ -24,7 +26,11 @@ function AuthGuard() {
       router.replace('/(tabs)');
     }
 
-    SplashScreen.hideAsync();
+    // Hide splash exactly once — after auth + segments are both resolved
+    if (!splashHidden.current) {
+      splashHidden.current = true;
+      SplashScreen.hideAsync().catch(() => { /* already hidden */ });
+    }
   }, [session, loading, segments]);
 
   return null;
