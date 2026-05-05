@@ -37,11 +37,15 @@ export default function CateringPackagesPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function showToast(msg: string) {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast(msg);
-    setTimeout(() => setToast(null), 4000);
+    toastTimerRef.current = setTimeout(() => setToast(null), 4000);
   }
+
+  useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
 
   useEffect(() => {
     loadPackages();
@@ -107,8 +111,10 @@ export default function CateringPackagesPage() {
   }
 
   async function uploadPhoto(file: File): Promise<string> {
+    if (!file.type.startsWith("image/")) throw new Error("Please choose an image file.");
+    if (file.size > 5 * 1024 * 1024) throw new Error("Photo must be under 5 MB.");
     const supabase = createClient();
-    const ext = file.name.split(".").pop();
+    const ext = file.name.split(".").pop() ?? "jpg";
     const path = "catering/" + Date.now() + "." + ext;
     const { error: uploadErr } = await supabase.storage
       .from("menu-photos")
@@ -127,10 +133,12 @@ export default function CateringPackagesPage() {
     try {
       const url = await uploadPhoto(file);
       setForm({ ...form, photo: url });
-    } catch {
-      showToast("Photo upload failed");
+    } catch (err: any) {
+      showToast(err?.message ?? "Photo upload failed");
+      if (fileRef.current) fileRef.current.value = ""; // reset so same file re-triggers onChange
+    } finally {
+      setUploading(false);
     }
-    setUploading(false);
   }
 
   function addInclude() {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
@@ -25,11 +25,15 @@ export default function CateringDashboardPage() {
   const [cateringEnabled, setCateringEnabled] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function showToast(msg: string) {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast(msg);
-    setTimeout(() => setToast(null), 3500);
+    toastTimerRef.current = setTimeout(() => setToast(null), 3500);
   }
+
+  useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
 
   useEffect(() => {
     loadRequests();
@@ -95,7 +99,7 @@ export default function CateringDashboardPage() {
 
       if (error) throw new Error(error.message);
 
-      setRequests(requests.map((r) =>
+      setRequests((prev) => prev.map((r) =>
         r.id === requestId ? { ...r, status } : r
       ));
       if (selected?.id === requestId) {

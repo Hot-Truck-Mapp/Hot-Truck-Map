@@ -27,21 +27,26 @@ export default function OrdersTab() {
   const [refreshing, setRefreshing] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const mountedRef = useRef(true);
 
   const loadOrders = useCallback(async (uid?: string) => {
     const id = uid ?? userId;
     if (!id) { setLoading(false); return; }
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('orders')
         .select('*, trucks(name)')
         .eq('customer_id', id)
         .order('created_at', { ascending: false })
         .limit(50);
+      if (!mountedRef.current) return;
+      if (error) console.error('loadOrders error:', error.message);
       if (data) setOrders(data);
     } catch { /* network error — keep existing list */ } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (mountedRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [userId]);
 
@@ -65,8 +70,10 @@ export default function OrdersTab() {
               filter: `customer_id=eq.${user.id}`,
             },
             (payload) => {
+              if (!mountedRef.current) return;
+              const updated = payload.new as Partial<typeof orders[0]>;
               setOrders((prev) =>
-                prev.map((o) => o.id === payload.new.id ? { ...o, ...payload.new } : o)
+                prev.map((o) => o.id === updated.id ? { ...o, ...updated } : o)
               );
             }
           )
@@ -75,6 +82,7 @@ export default function OrdersTab() {
     }
     init();
     return () => {
+      mountedRef.current = false;
       if (channelRef.current) supabase.removeChannel(channelRef.current);
     };
   }, []);

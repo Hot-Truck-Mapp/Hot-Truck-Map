@@ -4,6 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 
+/** Escape a value for safe insertion into an HTML string. */
+function esc(v: unknown): string {
+  return String(v ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
+
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
 
 type Props = {
@@ -27,6 +37,7 @@ export default function MapboxMap({ trucks }: Props) {
 
   useEffect(() => {
     if (map.current || !mapboxgl.accessToken || !mapContainer.current) return;
+    let geolocateTimerId: ReturnType<typeof setTimeout> | null = null;
 
     function buildMap(center: [number, number], zoom: number) {
       map.current = new mapboxgl.Map({
@@ -51,7 +62,7 @@ export default function MapboxMap({ trucks }: Props) {
         // Only auto-trigger geolocate when we fell back to the US view
         // (user's position wasn't known yet at init time).
         if (zoom < USER_ZOOM) {
-          setTimeout(() => {
+          geolocateTimerId = setTimeout(() => {
             try { geolocate.trigger(); } catch { /* denied — stays at US view */ }
           }, 300);
         }
@@ -81,6 +92,14 @@ export default function MapboxMap({ trucks }: Props) {
       setGeoState("denied");
       buildMap(US_CENTER, US_ZOOM);
     }
+
+    return () => {
+      if (geolocateTimerId !== null) clearTimeout(geolocateTimerId);
+      markers.current.forEach((m) => m.remove());
+      markers.current = [];
+      map.current?.remove();
+      map.current = null;
+    };
   }, []);
 
   // Re-run whenever trucks data changes OR map finishes loading
@@ -122,16 +141,16 @@ export default function MapboxMap({ trucks }: Props) {
         ? `<p style="margin:0 0 6px;font-size:11px;color:#555;display:flex;align-items:center;gap:3px">
             <span style="color:#F5A623">★</span>
             <span style="font-weight:700">${Number(truck.avg_rating).toFixed(1)}</span>
-            <span style="color:#aaa">(${truck.review_count ?? 0})</span>
+            <span style="color:#aaa">(${esc(truck.review_count ?? 0)})</span>
            </p>`
         : "";
       const popup = new mapboxgl.Popup({ offset: 28, closeButton: false }).setHTML(
         `<div style="font-family:sans-serif;padding:4px 2px;min-width:140px">
-          <p style="font-weight:800;margin:0 0 2px;font-size:14px;text-transform:uppercase;letter-spacing:0.02em">${truck.name ?? ""}</p>
-          <p style="color:#E8481C;margin:0 0 4px;font-size:12px;font-weight:600">${truck.cuisine ?? "Food Truck"}</p>
+          <p style="font-weight:800;margin:0 0 2px;font-size:14px;text-transform:uppercase;letter-spacing:0.02em">${esc(truck.name)}</p>
+          <p style="color:#E8481C;margin:0 0 4px;font-size:12px;font-weight:600">${esc(truck.cuisine ?? "Food Truck")}</p>
           ${ratingHtml}
           ${truck.is_live ? '<p style="color:#16a34a;font-size:11px;font-weight:700;margin:0 0 6px">● OPEN NOW</p>' : ""}
-          <a href="/truck/${truck.id}" style="display:block;background:#E8481C;color:white;text-align:center;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700;text-decoration:none;">View Profile</a>
+          <a href="/truck/${esc(truck.id)}" style="display:block;background:#E8481C;color:white;text-align:center;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700;text-decoration:none;">View Profile</a>
         </div>`
       );
 

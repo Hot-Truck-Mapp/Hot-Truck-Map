@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
@@ -25,6 +25,7 @@ const DIETARY = ["Vegan", "Gluten-Free", "Halal", "Vegetarian"];
 export default function HomePage() {
   const [trucks, setTrucks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [openNow, setOpenNow] = useState(true);
@@ -33,6 +34,8 @@ export default function HomePage() {
   const [showFilter, setShowFilter] = useState(false);
   const [showList, setShowList] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const mountedRef = useRef(true);
+  const searchBlurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -52,7 +55,11 @@ export default function HomePage() {
         loadTrucks();
       })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      mountedRef.current = false;
+      if (searchBlurTimerRef.current) clearTimeout(searchBlurTimerRef.current);
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   async function loadTrucks() {
@@ -63,11 +70,14 @@ export default function HomePage() {
         .select("*, locations(*)")
         .order("is_live", { ascending: false })
         .limit(200);
+      if (!mountedRef.current) return;
       setTrucks(data ?? []);
+      setLoadError(false);
     } catch {
-      // network error — keep showing whatever was loaded before
+      // network error — show error only on initial empty load
+      if (mountedRef.current && trucks.length === 0) setLoadError(true);
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }
 
@@ -104,6 +114,19 @@ export default function HomePage() {
   }
 
   const activeFilterCount = dietary.length + (cuisine !== "All" ? 1 : 0);
+
+  if (!mounted && loadError) return (
+    <div className="relative h-screen w-screen bg-neutral-900 flex flex-col items-center justify-center gap-4">
+      <p className="text-neutral-300 font-bold text-lg">Couldn&apos;t load trucks</p>
+      <p className="text-neutral-500 text-sm">Check your connection and try again.</p>
+      <button
+        onClick={() => { setLoadError(false); setLoading(true); loadTrucks(); }}
+        className="mt-2 px-6 py-2.5 bg-brand-red text-white rounded-xl font-semibold text-sm"
+      >
+        Retry
+      </button>
+    </div>
+  );
 
   if (!mounted) return (
     <div className="relative h-screen w-screen bg-neutral-900 flex flex-col items-center justify-center gap-4">
@@ -209,7 +232,10 @@ export default function HomePage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onFocus={() => setSearchFocused(true)}
-                onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
+                onBlur={() => {
+                  if (searchBlurTimerRef.current) clearTimeout(searchBlurTimerRef.current);
+                  searchBlurTimerRef.current = setTimeout(() => setSearchFocused(false), 200);
+                }}
                 placeholder="Search by name or cuisine..."
                 suppressHydrationWarning
                 className="flex-1 px-3 py-3 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none bg-transparent"
