@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
@@ -9,6 +9,7 @@ type Status = "idle" | "locating" | "live" | "going-offline" | "error";
 
 export default function GoLivePage() {
   const router = useRouter();
+  const mountedRef = useRef(true);
   const [authChecking, setAuthChecking] = useState(true);
   const [status, setStatus] = useState<Status>("idle");
   const [address, setAddress] = useState<string | null>(null);
@@ -16,11 +17,16 @@ export default function GoLivePage() {
   const [manualAddress, setManualAddress] = useState("");
   const [showManual, setShowManual] = useState(false);
 
+  useEffect(() => {
+    return () => { mountedRef.current = false; };
+  }, []);
+
   // Auth guard — operators only
   useEffect(() => {
     createClient()
       .auth.getUser()
       .then(({ data: { user } }) => {
+        if (!mountedRef.current) return;
         if (!user || user.user_metadata?.role !== "operator") {
           router.replace("/");
         } else {
@@ -28,7 +34,7 @@ export default function GoLivePage() {
         }
       })
       .catch(() => {
-        router.replace("/");
+        if (mountedRef.current) router.replace("/");
       });
   }, [router]);
 
@@ -65,6 +71,7 @@ export default function GoLivePage() {
 
     if (updateError) throw new Error(updateError.message);
 
+    if (!mountedRef.current) return;
     setAddress(place);
     setStatus("live");
   }
@@ -114,11 +121,13 @@ export default function GoLivePage() {
           const place = await geocode(lat, lng);
           await broadcastLocation(lat, lng, place);
         } catch (err: any) {
+          if (!mountedRef.current) return;
           setError(err.message ?? "Something went wrong");
           setStatus("error");
         }
       },
       () => {
+        if (!mountedRef.current) return;
         setError("Could not get your location.");
         setStatus("idle");
         setShowManual(true);
@@ -137,6 +146,7 @@ export default function GoLivePage() {
       if (!result) throw new Error("Address not found.");
       await broadcastLocation(result.lat, result.lng, result.place);
     } catch (err: any) {
+      if (!mountedRef.current) return;
       setError(err.message ?? "Something went wrong");
       setStatus("error");
     }
@@ -162,17 +172,20 @@ export default function GoLivePage() {
           .update({ is_live: false })
           .eq("id", truck.id);
         if (error) {
+          if (!mountedRef.current) return;
           setError(error.message);
           setStatus("error");
           return;
         }
       }
 
+      if (!mountedRef.current) return;
       setStatus("idle");
       setAddress(null);
       setManualAddress("");
       setShowManual(false);
     } catch (err: any) {
+      if (!mountedRef.current) return;
       setError(err.message ?? "Something went wrong");
       setStatus("error");
     }

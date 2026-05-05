@@ -46,14 +46,16 @@ export default function OrdersTab() {
   }, [userId]);
 
   useEffect(() => {
+    let mounted = true;
     async function init() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { setLoading(false); return; }
+        if (!user || !mounted) { if (mounted) setLoading(false); return; }
         setUserId(user.id);
         await loadOrders(user.id);
 
         // Realtime — update order card immediately when operator changes status
+        if (!mounted) return;
         channelRef.current = supabase
           .channel(`customer-orders-${user.id}`)
           .on(
@@ -71,10 +73,11 @@ export default function OrdersTab() {
             }
           )
           .subscribe();
-      } catch { setLoading(false); }
+      } catch { if (mounted) setLoading(false); }
     }
     init();
     return () => {
+      mounted = false;
       if (channelRef.current) supabase.removeChannel(channelRef.current);
     };
   }, []);

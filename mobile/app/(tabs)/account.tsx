@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Alert, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -10,8 +10,13 @@ import { Colors } from '@/constants/colors';
 export default function AccountTab() {
   const { session } = useAuth();
   const router = useRouter();
+  const mountedRef = useRef(true);
   const [avatarUrl, setAvatarUrl] = useState<string>('');
   const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     if (session?.user) {
@@ -87,12 +92,13 @@ export default function AccountTab() {
       });
       if (updateErr) throw new Error('Photo uploaded but failed to save: ' + updateErr.message);
 
+      if (!mountedRef.current) return;
       setAvatarUrl(data.publicUrl);
       Alert.alert('', 'Profile photo updated!');
     } catch (err: any) {
-      Alert.alert('Upload failed', err?.message ?? 'Please try again.');
+      if (mountedRef.current) Alert.alert('Upload failed', err?.message ?? 'Please try again.');
     } finally {
-      setUploading(false);
+      if (mountedRef.current) setUploading(false);
     }
   }
 

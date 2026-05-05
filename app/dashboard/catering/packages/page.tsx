@@ -37,10 +37,22 @@ export default function CateringPackagesPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const mountedRef = useRef(true);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   function showToast(msg: string) {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast(msg);
-    setTimeout(() => setToast(null), 4000);
+    toastTimerRef.current = setTimeout(() => {
+      if (mountedRef.current) setToast(null);
+    }, 4000);
   }
 
   useEffect(() => {
@@ -88,22 +100,27 @@ export default function CateringPackagesPage() {
   async function saveCateringInfo() {
     if (!truckId) return;
     setSavingInfo(true);
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("trucks")
-      .update({
-        catering_description: cateringInfo.catering_description,
-        catering_starting_price: cateringInfo.catering_starting_price
-          ? parseFloat(cateringInfo.catering_starting_price)
-          : null,
-        catering_min_guests: cateringInfo.catering_min_guests
-          ? parseInt(cateringInfo.catering_min_guests)
-          : null,
-      })
-      .eq("id", truckId);
-    if (error) showToast("Save failed: " + error.message);
-    else showToast("Catering info saved!");
-    setSavingInfo(false);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("trucks")
+        .update({
+          catering_description: cateringInfo.catering_description,
+          catering_starting_price: cateringInfo.catering_starting_price
+            ? parseFloat(cateringInfo.catering_starting_price)
+            : null,
+          catering_min_guests: cateringInfo.catering_min_guests
+            ? parseInt(cateringInfo.catering_min_guests)
+            : null,
+        })
+        .eq("id", truckId);
+      if (error) showToast("Save failed: " + error.message);
+      else showToast("Catering info saved!");
+    } catch {
+      showToast("Network error — please try again.");
+    } finally {
+      setSavingInfo(false);
+    }
   }
 
   async function uploadPhoto(file: File): Promise<string> {
@@ -215,13 +232,13 @@ export default function CateringPackagesPage() {
     setDeletingId(null);
     const supabase = createClient();
     const { error } = await supabase.from("catering_packages").delete().eq("id", id).eq("truck_id", truckId!);
-    if (!error) setPackages(packages.filter((p) => p.id !== id));
+    if (!error) setPackages((prev) => prev.filter((p) => p.id !== id));
     else showToast("Delete failed: " + error.message);
   }
 
   async function toggleActive(pkg: any) {
-    const snapshot = packages; // save for rollback
-    setPackages(packages.map((p) => // optimistic
+    const snapshot = [...packages]; // save for rollback
+    setPackages((prev) => prev.map((p) => // optimistic
       p.id === pkg.id ? { ...p, is_active: !p.is_active } : p
     ));
     try {

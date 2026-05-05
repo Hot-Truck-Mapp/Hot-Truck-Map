@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -15,6 +15,7 @@ const DIETARY = ["Vegan", "Gluten-Free", "Halal", "Vegetarian"];
 
 export default function TrucksListPage() {
   const router = useRouter();
+  const mountedRef = useRef(true);
   const [trucks, setTrucks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -26,6 +27,11 @@ export default function TrucksListPage() {
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
   useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
     loadTrucks();
     loadUser();
   }, []);
@@ -34,9 +40,10 @@ export default function TrucksListPage() {
     try {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user || !mountedRef.current) return;
       setUserId(user.id);
       const { data } = await supabase.from("follows").select("truck_id").eq("user_id", user.id);
+      if (!mountedRef.current) return;
       setFavorites(new Set((data ?? []).map((f: any) => f.truck_id)));
     } catch {
       // not signed in or network issue — favorites just won't show
@@ -78,11 +85,12 @@ export default function TrucksListPage() {
         .from("trucks")
         .select("*, locations(*), follows(count)")
         .order("is_live", { ascending: false });
+      if (!mountedRef.current) return;
       setTrucks(data ?? []);
     } catch {
       // network error — show empty state with filters available
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }
 

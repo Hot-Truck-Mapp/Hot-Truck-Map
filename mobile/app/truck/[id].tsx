@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   StyleSheet, View, Text, Image, ScrollView,
   TouchableOpacity, ActivityIndicator, Alert,
@@ -16,10 +16,15 @@ type TruckDetail = Truck & {
 export default function TruckScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
+  const mountedRef = useRef(true);
   const [truck, setTruck] = useState<TruckDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [following, setFollowing] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     if (!id) { setLoading(false); return; }
@@ -37,6 +42,7 @@ export default function TruckScreen() {
             .maybeSingle(),
         ]);
 
+        if (!mountedRef.current) return;
         if (truckRes.data) {
           navigation.setOptions({ title: truckRes.data.name });
           setTruck({
@@ -48,7 +54,7 @@ export default function TruckScreen() {
       } catch {
         // network error — "Truck not found" state will show
       } finally {
-        setLoading(false);
+        if (mountedRef.current) setLoading(false);
       }
     }
     load();

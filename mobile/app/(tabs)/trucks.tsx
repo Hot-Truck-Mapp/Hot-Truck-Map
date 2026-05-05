@@ -24,13 +24,16 @@ export default function TrucksTab() {
       if (error) throw error;
       if (data) setTrucks(data);
     } catch {
-      // Only show error on initial load (not on refresh over a populated list)
-      if (trucks.length === 0) setLoadError(true);
+      // Only show error banner on initial load — don't discard existing list on refresh failure
+      setTrucks((prev) => {
+        if (prev.length === 0) setLoadError(true);
+        return prev;
+      });
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [trucks.length]);
+  }, []);
 
   useEffect(() => { loadTrucks(); }, []);
 

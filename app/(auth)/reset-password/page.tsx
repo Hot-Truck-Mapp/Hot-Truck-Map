@@ -45,12 +45,17 @@ export default function ResetPasswordPage() {
     }
     setLoading(true);
     setError(null);
-    const supabase = createClient();
-    const { error } = await supabase.auth.updateUser({ password });
-    setLoading(false);
-    if (error) { setError(error.message); return; }
-    setDone(true);
-    setTimeout(() => router.push("/login"), 2500);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) { setError(error.message); return; }
+      setDone(true);
+      setTimeout(() => router.push("/login"), 2500);
+    } catch {
+      setError("Network error — please check your connection and try again.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

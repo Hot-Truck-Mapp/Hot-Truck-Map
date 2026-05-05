@@ -76,33 +76,37 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
     setSubmitError(null);
     setSubmitting(true);
 
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
 
-    const { error } = await supabase
-      .from("catering_requests")
-      .insert({
-        truck_id: id,
-        customer_id: user?.id ?? null,
-        customer_name: form.customer_name,
-        customer_email: form.customer_email,
-        customer_phone: form.customer_phone,
-        event_date: form.event_date,
-        event_time: form.event_time,
-        event_location: form.event_location,
-        guest_count: parseInt(form.guest_count),
-        budget: form.budget ? parseFloat(form.budget) : null,
-        event_type: form.event_type,
-        notes: form.notes,
-        status: "pending",
-      });
+      const { error } = await supabase
+        .from("catering_requests")
+        .insert({
+          truck_id: id,
+          customer_id: user?.id ?? null,
+          customer_name: form.customer_name,
+          customer_email: form.customer_email,
+          customer_phone: form.customer_phone,
+          event_date: form.event_date,
+          event_time: form.event_time,
+          event_location: form.event_location,
+          guest_count: parseInt(form.guest_count),
+          budget: form.budget ? parseFloat(form.budget) : null,
+          event_type: form.event_type,
+          notes: form.notes,
+          status: "pending",
+        });
 
-    setSubmitting(false);
-
-    if (!error) {
-      setSubmitted(true);
-    } else {
-      setSubmitError("Something went wrong. Please try again.");
+      if (!error) {
+        setSubmitted(true);
+      } else {
+        setSubmitError("Something went wrong. Please try again.");
+      }
+    } catch {
+      setSubmitError("Network error — please check your connection and try again.");
+    } finally {
+      setSubmitting(false);
     }
   }
 

@@ -14,13 +14,18 @@ export default function ForgotPasswordPage() {
     if (!email.trim()) return;
     setLoading(true);
     setError(null);
-    const supabase = createClient();
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: window.location.origin + "/reset-password",
-    });
-    setLoading(false);
-    if (error) { setError(error.message); return; }
-    setSent(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: window.location.origin + "/reset-password",
+      });
+      if (error) { setError(error.message); return; }
+      setSent(true);
+    } catch {
+      setError("Network error — please check your connection and try again.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

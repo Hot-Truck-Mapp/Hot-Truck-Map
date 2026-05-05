@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
@@ -14,6 +14,8 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function CateringDashboardPage() {
   const router = useRouter();
+  const mountedRef = useRef(true);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [truckId, setTruckId] = useState<string | null>(null);
@@ -26,9 +28,19 @@ export default function CateringDashboardPage() {
   const [updating, setUpdating] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+
   function showToast(msg: string) {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast(msg);
-    setTimeout(() => setToast(null), 3500);
+    toastTimerRef.current = setTimeout(() => {
+      if (mountedRef.current) setToast(null);
+    }, 3500);
   }
 
   useEffect(() => {
@@ -48,6 +60,7 @@ export default function CateringDashboardPage() {
         .from("trucks").select("id, offers_catering").eq("owner_id", user.id).maybeSingle();
 
       if (!truck) return;
+      if (!mountedRef.current) return;
       setTruckId(truck.id);
       setCateringEnabled(truck.offers_catering ?? false);
 
@@ -55,11 +68,12 @@ export default function CateringDashboardPage() {
         .from("catering_requests").select("*").eq("truck_id", truck.id)
         .order("created_at", { ascending: false });
 
+      if (!mountedRef.current) return;
       setRequests(data ?? []);
     } catch {
       // network error — keep empty state
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }
 
@@ -95,16 +109,15 @@ export default function CateringDashboardPage() {
 
       if (error) throw new Error(error.message);
 
-      setRequests(requests.map((r) =>
+      if (!mountedRef.current) return;
+      setRequests((prev) => prev.map((r) =>
         r.id === requestId ? { ...r, status } : r
       ));
-      if (selected?.id === requestId) {
-        setSelected({ ...selected, status });
-      }
+      setSelected((prev: any) => prev?.id === requestId ? { ...prev, status } : prev);
     } catch {
-      showToast("Failed to update status — please try again.");
+      if (mountedRef.current) showToast("Failed to update status — please try again.");
     } finally {
-      setUpdating(false);
+      if (mountedRef.current) setUpdating(false);
     }
   }
 
@@ -125,12 +138,13 @@ export default function CateringDashboardPage() {
 
       if (error) throw new Error(error.message);
 
+      if (!mountedRef.current) return;
       setMessage("");
       await loadMessages(selected.id);
     } catch {
-      showToast("Failed to send message — please try again.");
+      if (mountedRef.current) showToast("Failed to send message — please try again.");
     } finally {
-      setSending(false);
+      if (mountedRef.current) setSending(false);
     }
   }
 
