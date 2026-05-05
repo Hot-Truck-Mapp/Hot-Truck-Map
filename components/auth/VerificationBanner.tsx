@@ -11,10 +11,15 @@ export default function VerificationBanner() {
 
   useEffect(() => {
     const checkVerification = async () => {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      setVerified(!!user.email_confirmed_at);
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        setVerified(!!user.email_confirmed_at);
+      } catch {
+        // Network error — assume verified so the banner doesn't incorrectly
+        // appear. It will correct itself on the next successful check.
+      }
     };
     checkVerification();
   }, []);

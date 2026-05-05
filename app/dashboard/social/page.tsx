@@ -65,7 +65,7 @@ export default function SocialPage() {
   const [showComingSoon, setShowComingSoon] = useState(false);
 
   function toggleConnect(id: string) {
-    setPlatforms(platforms.map((p) =>
+    setPlatforms((prev) => prev.map((p) =>
       p.id === id && !p.comingSoon
         ? { ...p, connected: !p.connected }
         : p

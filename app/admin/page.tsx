@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 
-// ── Owner emails — add yours here ────────────────────────────────────────────
-const OWNER_EMAILS = ["Hottruckmap@gmail.com"];
+// ── Owner emails — stored lower-cased for case-insensitive comparison ────────
+const OWNER_EMAILS = ["hottruckmap@gmail.com"];
 
 type Stats = {
   totalTrucks: number;
@@ -27,18 +27,10 @@ type Truck = {
   followers?: number;
 };
 
-type RecentSignup = {
-  id: string;
-  email: string;
-  role: string;
-  created_at: string;
-};
-
 export default function AdminPage() {
   const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [trucks, setTrucks] = useState<Truck[]>([]);
-  const [recentSignups, setRecentSignups] = useState<RecentSignup[]>([]);
   const [liveTrucks, setLiveTrucks] = useState<Truck[]>([]);
   const [activeTab, setActiveTab] = useState<"overview" | "trucks" | "users" | "live">("overview");
   const [loading, setLoading] = useState(true);
@@ -53,7 +45,7 @@ export default function AdminPage() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
 
-      if (!user || !OWNER_EMAILS.includes(user.email ?? "")) {
+      if (!user || !OWNER_EMAILS.includes((user.email ?? "").toLowerCase())) {
         setAuthorized(false);
         setLoading(false);
         return;
@@ -100,10 +92,12 @@ export default function AdminPage() {
           .eq("is_live", true),
       ]);
 
-      // Batch follower counts in a single query instead of N+1
+      // Batch follower counts in a single query instead of N+1.
+      // Limit to 1000 rows — enough for all trucks at this scale.
       const { data: followCounts } = await supabase
         .from("follows")
-        .select("truck_id");
+        .select("truck_id")
+        .limit(1000);
       const followerMap: Record<string, number> = {};
       for (const f of followCounts ?? []) {
         followerMap[f.truck_id] = (followerMap[f.truck_id] ?? 0) + 1;

@@ -31,11 +31,27 @@ export default async function CityPage({ params }: Props) {
 
   const supabase = await createClient();
 
-  const { data: trucks } = await supabase
-    .from("trucks")
-    .select("*, locations(*)")
-    .ilike("locations.address", "%" + city + "%")
-    .eq("is_live", true);
+  // PostgREST silently ignores .ilike() on joined-table columns for parent-row
+  // filtering.  Instead: fetch all live trucks with their locations in one
+  // query and filter in-memory by address.  The live truck set is always small
+  // so the in-process filter is fast enough.
+  let trucks: any[] = [];
+  try {
+    const { data, error } = await supabase
+      .from("trucks")
+      .select("*, locations(*)")
+      .eq("is_live", true);
+
+    if (!error && data) {
+      trucks = data.filter((truck: any) =>
+        truck.locations?.some((loc: any) =>
+          loc.address?.toLowerCase().includes(city.toLowerCase())
+        )
+      );
+    }
+  } catch {
+    // Network error on server — render empty state rather than crashing
+  }
 
   return (
     <div className="min-h-screen bg-neutral-50">
@@ -153,7 +169,7 @@ export default async function CityPage({ params }: Props) {
               href={"/trucks/" + c.toLowerCase()}
               className="text-xs text-brand-red hover:underline"
             >
-              Food Trucks in {c.replace("-", " ")}
+              Food Trucks in {c.replace(/-/g, " ")}
             </Link>
           ))}
         </div>

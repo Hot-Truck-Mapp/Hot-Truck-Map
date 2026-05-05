@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, useRef, use } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
@@ -30,6 +30,10 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewSuccess, setReviewSuccess] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
+
+  const mountedRef = useRef(true);
+  const reviewSuccessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const followLoadingRef = useRef(false); // prevent concurrent follow/unfollow
 
   // Computed cart values
   const cartEntries = Object.entries(cart).filter(([, qty]) => qty > 0);
@@ -78,6 +82,13 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
     }
     router.push(`/truck/${id}/order`);
   }
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      if (reviewSuccessTimerRef.current) clearTimeout(reviewSuccessTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     // Check for an existing cart from a DIFFERENT truck
@@ -137,6 +148,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
         }
       } catch { /* ignore — view tracking is non-critical */ }
 
+      if (!mountedRef.current) return;
       setTruck(truckData);
       setLocation(locationData ?? null);
       setMenuItems(menu ?? []);
@@ -146,12 +158,14 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
     } catch {
       // silently fail — UI will show empty states
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }
 
   async function toggleFollow() {
     if (!userId) { router.push("/account"); return; }
+    if (followLoadingRef.current) return; // prevent concurrent ops
+    followLoadingRef.current = true;
     const supabase = createClient();
     const wasFollowing = following;
 
@@ -165,9 +179,12 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
 
     if (error) {
       // Roll back on failure
-      setFollowing(wasFollowing);
-      setFollowerCount((c) => wasFollowing ? c + 1 : c - 1);
+      if (mountedRef.current) {
+        setFollowing(wasFollowing);
+        setFollowerCount((c) => wasFollowing ? c + 1 : c - 1);
+      }
     }
+    followLoadingRef.current = false;
   }
 
   async function submitReview() {
@@ -192,16 +209,19 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
         comment: reviewText.trim() || null,
       });
       if (error) throw new Error(error.message);
+      const { data } = await supabase.from("reviews").select("*").eq("truck_id", id).order("created_at", { ascending: false }).limit(50);
+      if (!mountedRef.current) return;
       setReviewSuccess(true);
       setReviewRating(0);
       setReviewText("");
-      const { data } = await supabase.from("reviews").select("*").eq("truck_id", id).order("created_at", { ascending: false }).limit(50);
       setReviews(data ?? []);
-      setTimeout(() => setReviewSuccess(false), 3000);
+      reviewSuccessTimerRef.current = setTimeout(() => {
+        if (mountedRef.current) setReviewSuccess(false);
+      }, 3000);
     } catch (err: any) {
-      setReviewError(err?.message ?? "Could not submit review. Please try again.");
+      if (mountedRef.current) setReviewError(err?.message ?? "Could not submit review. Please try again.");
     } finally {
-      setReviewSubmitting(false);
+      if (mountedRef.current) setReviewSubmitting(false);
     }
   }
 

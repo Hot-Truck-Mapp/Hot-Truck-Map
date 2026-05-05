@@ -14,10 +14,16 @@ export default function RoleGuard({ allowedRoles, children }: Props) {
   const router = useRouter()
 
   useEffect(() => {
-    if (!loading && role && !allowedRoles.includes(role)) {
-      router.push('/')
+    if (loading) return;
+    if (!role) {
+      // Not signed in — send to login instead of showing a blank screen
+      router.push('/login');
+      return;
     }
-  }, [role, loading, router]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!allowedRoles.includes(role)) {
+      router.push('/');
+    }
+  }, [role, loading, router, allowedRoles])
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-[3px] border-brand-red border-t-transparent rounded-full animate-spin" /></div>
   if (!role || !allowedRoles.includes(role)) return null

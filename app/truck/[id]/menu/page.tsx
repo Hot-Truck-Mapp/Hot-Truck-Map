@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, useRef, use } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
@@ -18,10 +18,15 @@ export default function MenuPage({ params }: { params: Promise<{ id: string }> }
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState("ALL");
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     loadMenu();
-  }, [id]);
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadMenu() {
     try {
@@ -30,12 +35,13 @@ export default function MenuPage({ params }: { params: Promise<{ id: string }> }
         supabase.from("trucks").select("*").eq("id", id).maybeSingle(),
         supabase.from("menu_items").select("*").eq("truck_id", id).order("created_at", { ascending: true }),
       ]);
+      if (!mountedRef.current) return;
       setTruck(truckData ?? null);
       setItems(menuData ?? []);
     } catch {
       // network error — truck stays null, renders "not found"
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }
 
