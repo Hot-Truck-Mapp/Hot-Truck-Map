@@ -11,7 +11,9 @@ export default function ForgotPasswordPage() {
   const [error, setError]       = useState<string | null>(null);
 
   async function handleReset() {
+    if (loading) return;
     if (!email.trim()) return;
+    if (!email.includes("@")) { setError("Please enter a valid email address."); return; }
     setLoading(true);
     setError(null);
     const supabase = createClient();
@@ -69,6 +71,7 @@ export default function ForgotPasswordPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleReset()}
                     placeholder="you@example.com"
+                    maxLength={254}
                     className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
                   />
                 </div>

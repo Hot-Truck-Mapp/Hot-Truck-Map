@@ -90,6 +90,8 @@ export default function Dashboard() {
   const [showManual, setShowManual]     = useState(false);
   const watchIdRef                      = useRef<number | null>(null);
   const locationIntervalRef             = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isBroadcastingRef               = useRef(false);
+  const lastBroadcastPosRef             = useRef<{ lat: number; lng: number } | null>(null);
 
   // Analytics
   const [analyticsLoaded, setAnalyticsLoaded]   = useState(false);
@@ -98,12 +100,14 @@ export default function Dashboard() {
   const [chartData, setChartData]               = useState<any[]>([]);
   const [periodStats, setPeriodStats]           = useState({ followers:0, orders:0, views:0, revenue:0 });
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError]     = useState(false);
   const [allTimeOrders, setAllTimeOrders]       = useState(0);
   const [allTimeRevenue, setAllTimeRevenue]     = useState(0);
 
   // Orders
   const [orders, setOrders]           = useState<any[]>([]);
   const [newOrderCount, setNewOrderCount] = useState(0);
+  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
 
   // ── Cleanup timers on unmount ───────────────────────────────────────────────
   useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
@@ -205,6 +209,7 @@ export default function Dashboard() {
 
   // ── Profile ─────────────────────────────────────────────────────────────────
   async function uploadProfilePhoto(file: File) {
+    if (!file.type.startsWith("image/")) { showToast("Please choose an image file."); return; }
     if (file.size > 5 * 1024 * 1024) { showToast("Photo must be under 5 MB"); return; }
     setPhotoUploading(true);
     try {
@@ -257,6 +262,7 @@ export default function Dashboard() {
 
   // ── Menu ────────────────────────────────────────────────────────────────────
   async function uploadMenuPhoto(file: File) {
+    if (!file.type.startsWith("image/")) { showToast("Please choose an image file."); return; }
     if (file.size > 5 * 1024 * 1024) { showToast("Photo must be under 5 MB"); return; }
     setMenuUploading(true);
     try {
@@ -298,6 +304,10 @@ export default function Dashboard() {
     const parsedPrice = parseFloat(itemForm.price);
     if (isNaN(parsedPrice) || parsedPrice <= 0) {
       showToast("Please enter a valid price greater than $0.00");
+      return;
+    }
+    if (parsedPrice > 9999.99) {
+      showToast("Price cannot exceed $9,999.99");
       return;
     }
     setMenuSaving(true);
@@ -459,15 +469,32 @@ export default function Dashboard() {
     setLiveStatus("locating");
     setLiveError(null);
 
-    // Try fast low-accuracy GPS first (gets a position quickly), then refine
+    // Returns metres between two lat/lng points (Haversine approximation)
+    function haversineMetres(lat1: number, lng1: number, lat2: number, lng2: number) {
+      const R = 6371000;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLng = (lng2 - lng1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    // De-duplicated broadcast — skips if already in-flight or truck moved < 50 m
     const tryBroadcast = async (pos: GeolocationPosition) => {
+      if (isBroadcastingRef.current) return;
+      const { latitude: lat, longitude: lng } = pos.coords;
+      const prev = lastBroadcastPosRef.current;
+      if (prev && haversineMetres(prev.lat, prev.lng, lat, lng) < 50) return;
+      isBroadcastingRef.current = true;
       try {
-        const place = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
-        await broadcastLocation(pos.coords.latitude, pos.coords.longitude, place);
+        const place = await reverseGeocode(lat, lng);
+        await broadcastLocation(lat, lng, place);
+        lastBroadcastPosRef.current = { lat, lng };
       } catch (e: any) {
         setLiveError(e.message);
         setLiveStatus("error");
         stopLocationTracking();
+      } finally {
+        isBroadcastingRef.current = false;
       }
     };
 
@@ -486,15 +513,6 @@ export default function Dashboard() {
       },
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
     );
-
-    // Also force a precise update every 5 minutes while live
-    locationIntervalRef.current = setInterval(() => {
-      navigator.geolocation.getCurrentPosition(
-        tryBroadcast,
-        () => { /* silent — keep showing current pin if refresh fails */ },
-        { enableHighAccuracy: true, timeout: 15000 }
-      );
-    }, 5 * 60 * 1000);
   }
 
   async function goLiveManual() {
@@ -597,7 +615,8 @@ export default function Dashboard() {
         revenue: completedOrders.reduce((s, o) => s + (o.total ?? 0), 0),
       });
       setAnalyticsLoaded(true);
-    } catch { /* analytics unavailable — UI shows empty state */ }
+      setAnalyticsError(false);
+    } catch { setAnalyticsError(true); }
     setAnalyticsLoading(false);
   }
 
@@ -640,11 +659,19 @@ export default function Dashboard() {
   }
 
   async function updateOrderStatus(orderId: string, status: string) {
-    const supabase = createClient();
-    // Scope update to this operator's truck — prevents cross-operator order tampering
-    const { error } = await supabase.from("orders").update({ status }).eq("id", orderId).eq("truck_id", truckId!);
-    if (!error) setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status } : o));
-    else showToast("Failed to update order status — please try again");
+    if (updatingOrderId) return; // prevent double-tap
+    setUpdatingOrderId(orderId);
+    try {
+      const supabase = createClient();
+      // Scope update to this operator's truck — prevents cross-operator order tampering
+      const { error } = await supabase.from("orders").update({ status }).eq("id", orderId).eq("truck_id", truckId!);
+      if (!error) setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status } : o));
+      else showToast("Failed to update order status — please try again");
+    } catch {
+      showToast("Failed to update order status — check your connection");
+    } finally {
+      setUpdatingOrderId(null);
+    }
   }
 
   // ── Render ───────────────────────────────────────────────────────────────────
@@ -1470,6 +1497,24 @@ export default function Dashboard() {
                   </div>
                 </div>
               </div>
+            ) : analyticsError ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-4 text-center px-4">
+                <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#E8481C" strokeWidth="2" strokeLinecap="round">
+                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-bold text-neutral-800">Could not load analytics</p>
+                  <p className="text-sm text-neutral-400 mt-1">Check your connection and try again.</p>
+                </div>
+                <button
+                  onClick={() => truckId && loadAnalytics(truckId, analyticsRange)}
+                  className="px-5 py-2.5 bg-brand-red text-white rounded-xl font-semibold text-sm"
+                >
+                  Retry
+                </button>
+              </div>
             ) : (
               <>
                 {/* ── ALL-TIME HERO STATS ── */}
@@ -1718,25 +1763,28 @@ export default function Dashboard() {
                                   {order.status === "pending" && (
                                     <button
                                       onClick={() => updateOrderStatus(order.id, "preparing")}
-                                      className="flex-1 py-2.5 bg-blue-500 text-white rounded-xl font-bold text-sm active:scale-95 transition-all"
+                                      disabled={updatingOrderId === order.id}
+                                      className="flex-1 py-2.5 bg-blue-500 text-white rounded-xl font-bold text-sm active:scale-95 transition-all disabled:opacity-50"
                                     >
-                                      Start Preparing
+                                      {updatingOrderId === order.id ? "Updating..." : "Start Preparing"}
                                     </button>
                                   )}
                                   {order.status === "preparing" && (
                                     <button
                                       onClick={() => updateOrderStatus(order.id, "ready")}
-                                      className="flex-1 py-2.5 bg-green-500 text-white rounded-xl font-bold text-sm active:scale-95 transition-all"
+                                      disabled={updatingOrderId === order.id}
+                                      className="flex-1 py-2.5 bg-green-500 text-white rounded-xl font-bold text-sm active:scale-95 transition-all disabled:opacity-50"
                                     >
-                                      Mark Ready
+                                      {updatingOrderId === order.id ? "Updating..." : "Mark Ready"}
                                     </button>
                                   )}
                                   {order.status === "ready" && (
                                     <button
                                       onClick={() => updateOrderStatus(order.id, "picked_up")}
-                                      className="flex-1 py-2.5 bg-neutral-800 text-white rounded-xl font-bold text-sm active:scale-95 transition-all"
+                                      disabled={updatingOrderId === order.id}
+                                      className="flex-1 py-2.5 bg-neutral-800 text-white rounded-xl font-bold text-sm active:scale-95 transition-all disabled:opacity-50"
                                     >
-                                      Picked Up ✓
+                                      {updatingOrderId === order.id ? "Updating..." : "Picked Up ✓"}
                                     </button>
                                   )}
                                 </div>

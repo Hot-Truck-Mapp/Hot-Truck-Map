@@ -21,19 +21,24 @@ export default function AccountPage() {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarToast, setAvatarToast] = useState<string | null>(null);
   const avatarRef = useRef<HTMLInputElement>(null);
+  const avatarToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function showAvatarToast(msg: string) {
+    if (avatarToastTimerRef.current) clearTimeout(avatarToastTimerRef.current);
     setAvatarToast(msg);
-    setTimeout(() => setAvatarToast(null), 3500);
+    avatarToastTimerRef.current = setTimeout(() => setAvatarToast(null), 3500);
   }
 
+  useEffect(() => () => { if (avatarToastTimerRef.current) clearTimeout(avatarToastTimerRef.current); }, []);
+
   async function uploadAvatar(file: File) {
+    if (!file.type.startsWith("image/")) { showAvatarToast("Please choose an image file."); return; }
     if (file.size > 5 * 1024 * 1024) { showAvatarToast("Photo must be under 5 MB"); return; }
     if (!user) return;
     setAvatarUploading(true);
     try {
       const supabase = createClient();
-      const ext = file.name.split(".").pop();
+      const ext = file.name.split(".").pop() ?? "jpg";
       const path = `customers/${user.id}.${ext}`;
       const { error: uploadErr } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
       if (uploadErr) throw new Error(uploadErr.message);

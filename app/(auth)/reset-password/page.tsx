@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
@@ -12,6 +12,7 @@ export default function ResetPasswordPage() {
   const [error, setError]         = useState<string | null>(null);
   const [ready, setReady]         = useState(false);
   const [timedOut, setTimedOut]   = useState(false);
+  const redirectTimerRef          = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -31,16 +32,22 @@ export default function ResetPasswordPage() {
     return () => {
       subscription.unsubscribe();
       clearTimeout(timeout);
+      if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
     };
   }, []);
 
   async function handleUpdate() {
+    if (loading) return;
     if (!password || password !== confirm) {
       setError("Passwords don't match.");
       return;
     }
     if (password.length < 6) {
       setError("Password must be at least 6 characters.");
+      return;
+    }
+    if (password.length > 72) {
+      setError("Password must be 72 characters or fewer.");
       return;
     }
     setLoading(true);
@@ -50,7 +57,7 @@ export default function ResetPasswordPage() {
     setLoading(false);
     if (error) { setError(error.message); return; }
     setDone(true);
-    setTimeout(() => router.push("/login"), 2500);
+    redirectTimerRef.current = setTimeout(() => router.push("/login"), 2500);
   }
 
   return (

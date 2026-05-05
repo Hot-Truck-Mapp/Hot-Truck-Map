@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, useRef, use } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
@@ -34,8 +34,10 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
     notes: "",
   });
 
+  const mountedRef = useRef(true);
   useEffect(() => {
     loadData();
+    return () => { mountedRef.current = false; };
   }, []);
 
   async function loadData() {
@@ -46,6 +48,7 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
         supabase.from("trucks").select("*").eq("id", id).maybeSingle(),
         supabase.from("catering_packages").select("*").eq("truck_id", id).eq("is_active", true),
       ]);
+      if (!mountedRef.current) return;
       setUser(user ?? null);
       setTruck(truckData ?? null);
       setPackages(pkgData ?? []);
@@ -53,11 +56,12 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
     } catch {
       // network error — truck stays null, page shows "not found"
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }
 
   async function handleSubmit() {
+    if (submitting) return;
     if (
       !form.customer_name ||
       !form.customer_email ||
@@ -65,6 +69,26 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
       !form.event_location ||
       !form.guest_count
     ) return;
+
+    // Basic email format check
+    if (!form.customer_email.includes("@")) {
+      setSubmitError("Please enter a valid email address.");
+      return;
+    }
+
+    // Guest count sanity bounds
+    const guestCount = parseInt(form.guest_count);
+    if (isNaN(guestCount) || guestCount < 1 || guestCount > 100000) {
+      setSubmitError("Guest count must be between 1 and 100,000.");
+      return;
+    }
+
+    // Budget cannot be negative
+    const budget = form.budget ? parseFloat(form.budget) : null;
+    if (budget !== null && (isNaN(budget) || budget < 0)) {
+      setSubmitError("Please enter a valid budget amount.");
+      return;
+    }
 
     // Reject past dates
     const today = new Date().toISOString().split("T")[0];
@@ -76,33 +100,39 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
     setSubmitError(null);
     setSubmitting(true);
 
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
 
-    const { error } = await supabase
-      .from("catering_requests")
-      .insert({
-        truck_id: id,
-        customer_id: user?.id ?? null,
-        customer_name: form.customer_name,
-        customer_email: form.customer_email,
-        customer_phone: form.customer_phone,
-        event_date: form.event_date,
-        event_time: form.event_time,
-        event_location: form.event_location,
-        guest_count: parseInt(form.guest_count),
-        budget: form.budget ? parseFloat(form.budget) : null,
-        event_type: form.event_type,
-        notes: form.notes,
-        status: "pending",
-      });
+      const { error } = await supabase
+        .from("catering_requests")
+        .insert({
+          truck_id: id,
+          customer_id: user?.id ?? null,
+          customer_name: form.customer_name,
+          customer_email: form.customer_email,
+          customer_phone: form.customer_phone,
+          event_date: form.event_date,
+          event_time: form.event_time,
+          event_location: form.event_location,
+          guest_count: guestCount,
+          budget,
+          event_type: form.event_type,
+          notes: form.notes,
+          status: "pending",
+        });
 
-    setSubmitting(false);
+      if (!mountedRef.current) return;
 
-    if (!error) {
-      setSubmitted(true);
-    } else {
-      setSubmitError("Something went wrong. Please try again.");
+      if (!error) {
+        setSubmitted(true);
+      } else {
+        setSubmitError("Something went wrong. Please try again.");
+      }
+    } catch {
+      if (mountedRef.current) setSubmitError("Network error — please check your connection and try again.");
+    } finally {
+      if (mountedRef.current) setSubmitting(false);
     }
   }
 
@@ -297,7 +327,7 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
                           {pkg.description}
                         </p>
                       )}
-                      {pkg.includes?.length > 0 && (
+                      {Array.isArray(pkg.includes) && pkg.includes.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-2">
                           {pkg.includes.map((item: string) => (
                             <span
