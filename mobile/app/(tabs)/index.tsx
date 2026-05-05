@@ -31,44 +31,48 @@ export default function MapTab() {
   const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
+    let mounted = true;
     (async () => {
       try {
         // Check existing permission first (no prompt if already granted/denied)
         const { status: existing } = await Location.getForegroundPermissionsAsync();
 
         if (existing === 'granted') {
+          if (!mounted) return;
           setLocationStatus('granted');
-          await locateUser();
+          await locateUser(mounted);
           return;
         }
 
         if (existing === 'denied') {
           // Already permanently denied — show the in-app banner instead of
           // a system dialog that won't appear.
-          setLocationStatus('denied');
+          if (mounted) setLocationStatus('denied');
           return;
         }
 
         // Permission is 'undetermined' — show the system prompt now.
         const { status } = await Location.requestForegroundPermissionsAsync();
+        if (!mounted) return;
         if (status === 'granted') {
           setLocationStatus('granted');
-          await locateUser();
+          await locateUser(mounted);
         } else {
           setLocationStatus('denied');
         }
       } catch {
         // Location API unavailable — fall back to showing the map without centering
-        setLocationStatus('denied');
+        if (mounted) setLocationStatus('denied');
       }
     })();
+    return () => { mounted = false; };
   }, []);
 
-  async function locateUser() {
+  async function locateUser(mounted = true) {
     // 1. Last-known position — instant if the OS has a cached fix.
     try {
       const last = await Location.getLastKnownPositionAsync({});
-      if (last) {
+      if (last && mounted) {
         const r: Region = {
           latitude: last.coords.latitude,
           longitude: last.coords.longitude,
@@ -85,6 +89,7 @@ export default function MapTab() {
       const loc = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
+      if (!mounted) return;
       const r: Region = {
         latitude: loc.coords.latitude,
         longitude: loc.coords.longitude,

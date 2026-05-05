@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, useRef, use } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -29,6 +29,11 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [customerId, setCustomerId] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     // Load cart
@@ -44,10 +49,10 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
     } catch {
       router.replace(`/truck/${id}`);
     }
-    // Get logged-in user for order attribution
-    createClient().auth.getUser().then(({ data }) => {
-      setCustomerId(data.user?.id ?? null);
-    });
+    // Get logged-in user for order attribution (fire-and-forget; orders work anonymously too)
+    createClient().auth.getUser()
+      .then(({ data }) => { if (mountedRef.current) setCustomerId(data.user?.id ?? null); })
+      .catch(() => { /* not signed in — proceed as guest */ });
   }, [id, router]);
 
   function updateQty(itemId: string, delta: number) {

@@ -21,10 +21,23 @@ export default function AccountPage() {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarToast, setAvatarToast] = useState<string | null>(null);
   const avatarRef = useRef<HTMLInputElement>(null);
+  const avatarToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      if (avatarToastTimerRef.current) clearTimeout(avatarToastTimerRef.current);
+    };
+  }, []);
 
   function showAvatarToast(msg: string) {
+    if (!mountedRef.current) return;
     setAvatarToast(msg);
-    setTimeout(() => setAvatarToast(null), 3500);
+    if (avatarToastTimerRef.current) clearTimeout(avatarToastTimerRef.current);
+    avatarToastTimerRef.current = setTimeout(() => {
+      if (mountedRef.current) setAvatarToast(null);
+    }, 3500);
   }
 
   async function uploadAvatar(file: File) {
@@ -80,6 +93,7 @@ export default function AccountPage() {
   }
 
   async function updateNotification(key: keyof typeof notifications, value: boolean) {
+    if (savingNotif) return; // prevent concurrent saves
     const prev = notifications;
     const updated = { ...notifications, [key]: value };
     setNotifications(updated);
@@ -114,8 +128,10 @@ export default function AccountPage() {
   }
 
   async function signOut() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    } catch { /* ignore — redirect anyway */ }
     window.location.href = "/";
   }
 
