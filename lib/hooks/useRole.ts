@@ -11,17 +11,15 @@ export function useRole() {
 
   useEffect(() => {
     const fetchRole = async () => {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-
-      if (!user) {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        setRole(user ? ((user.user_metadata?.role as Role) ?? "customer") : null);
+      } catch {
         setRole(null);
+      } finally {
         setLoading(false);
-        return;
       }
-
-      setRole((user.user_metadata?.role as Role) ?? "customer");
-      setLoading(false);
     };
 
     fetchRole();
