@@ -11,9 +11,11 @@ type Props = {
   trucks: TruckWithLocation[];
   initialRegion: Region;
   mapRef?: RefObject<MapView>;
+  /** Only show the blue dot when location permission is actually granted */
+  showsUserLocation?: boolean;
 };
 
-export function TruckMap({ trucks, initialRegion, mapRef }: Props) {
+export function TruckMap({ trucks, initialRegion, mapRef, showsUserLocation = false }: Props) {
   const router = useRouter();
 
   return (
@@ -25,8 +27,8 @@ export function TruckMap({ trucks, initialRegion, mapRef }: Props) {
       // Google Maps API key, add android.config.googleMaps.apiKey to app.json
       // and restore: provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
       initialRegion={initialRegion}
-      showsUserLocation
-      showsMyLocationButton
+      showsUserLocation={showsUserLocation}
+      showsMyLocationButton={showsUserLocation}
     >
       {trucks
         .filter(t => t.location?.lat != null && t.location?.lng != null)
@@ -37,8 +39,8 @@ export function TruckMap({ trucks, initialRegion, mapRef }: Props) {
               latitude: truck.location!.lat,
               longitude: truck.location!.lng,
             }}
-            title={truck.name}
-            description={truck.cuisine}
+            title={truck.name ?? undefined}
+            description={truck.cuisine ?? undefined}
             onCalloutPress={() => router.push(`/truck/${truck.id}`)}
           >
             <View style={styles.marker}>

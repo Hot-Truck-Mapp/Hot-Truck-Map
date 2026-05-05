@@ -143,7 +143,7 @@ export default function OrdersTab() {
             </Text>
             <View style={styles.cardRow}>
               <Text style={styles.total}>${(item.total ?? 0).toFixed(2)}</Text>
-              <Text style={styles.date}>{new Date(item.created_at).toLocaleDateString()}</Text>
+              <Text style={styles.date}>{item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}</Text>
             </View>
           </View>
         )}

@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 
-type Status = "idle" | "locating" | "live" | "error";
+type Status = "idle" | "locating" | "live" | "going-offline" | "error";
 
 export default function GoLivePage() {
   const router = useRouter();
+  const [authChecking, setAuthChecking] = useState(true);
   const [status, setStatus] = useState<Status>("idle");
   const [address, setAddress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -17,11 +18,18 @@ export default function GoLivePage() {
 
   // Auth guard — operators only
   useEffect(() => {
-    createClient().auth.getUser().then(({ data: { user } }) => {
-      if (!user || user.user_metadata?.role !== "operator") {
+    createClient()
+      .auth.getUser()
+      .then(({ data: { user } }) => {
+        if (!user || user.user_metadata?.role !== "operator") {
+          router.replace("/");
+        } else {
+          setAuthChecking(false);
+        }
+      })
+      .catch(() => {
         router.replace("/");
-      }
-    });
+      });
   }, [router]);
 
   async function broadcastLocation(lat: number, lng: number, place: string) {
@@ -90,6 +98,12 @@ export default function GoLivePage() {
   }
 
   async function goLiveGPS() {
+    if (!navigator.geolocation) {
+      setError("Geolocation is not supported by your browser. Please enter your address manually.");
+      setShowManual(true);
+      return;
+    }
+
     setStatus("locating");
     setError(null);
 
@@ -129,32 +143,48 @@ export default function GoLivePage() {
   }
 
   async function goOffline() {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    setStatus("going-offline");
+    setError(null);
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setStatus("live"); return; }
 
-    const { data: truck } = await supabase
-      .from("trucks")
-      .select("id")
-      .eq("owner_id", user.id)
-      .maybeSingle();
-
-    if (truck) {
-      const { error } = await supabase
+      const { data: truck } = await supabase
         .from("trucks")
-        .update({ is_live: false })
-        .eq("id", truck.id);
-      if (error) {
-        setError(error.message);
-        setStatus("error");
-        return;
-      }
-    }
+        .select("id")
+        .eq("owner_id", user.id)
+        .maybeSingle();
 
-    setStatus("idle");
-    setAddress(null);
-    setManualAddress("");
-    setShowManual(false);
+      if (truck) {
+        const { error } = await supabase
+          .from("trucks")
+          .update({ is_live: false })
+          .eq("id", truck.id);
+        if (error) {
+          setError(error.message);
+          setStatus("error");
+          return;
+        }
+      }
+
+      setStatus("idle");
+      setAddress(null);
+      setManualAddress("");
+      setShowManual(false);
+    } catch (err: any) {
+      setError(err.message ?? "Something went wrong");
+      setStatus("error");
+    }
+  }
+
+  // Don't render until auth check completes — prevents operator-only UI flashing to unauthenticated users
+  if (authChecking) {
+    return (
+      <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
+        <div className="w-8 h-8 border-[3px] border-brand-red border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   }
 
   return (
@@ -208,7 +238,7 @@ export default function GoLivePage() {
                 type="text"
                 value={manualAddress}
                 onChange={(e) => setManualAddress(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && goLiveManual()}
+                onKeyDown={(e) => e.key === "Enter" && status === "idle" && goLiveManual()}
                 placeholder="e.g. 123 Main St, Newark, NJ"
                 maxLength={200}
                 className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-brand-red transition-colors bg-white"
@@ -240,8 +270,8 @@ export default function GoLivePage() {
         </div>
       )}
 
-      {/* LIVE STATE */}
-      {status === "live" && (
+      {/* LIVE STATE (also covers going-offline transition) */}
+      {(status === "live" || status === "going-offline") && (
         <div className="flex flex-col items-center gap-6">
           <div
             className="w-64 h-64 rounded-full bg-brand-red text-white flex flex-col items-center justify-center gap-3"
@@ -256,9 +286,10 @@ export default function GoLivePage() {
           </div>
           <button
             onClick={goOffline}
-            className="px-8 py-3 rounded-full bg-neutral-800 text-white font-black text-sm uppercase tracking-wide hover:bg-neutral-700 active:scale-95 transition-all"
+            disabled={status === "going-offline"}
+            className="px-8 py-3 rounded-full bg-neutral-800 text-white font-black text-sm uppercase tracking-wide hover:bg-neutral-700 active:scale-95 transition-all disabled:opacity-50"
           >
-            Go Offline
+            {status === "going-offline" ? "Going Offline…" : "Go Offline"}
           </button>
         </div>
       )}

@@ -55,17 +55,23 @@ export default function TruckScreen() {
   }, [id]);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
-      setUserId(user.id);
-      supabase
-        .from('follows')
-        .select('truck_id')
-        .eq('user_id', user.id)
-        .eq('truck_id', id)
-        .maybeSingle()
-        .then(({ data }) => setFollowing(!!data));
-    });
+    let mounted = true;
+    supabase.auth.getUser()
+      .then(({ data: { user } }) => {
+        if (!user || !mounted) return;
+        setUserId(user.id);
+        return supabase
+          .from('follows')
+          .select('truck_id')
+          .eq('user_id', user.id)
+          .eq('truck_id', id)
+          .maybeSingle();
+      })
+      .then((res) => {
+        if (res && mounted) setFollowing(!!(res as any).data);
+      })
+      .catch(() => { /* not signed in or network error */ });
+    return () => { mounted = false; };
   }, [id]);
 
   async function toggleFollow() {
@@ -139,7 +145,7 @@ export default function TruckScreen() {
         {isLive && truck.location && (
           <View style={styles.locationBox}>
             <Text style={styles.locationLabel}>Current location</Text>
-            <Text style={styles.locationAddress}>{truck.location.address}</Text>
+            <Text style={styles.locationAddress}>{truck.location.address ?? ''}</Text>
           </View>
         )}
 
@@ -163,7 +169,7 @@ export default function TruckScreen() {
                     <Text style={styles.menuItemDesc} numberOfLines={2}>{item.description}</Text>
                   ) : null}
                 </View>
-                <Text style={styles.menuItemPrice}>${item.price.toFixed(2)}</Text>
+                <Text style={styles.menuItemPrice}>${(item.price ?? 0).toFixed(2)}</Text>
               </View>
             ))}
           </>

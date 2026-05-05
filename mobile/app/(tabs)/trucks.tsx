@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { StyleSheet, View, FlatList, TextInput, ActivityIndicator, Text, RefreshControl } from 'react-native';
+import { StyleSheet, View, FlatList, TextInput, ActivityIndicator, Text, RefreshControl, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TruckCard } from '@/components/TruckCard';
 import { supabase } from '@/lib/supabase';
@@ -10,21 +10,27 @@ export default function TrucksTab() {
   const [trucks, setTrucks] = useState<Truck[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadTrucks = useCallback(async () => {
+    setLoadError(false);
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('trucks')
         .select('*')
         .order('name')
         .limit(200);
+      if (error) throw error;
       if (data) setTrucks(data);
-    } catch { /* network error — keep existing list */ } finally {
+    } catch {
+      // Only show error on initial load (not on refresh over a populated list)
+      if (trucks.length === 0) setLoadError(true);
+    } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [trucks.length]);
 
   useEffect(() => { loadTrucks(); }, []);
 
@@ -45,6 +51,17 @@ export default function TrucksTab() {
     return (
       <View style={styles.loading}>
         <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <View style={styles.loading}>
+        <Text style={styles.errorText}>Could not load trucks</Text>
+        <TouchableOpacity onPress={loadTrucks} style={{ marginTop: 12 }}>
+          <Text style={{ color: Colors.primary, fontWeight: '600', fontSize: 15 }}>Retry</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -86,6 +103,7 @@ export default function TrucksTab() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  errorText: { fontSize: 16, color: Colors.textSecondary, textAlign: 'center' },
   searchContainer: { padding: 16, paddingBottom: 8 },
   search: {
     backgroundColor: Colors.card,
