@@ -1,10 +1,23 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-export default function AuthCallback() {
+// Spinner shown while the Suspense boundary is resolving (or during redirect)
+function Spinner() {
+  return (
+    <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-10 h-10 rounded-full border-4 border-brand-red border-t-transparent animate-spin" />
+        <p className="text-neutral-400 text-sm">Signing you in...</p>
+      </div>
+    </div>
+  );
+}
+
+// useSearchParams() must be inside a Suspense boundary — Next.js requirement for static export
+function AuthCallbackInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -38,12 +51,13 @@ export default function AuthCallback() {
     handleRedirect();
   }, [router, searchParams]);
 
+  return <Spinner />;
+}
+
+export default function AuthCallback() {
   return (
-    <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
-      <div className="flex flex-col items-center gap-3">
-        <div className="w-10 h-10 rounded-full border-4 border-brand-red border-t-transparent animate-spin" />
-        <p className="text-neutral-400 text-sm">Signing you in...</p>
-      </div>
-    </div>
+    <Suspense fallback={<Spinner />}>
+      <AuthCallbackInner />
+    </Suspense>
   );
 }
