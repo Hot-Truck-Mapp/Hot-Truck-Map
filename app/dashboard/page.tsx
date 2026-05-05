@@ -71,9 +71,11 @@ export default function Dashboard() {
 
   // Toast notifications
   const [toast, setToast] = useState<{msg: string; isError?: boolean} | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   function showToast(msg: string, isError = true) {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ msg, isError });
-    setTimeout(() => setToast(null), 4000);
+    toastTimerRef.current = setTimeout(() => setToast(null), 4000);
   }
 
   // Inline delete confirms
@@ -102,6 +104,9 @@ export default function Dashboard() {
   // Orders
   const [orders, setOrders]           = useState<any[]>([]);
   const [newOrderCount, setNewOrderCount] = useState(0);
+
+  // ── Cleanup timers on unmount ───────────────────────────────────────────────
+  useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
 
   // ── Initial load ────────────────────────────────────────────────────────────
   useEffect(() => { loadAll(); }, []);
@@ -244,7 +249,8 @@ export default function Dashboard() {
         if (newTruck) setTruckId(newTruck.id);
       }
       setProfileSaved(true);
-      setTimeout(() => setProfileSaved(false), 3000);
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = setTimeout(() => setProfileSaved(false), 3000);
     } catch (err: any) { showToast("Save failed: " + (err?.message ?? "Please try again.")); }
     setProfileSaving(false);
   }
@@ -394,10 +400,14 @@ export default function Dashboard() {
   async function deleteSchedEntry(id: string) {
     if (deletingSchedId !== id) { setDeletingSchedId(id); return; }
     setDeletingSchedId(null);
-    const supabase = createClient();
-    const { error } = await supabase.from("schedules").delete().eq("id", id).eq("truck_id", truckId!);
-    if (!error) setSchedule(s => s.filter(e => e.id !== id));
-    else showToast("Delete failed: " + error.message);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.from("schedules").delete().eq("id", id).eq("truck_id", truckId!);
+      if (!error) setSchedule(s => s.filter(e => e.id !== id));
+      else showToast("Delete failed: " + error.message);
+    } catch {
+      showToast("Delete failed — check your connection and try again");
+    }
   }
 
   // ── Go Live ─────────────────────────────────────────────────────────────────
