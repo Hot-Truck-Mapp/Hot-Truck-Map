@@ -36,6 +36,10 @@ export default function SignupPage() {
 
   async function handleOperatorSignup() {
     if (!truckName.trim() || !opEmail || !opPassword) return;
+    if (!opEmail.includes("@") || !opEmail.includes(".")) {
+      setOpError("Please enter a valid email address.");
+      return;
+    }
     if (opPassword.length < 6) {
       setOpError("Password must be at least 6 characters.");
       return;
@@ -89,28 +93,36 @@ export default function SignupPage() {
 
   async function handleCustomerSignup() {
     if (!cuEmail || !cuPassword) return;
+    if (!cuEmail.includes("@") || !cuEmail.includes(".")) {
+      setCuError("Please enter a valid email address.");
+      return;
+    }
     if (cuPassword.length < 6) { setCuError("Password must be at least 6 characters."); return; }
     setCuLoading(true);
     setCuError(null);
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.signUp({
-      email: cuEmail,
-      password: cuPassword,
-      options: {
-        data: { role: "customer" },
-        emailRedirectTo: window.location.origin + "/",
-      },
-    });
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signUp({
+        email: cuEmail,
+        password: cuPassword,
+        options: {
+          data: { role: "customer" },
+          emailRedirectTo: window.location.origin + "/",
+        },
+      });
 
-    if (error) {
-      setCuError(error.message);
+      if (error) {
+        setCuError(error.message);
+        return;
+      }
+
+      setStep("done-customer");
+    } catch {
+      setCuError("Network error — please check your connection and try again.");
+    } finally {
       setCuLoading(false);
-      return;
     }
-
-    setCuLoading(false);
-    setStep("done-customer");
   }
 
   // ── CHOOSE ───────────────────────────────────────────────────────────────

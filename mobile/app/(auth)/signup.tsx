@@ -19,6 +19,10 @@ export default function SignupScreen() {
       Alert.alert('Missing fields', 'Please fill in all fields.');
       return;
     }
+    if (!email.trim().includes('@') || !email.trim().includes('.')) {
+      Alert.alert('Invalid email', 'Please enter a valid email address.');
+      return;
+    }
     if (password !== confirm) {
       Alert.alert('Password mismatch', 'Passwords do not match.');
       return;
