@@ -49,75 +49,88 @@ export default function AdminPage() {
   }, []);
 
   async function checkAuth() {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
 
-    if (!user || !OWNER_EMAILS.includes(user.email ?? "")) {
+      if (!user || !OWNER_EMAILS.includes(user.email ?? "")) {
+        setAuthorized(false);
+        setLoading(false);
+        return;
+      }
+
+      setAuthorized(true);
+      await loadData();
+    } catch {
+      // Network error during auth check — deny access and stop the spinner
       setAuthorized(false);
       setLoading(false);
-      return;
     }
-
-    setAuthorized(true);
-    await loadData();
   }
 
   async function loadData() {
-    const supabase = createClient();
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    const weekAgoISO = weekAgo.toISOString();
+    try {
+      const supabase = createClient();
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      const weekAgoISO = weekAgo.toISOString();
 
-    const [
-      { count: totalTrucks },
-      { count: liveTrucksCount },
-      { count: totalFollows },
-      { count: totalViews },
-      { count: newTrucksThisWeek },
-      { data: truckList },
-      { data: liveTruckList },
-    ] = await Promise.all([
-      supabase.from("trucks").select("*", { count: "exact", head: true }),
-      supabase.from("trucks").select("*", { count: "exact", head: true }).eq("is_live", true),
-      supabase.from("follows").select("*", { count: "exact", head: true }),
-      supabase.from("truck_views").select("*", { count: "exact", head: true }),
-      supabase.from("trucks").select("*", { count: "exact", head: true }).gte("created_at", weekAgoISO),
-      supabase
-        .from("trucks")
-        .select("id, name, cuisine, is_live, created_at")
-        .order("created_at", { ascending: false })
-        .limit(20),
-      supabase
-        .from("trucks")
-        .select("id, name, cuisine, is_live, created_at, locations(address, broadcasted_at)")
-        .eq("is_live", true),
-    ]);
+      const [
+        { count: totalTrucks },
+        { count: liveTrucksCount },
+        { count: totalFollows },
+        { count: totalViews },
+        { count: newTrucksThisWeek },
+        { data: truckList },
+        { data: liveTruckList },
+      ] = await Promise.all([
+        supabase.from("trucks").select("*", { count: "exact", head: true }),
+        supabase.from("trucks").select("*", { count: "exact", head: true }).eq("is_live", true),
+        supabase.from("follows").select("*", { count: "exact", head: true }),
+        supabase.from("truck_views").select("*", { count: "exact", head: true }),
+        supabase.from("trucks").select("*", { count: "exact", head: true }).gte("created_at", weekAgoISO),
+        supabase
+          .from("trucks")
+          .select("id, name, cuisine, is_live, created_at")
+          .order("created_at", { ascending: false })
+          .limit(20),
+        supabase
+          .from("trucks")
+          .select("id, name, cuisine, is_live, created_at, locations(address, broadcasted_at)")
+          .eq("is_live", true),
+      ]);
 
-    // Get follower counts for each truck
-    const trucksWithFollowers = await Promise.all(
-      (truckList ?? []).map(async (truck) => {
-        const { count } = await supabase
-          .from("follows")
-          .select("*", { count: "exact", head: true })
-          .eq("truck_id", truck.id);
-        return { ...truck, followers: count ?? 0 };
-      })
-    );
+      // Batch follower counts in a single query instead of N+1
+      const { data: followCounts } = await supabase
+        .from("follows")
+        .select("truck_id");
+      const followerMap: Record<string, number> = {};
+      for (const f of followCounts ?? []) {
+        followerMap[f.truck_id] = (followerMap[f.truck_id] ?? 0) + 1;
+      }
+      const trucksWithFollowers = (truckList ?? []).map((truck) => ({
+        ...truck,
+        followers: followerMap[truck.id] ?? 0,
+      }));
 
-    setStats({
-      totalTrucks: totalTrucks ?? 0,
-      liveTrucks: liveTrucksCount ?? 0,
-      totalUsers: 0, // requires service role key to query auth.users
-      totalFollows: totalFollows ?? 0,
-      totalViews: totalViews ?? 0,
-      newTrucksThisWeek: newTrucksThisWeek ?? 0,
-      newUsersThisWeek: 0,
-    });
+      setStats({
+        totalTrucks: totalTrucks ?? 0,
+        liveTrucks: liveTrucksCount ?? 0,
+        totalUsers: 0, // requires service role key to query auth.users
+        totalFollows: totalFollows ?? 0,
+        totalViews: totalViews ?? 0,
+        newTrucksThisWeek: newTrucksThisWeek ?? 0,
+        newUsersThisWeek: 0,
+      });
 
-    setTrucks(trucksWithFollowers);
-    setLiveTrucks(liveTruckList ?? []);
-    setLastRefresh(new Date());
-    setLoading(false);
+      setTrucks(trucksWithFollowers);
+      setLiveTrucks(liveTruckList ?? []);
+      setLastRefresh(new Date());
+    } catch {
+      // Network error — keep showing last loaded data (or empty state on first load)
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function refresh() {

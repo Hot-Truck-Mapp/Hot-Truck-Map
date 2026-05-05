@@ -13,11 +13,13 @@ export function useLiveTrucks() {
   const fetchTrucks = useCallback(async () => {
     try {
       const cutoff = new Date(Date.now() - LIVE_WINDOW_MS).toISOString();
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('trucks')
         .select('*, locations!inner(*)')
         .eq('is_live', true)
         .gte('locations.broadcasted_at', cutoff);
+
+      if (error) throw error; // surface DB errors so catch handles them uniformly
 
       if (data) {
         setTrucks(
@@ -28,7 +30,7 @@ export function useLiveTrucks() {
         );
       }
     } catch {
-      // network error — keep showing previously loaded trucks
+      // network / DB error — keep showing previously loaded trucks
     } finally {
       setLoading(false);
     }

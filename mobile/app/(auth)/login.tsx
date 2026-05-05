@@ -21,11 +21,14 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-      if (error) Alert.alert('Login failed', error.message);
-      // Navigation handled by AuthGuard in _layout
+      if (error) {
+        Alert.alert('Login failed', error.message);
+        setLoading(false); // Only reset spinner on failure
+      }
+      // On success: keep loading=true — AuthGuard in _layout.tsx will navigate away
+      // once the session state change fires, naturally unmounting this screen.
     } catch {
       Alert.alert('Login failed', 'Network error — please check your connection and try again.');
-    } finally {
       setLoading(false);
     }
   }

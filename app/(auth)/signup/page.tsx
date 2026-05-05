@@ -36,38 +36,55 @@ export default function SignupPage() {
 
   async function handleOperatorSignup() {
     if (!truckName.trim() || !opEmail || !opPassword) return;
+    if (opPassword.length < 6) {
+      setOpError("Password must be at least 6 characters.");
+      return;
+    }
     setOpLoading(true);
     setOpError(null);
 
-    const supabase = createClient();
-    const { data, error } = await supabase.auth.signUp({
-      email: opEmail,
-      password: opPassword,
-      options: {
-        data: { role: "operator" },
-        emailRedirectTo: window.location.origin + "/dashboard",
-      },
-    });
-
-    if (error) {
-      setOpError(error.message);
-      setOpLoading(false);
-      return;
-    }
-
-    if (data.user) {
-      // Best-effort: create the truck record now. Fails silently if email
-      // confirmation is required first — dashboard handles the missing-truck state.
-      await supabase.from("trucks").insert({
-        owner_id: data.user.id,
-        name: truckName.trim(),
-        cuisine: cuisine || null,
-        is_live: false,
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase.auth.signUp({
+        email: opEmail,
+        password: opPassword,
+        options: {
+          data: { role: "operator" },
+          emailRedirectTo: window.location.origin + "/dashboard",
+        },
       });
-    }
 
-    setOpLoading(false);
-    setStep("done-operator");
+      if (error) {
+        setOpError(error.message);
+        setOpLoading(false);
+        return;
+      }
+
+      // Detect "email already registered" — Supabase returns a user with empty identities
+      if (data.user && (!data.user.identities || data.user.identities.length === 0)) {
+        setOpError("An account with this email already exists. Please sign in instead.");
+        setOpLoading(false);
+        return;
+      }
+
+      if (data.user) {
+        // Best-effort: create the truck record now. Fails silently if email
+        // confirmation is required first — dashboard handles the missing-truck state.
+        const { error: insertErr } = await supabase.from("trucks").insert({
+          owner_id: data.user.id,
+          name: truckName.trim(),
+          cuisine: cuisine || null,
+          is_live: false,
+        });
+        if (insertErr) console.error("Truck insert failed:", insertErr.message);
+      }
+
+      setStep("done-operator");
+    } catch {
+      setOpError("Network error — please check your connection and try again.");
+    } finally {
+      setOpLoading(false);
+    }
   }
 
   async function handleCustomerSignup() {

@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -15,26 +17,34 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    const supabase = createClient();
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    try {
+      const supabase = createClient();
+      const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (error) {
-      setError(error.message);
+      if (authError) {
+        setError(authError.message);
+        setLoading(false);
+        return;
+      }
+
+      const role = data.user?.user_metadata?.role;
+      router.replace(role === "operator" ? "/dashboard" : "/");
+      // Keep loading=true; page will navigate away — no need to reset spinner
+    } catch {
+      setError("Network error — please check your connection and try again.");
       setLoading(false);
-      return;
     }
-
-    const role = data.user?.user_metadata?.role;
-    window.location.href = role === "operator" ? "/dashboard" : "/";
   }
 
   async function handleGoogle() {
+    setError(null);
     const supabase = createClient();
     // After Google OAuth, the auth callback checks role and routes accordingly
-    await supabase.auth.signInWithOAuth({
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: window.location.origin + "/auth/callback" },
     });
+    if (oauthError) setError(oauthError.message);
   }
 
   return (

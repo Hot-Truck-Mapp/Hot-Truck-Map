@@ -63,7 +63,9 @@ export default function AccountTab() {
 
     setUploading(true);
     try {
-      const ext = asset.uri.split('.').pop() ?? 'jpg';
+      // Use MIME type for extension — Android content URIs don't have file extensions
+      const mimeType = asset.mimeType ?? 'image/jpeg';
+      const ext = mimeType.split('/')[1] ?? 'jpg';
       const path = `customers/${session.user.id}.${ext}`;
 
       // Fetch the image as a blob
@@ -89,8 +91,9 @@ export default function AccountTab() {
       Alert.alert('', 'Profile photo updated!');
     } catch (err: any) {
       Alert.alert('Upload failed', err?.message ?? 'Please try again.');
+    } finally {
+      setUploading(false);
     }
-    setUploading(false);
   }
 
   if (!session) {
@@ -114,7 +117,7 @@ export default function AccountTab() {
           ) : (
             <View style={styles.avatarPlaceholder}>
               <Text style={styles.avatarText}>
-                {(session.user.email ?? '?')[0].toUpperCase()}
+                {((session.user.email ?? '?')[0] ?? '?').toUpperCase()}
               </Text>
             </View>
           )}

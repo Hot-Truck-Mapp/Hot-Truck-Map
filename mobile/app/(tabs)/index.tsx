@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   StyleSheet, View, ActivityIndicator, Text,
-  TouchableOpacity, Linking, ScrollView, RefreshControl,
+  TouchableOpacity, Linking, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -32,28 +32,33 @@ export default function MapTab() {
 
   useEffect(() => {
     (async () => {
-      // Check existing permission first (no prompt if already granted/denied)
-      const { status: existing } = await Location.getForegroundPermissionsAsync();
+      try {
+        // Check existing permission first (no prompt if already granted/denied)
+        const { status: existing } = await Location.getForegroundPermissionsAsync();
 
-      if (existing === 'granted') {
-        setLocationStatus('granted');
-        await locateUser();
-        return;
-      }
+        if (existing === 'granted') {
+          setLocationStatus('granted');
+          await locateUser();
+          return;
+        }
 
-      if (existing === 'denied') {
-        // Already permanently denied — show the in-app banner instead of
-        // a system dialog that won't appear.
-        setLocationStatus('denied');
-        return;
-      }
+        if (existing === 'denied') {
+          // Already permanently denied — show the in-app banner instead of
+          // a system dialog that won't appear.
+          setLocationStatus('denied');
+          return;
+        }
 
-      // Permission is 'undetermined' — show the system prompt now.
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        setLocationStatus('granted');
-        await locateUser();
-      } else {
+        // Permission is 'undetermined' — show the system prompt now.
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          setLocationStatus('granted');
+          await locateUser();
+        } else {
+          setLocationStatus('denied');
+        }
+      } catch {
+        // Location API unavailable — fall back to showing the map without centering
         setLocationStatus('denied');
       }
     })();
@@ -92,13 +97,18 @@ export default function MapTab() {
   }
 
   function openSettings() {
-    Linking.openSettings();
+    Linking.openSettings().catch(() => {
+      Alert.alert('Could not open Settings', 'Please open your device Settings manually and enable Location for this app.');
+    });
   }
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refetch();
-    setRefreshing(false);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
   }, [refetch]);
 
   if (loading) {
@@ -146,19 +156,13 @@ export default function MapTab() {
         <Text style={styles.headerCount}>{trucks.length} live now</Text>
       </View>
 
+      {/* Pull-to-refresh indicator sits above the map without intercepting touches */}
+      {refreshing && (
+        <View style={styles.refreshingBanner}>
+          <ActivityIndicator size="small" color={Colors.primary} />
+        </View>
+      )}
       <View style={styles.mapWrapper}>
-        <ScrollView
-          style={StyleSheet.absoluteFill}
-          contentContainerStyle={styles.scrollContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={Colors.primary}
-            />
-          }
-          scrollEnabled={false}
-        />
         <TruckMap trucks={trucks} initialRegion={region ?? US_REGION} mapRef={mapRef} />
       </View>
     </SafeAreaView>
@@ -225,6 +229,13 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 18, fontWeight: '700', color: Colors.text },
   headerCount: { fontSize: 14, color: Colors.textSecondary },
-  mapWrapper: { flex: 1, position: 'relative' },
-  scrollContent: { flex: 1 },
+  mapWrapper: { flex: 1 },
+  refreshingBanner: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0,
+    zIndex: 10,
+    alignItems: 'center',
+    paddingTop: 8,
+    pointerEvents: 'none',
+  } as const,
 });
