@@ -162,6 +162,7 @@ export default function MapTab() {
           <ActivityIndicator size="small" color={Colors.primary} />
         </View>
       )}
+
       <View style={styles.mapWrapper}>
         <TruckMap trucks={trucks} initialRegion={region ?? US_REGION} mapRef={mapRef} />
       </View>
