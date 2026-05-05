@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Truck, Location } from '@shared/types';
 
@@ -9,6 +9,7 @@ const LIVE_WINDOW_MS = 30 * 60 * 1000;
 export function useLiveTrucks() {
   const [trucks, setTrucks] = useState<TruckWithLocation[]>([]);
   const [loading, setLoading] = useState(true);
+  const mountedRef = useRef(true);
 
   const fetchTrucks = useCallback(async () => {
     try {
@@ -21,7 +22,7 @@ export function useLiveTrucks() {
 
       if (error) throw error; // surface DB errors so catch handles them uniformly
 
-      if (data) {
+      if (data && mountedRef.current) {
         setTrucks(
           data.map(t => ({
             ...t,
@@ -32,11 +33,12 @@ export function useLiveTrucks() {
     } catch {
       // network / DB error — keep showing previously loaded trucks
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     fetchTrucks();
 
     const channel = supabase
@@ -45,7 +47,10 @@ export function useLiveTrucks() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'locations' }, fetchTrucks)
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      mountedRef.current = false;
+      supabase.removeChannel(channel);
+    };
   }, [fetchTrucks]);
 
   return { trucks, loading, refetch: fetchTrucks };

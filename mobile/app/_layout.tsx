@@ -14,7 +14,7 @@ function AuthGuard() {
 
   useEffect(() => {
     // Wait for auth to resolve and for the router to settle its initial segments
-    if (loading || segments.length === 0) return;
+    if (loading || !segments[0]) return;
 
     const inAuthGroup = segments[0] === '(auth)';
 

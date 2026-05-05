@@ -13,9 +13,23 @@ function isRateLimited(ip: string): boolean {
   const now = Date.now();
   const windowStart = now - RATE_LIMIT_WINDOW_MS;
   const timestamps = (rateLimitMap.get(ip) ?? []).filter((t) => t > windowStart);
-  if (timestamps.length >= RATE_LIMIT_MAX) return true;
+  if (timestamps.length >= RATE_LIMIT_MAX) {
+    // Update the filtered (pruned) list even on rejection to avoid unbounded growth
+    rateLimitMap.set(ip, timestamps);
+    return true;
+  }
   timestamps.push(now);
   rateLimitMap.set(ip, timestamps);
+  // Evict entries that are now empty to prevent the map from growing unbounded
+  // (long-running non-serverless deployments; no-op in serverless cold-start model)
+  if (timestamps.length === 1) {
+    // First hit from this IP — schedule cleanup after the window expires
+    setTimeout(() => {
+      const remaining = (rateLimitMap.get(ip) ?? []).filter((t) => t > Date.now() - RATE_LIMIT_WINDOW_MS);
+      if (remaining.length === 0) rateLimitMap.delete(ip);
+      else rateLimitMap.set(ip, remaining);
+    }, RATE_LIMIT_WINDOW_MS);
+  }
   return false;
 }
 
@@ -72,11 +86,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = await req.json();
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
     const { truck_id, pickup_name, notes, items, total, customer_id } = body;
 
     if (!truck_id || !pickup_name || !items?.length || total == null) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+    if (!Array.isArray(items) || items.length > 50) {
+      return NextResponse.json({ error: "Order must contain between 1 and 50 items" }, { status: 400 });
     }
     if (typeof pickup_name !== "string" || pickup_name.trim().length > 100) {
       return NextResponse.json({ error: "Pickup name must be 100 characters or fewer" }, { status: 400 });
@@ -122,11 +144,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Recalculate total server-side to prevent price tampering
-    const serverTotal = items.reduce((sum: number, item: any) => {
+    // Recalculate total server-side to prevent price tampering.
+    // Use integer cent arithmetic to avoid floating-point rounding errors.
+    const serverTotalCents = items.reduce((sum: number, item: any) => {
       const db = dbItems.find((d) => d.id === item.menu_item_id);
-      return sum + (db?.price ?? 0) * item.quantity;
+      return sum + Math.round((db?.price ?? 0) * 100) * item.quantity;
     }, 0);
+    const serverTotal = serverTotalCents / 100;
 
     if (serverTotal <= 0) {
       return NextResponse.json({ error: "Order total must be greater than zero" }, { status: 400 });

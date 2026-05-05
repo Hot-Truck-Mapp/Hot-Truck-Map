@@ -21,7 +21,7 @@ const US_REGION: Region = {
 
 const USER_DELTA = 0.05; // ~3-mile radius around the user
 
-type LocationStatus = 'requesting' | 'granted' | 'denied';
+type LocationStatus = 'requesting' | 'granted' | 'skipped' | 'denied';
 
 export default function MapTab() {
   const { trucks, loading, refetch } = useLiveTrucks();
@@ -141,8 +141,8 @@ export default function MapTab() {
           <Text style={styles.settingsButtonText}>Open Settings</Text>
         </TouchableOpacity>
 
-        {/* Still let them browse the full map */}
-        <TouchableOpacity style={styles.skipButton} onPress={() => setLocationStatus('granted')}>
+        {/* Still let them browse the full map — 'skipped' keeps showsUserLocation=false */}
+        <TouchableOpacity style={styles.skipButton} onPress={() => setLocationStatus('skipped')}>
           <Text style={styles.skipButtonText}>Browse all trucks instead</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -164,7 +164,12 @@ export default function MapTab() {
       )}
 
       <View style={styles.mapWrapper}>
-        <TruckMap trucks={trucks} initialRegion={region ?? US_REGION} mapRef={mapRef} />
+        <TruckMap
+          trucks={trucks}
+          initialRegion={region ?? US_REGION}
+          mapRef={mapRef}
+          showsUserLocation={locationStatus === 'granted'}
+        />
       </View>
     </SafeAreaView>
   );

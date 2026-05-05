@@ -153,12 +153,20 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
   async function toggleFollow() {
     if (!userId) { router.push("/account"); return; }
     const supabase = createClient();
-    if (following) {
-      const { error } = await supabase.from("follows").delete().eq("truck_id", id).eq("user_id", userId);
-      if (!error) { setFollowing(false); setFollowerCount((c) => c - 1); }
-    } else {
-      const { error } = await supabase.from("follows").insert({ truck_id: id, user_id: userId });
-      if (!error) { setFollowing(true); setFollowerCount((c) => c + 1); }
+    const wasFollowing = following;
+
+    // Optimistic update
+    setFollowing(!wasFollowing);
+    setFollowerCount((c) => wasFollowing ? c - 1 : c + 1);
+
+    const { error } = wasFollowing
+      ? await supabase.from("follows").delete().eq("truck_id", id).eq("user_id", userId)
+      : await supabase.from("follows").insert({ truck_id: id, user_id: userId });
+
+    if (error) {
+      // Roll back on failure
+      setFollowing(wasFollowing);
+      setFollowerCount((c) => wasFollowing ? c + 1 : c - 1);
     }
   }
 
@@ -371,8 +379,8 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
               {truck.phone}
             </a>
           )}
-          {truck.instagram && (
-            <a href={"https://instagram.com/" + truck.instagram} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-brand-red transition-colors">
+          {truck.instagram && /^[\w.]+$/.test(truck.instagram) && (
+            <a href={"https://instagram.com/" + encodeURIComponent(truck.instagram)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-brand-red transition-colors">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                 <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
                 <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>

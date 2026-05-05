@@ -49,12 +49,25 @@ export default function TrucksListPage() {
     if (!userId) { router.push("/login"); return; }
     const supabase = createClient();
     const isFaved = favorites.has(truckId);
-    if (isFaved) {
-      const { error } = await supabase.from("follows").delete().eq("truck_id", truckId).eq("user_id", userId);
-      if (!error) setFavorites((prev) => { const next = new Set(prev); next.delete(truckId); return next; });
-    } else {
-      const { error } = await supabase.from("follows").insert({ truck_id: truckId, user_id: userId });
-      if (!error) setFavorites((prev) => new Set(prev).add(truckId));
+
+    // Optimistic update
+    setFavorites((prev) => {
+      const next = new Set(prev);
+      if (isFaved) next.delete(truckId); else next.add(truckId);
+      return next;
+    });
+
+    const { error } = isFaved
+      ? await supabase.from("follows").delete().eq("truck_id", truckId).eq("user_id", userId)
+      : await supabase.from("follows").insert({ truck_id: truckId, user_id: userId });
+
+    if (error) {
+      // Roll back on failure
+      setFavorites((prev) => {
+        const next = new Set(prev);
+        if (isFaved) next.add(truckId); else next.delete(truckId);
+        return next;
+      });
     }
   }
 

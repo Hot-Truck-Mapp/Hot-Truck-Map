@@ -289,12 +289,17 @@ export default function Dashboard() {
 
   async function saveMenuItem() {
     if (!truckId || !itemForm.name || !itemForm.price) return;
+    const parsedPrice = parseFloat(itemForm.price);
+    if (isNaN(parsedPrice) || parsedPrice <= 0) {
+      showToast("Please enter a valid price greater than $0.00");
+      return;
+    }
     setMenuSaving(true);
     try {
       const supabase = createClient();
       const payload = {
         truck_id: truckId, name: itemForm.name,
-        description: itemForm.description, price: parseFloat(itemForm.price),
+        description: itemForm.description, price: parsedPrice,
         category: itemForm.category || "Other", allergens: itemForm.allergens,
         is_popular: itemForm.is_popular, is_sold_out: itemForm.is_sold_out,
         photo: itemForm.photo,
@@ -319,17 +324,31 @@ export default function Dashboard() {
   async function deleteMenuItem(id: string) {
     if (deletingMenuId !== id) { setDeletingMenuId(id); return; }
     setDeletingMenuId(null);
-    const supabase = createClient();
-    const { error } = await supabase.from("menu_items").delete().eq("id", id).eq("truck_id", truckId!);
-    if (!error) setMenuItems(items => items.filter(i => i.id !== id));
-    else showToast("Delete failed: " + error.message);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.from("menu_items").delete().eq("id", id).eq("truck_id", truckId!);
+      if (!error) setMenuItems(items => items.filter(i => i.id !== id));
+      else showToast("Delete failed: " + error.message);
+    } catch {
+      showToast("Delete failed — check your connection and try again");
+    }
   }
 
   async function toggleSoldOut(item: any) {
-    const supabase = createClient();
-    const { error } = await supabase.from("menu_items").update({ is_sold_out: !item.is_sold_out }).eq("id", item.id).eq("truck_id", truckId!);
-    if (!error) setMenuItems(items => items.map(i => i.id === item.id ? { ...i, is_sold_out: !i.is_sold_out } : i));
-    else showToast("Could not update item: " + error.message);
+    // Optimistic update
+    setMenuItems(items => items.map(i => i.id === item.id ? { ...i, is_sold_out: !i.is_sold_out } : i));
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.from("menu_items").update({ is_sold_out: !item.is_sold_out }).eq("id", item.id).eq("truck_id", truckId!);
+      if (error) {
+        // Roll back on failure
+        setMenuItems(items => items.map(i => i.id === item.id ? { ...i, is_sold_out: item.is_sold_out } : i));
+        showToast("Could not update item: " + error.message);
+      }
+    } catch {
+      setMenuItems(items => items.map(i => i.id === item.id ? { ...i, is_sold_out: item.is_sold_out } : i));
+      showToast("Could not update item — check your connection");
+    }
   }
 
   // ── Schedule ────────────────────────────────────────────────────────────────
@@ -488,11 +507,15 @@ export default function Dashboard() {
   async function goOffline() {
     if (!truckId) return;
     stopLocationTracking();
-    const supabase = createClient();
-    const { error } = await supabase.from("trucks").update({ is_live: false }).eq("id", truckId);
-    if (error) { showToast("Could not go offline: " + error.message); return; }
-    setLiveStatus("idle"); setIsLive(false); setLiveAddress(null);
-    setManualAddr(""); setShowManual(false);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.from("trucks").update({ is_live: false }).eq("id", truckId);
+      if (error) { showToast("Could not go offline: " + error.message); return; }
+      setLiveStatus("idle"); setIsLive(false); setLiveAddress(null);
+      setManualAddr(""); setShowManual(false);
+    } catch {
+      showToast("Could not go offline — check your connection and try again");
+    }
   }
 
   // Clean up GPS watch when component unmounts
@@ -569,8 +592,9 @@ export default function Dashboard() {
   }
 
   function switchAnalyticsRange(r: AnalyticsRange) {
+    // Only update the state — the useEffect on [activeTab, truckId, analyticsRange]
+    // will fire automatically and call loadAnalytics, avoiding a double-fire race.
     setAnalyticsRange(r);
-    if (truckId) loadAnalytics(truckId, r);
   }
 
   // ── Order notifications ──────────────────────────────────────────────────────
