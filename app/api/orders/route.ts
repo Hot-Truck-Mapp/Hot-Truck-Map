@@ -103,9 +103,11 @@ export async function POST(req: NextRequest) {
     if (typeof pickup_name !== "string" || pickup_name.trim().length === 0 || pickup_name.trim().length > 100) {
       return NextResponse.json({ error: "Pickup name must be between 1 and 100 characters" }, { status: 400 });
     }
+    const trimmedName = pickup_name.trim();
     if (notes != null && (typeof notes !== "string" || notes.length > 500)) {
       return NextResponse.json({ error: "Notes must be 500 characters or fewer" }, { status: 400 });
     }
+    const trimmedNotes = notes?.trim() || null;
 
     const supabase = getAdminClient();
 
@@ -161,8 +163,8 @@ export async function POST(req: NextRequest) {
       .from("orders")
       .insert({
         truck_id,
-        pickup_name,
-        notes: notes ?? null,
+        pickup_name: trimmedName,
+        notes: trimmedNotes,
         items,
         total: serverTotal,
         status: "pending",

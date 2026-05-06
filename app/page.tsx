@@ -214,7 +214,7 @@ export default function HomePage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onFocus={() => setSearchFocused(true)}
-                onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
+                onBlur={() => setTimeout(() => { if (mountedRef.current) setSearchFocused(false); }, 200)}
                 placeholder="Search by name or cuisine..."
                 suppressHydrationWarning
                 className="flex-1 px-3 py-3 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none bg-transparent"

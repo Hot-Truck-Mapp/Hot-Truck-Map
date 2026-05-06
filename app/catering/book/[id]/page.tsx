@@ -73,6 +73,18 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
       return;
     }
 
+    // Validate numeric fields
+    const parsedGuests = parseInt(form.guest_count, 10);
+    if (!Number.isFinite(parsedGuests) || parsedGuests < 1 || parsedGuests > 100000) {
+      setSubmitError("Please enter a valid guest count.");
+      return;
+    }
+    const parsedBudget = form.budget ? parseFloat(form.budget) : null;
+    if (parsedBudget !== null && (!Number.isFinite(parsedBudget) || parsedBudget < 0)) {
+      setSubmitError("Please enter a valid budget amount.");
+      return;
+    }
+
     setSubmitError(null);
     setSubmitting(true);
 
@@ -85,14 +97,14 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
         .insert({
           truck_id: id,
           customer_id: user?.id ?? null,
-          customer_name: form.customer_name,
-          customer_email: form.customer_email,
-          customer_phone: form.customer_phone,
+          customer_name: form.customer_name.trim(),
+          customer_email: form.customer_email.trim(),
+          customer_phone: form.customer_phone.trim() || null,
           event_date: form.event_date,
-          event_time: form.event_time,
-          event_location: form.event_location,
-          guest_count: parseInt(form.guest_count),
-          budget: form.budget ? parseFloat(form.budget) : null,
+          event_time: form.event_time || null,
+          event_location: form.event_location.trim(),
+          guest_count: parsedGuests,
+          budget: parsedBudget,
           event_type: form.event_type,
           notes: form.notes,
           status: "pending",
