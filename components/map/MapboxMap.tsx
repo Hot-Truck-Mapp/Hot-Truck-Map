@@ -22,6 +22,7 @@ export default function MapboxMap({ trucks }: Props) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markers = useRef<mapboxgl.Marker[]>([]);
+  const geolocateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [geoState, setGeoState] = useState<GeoState>("locating");
 
@@ -51,7 +52,7 @@ export default function MapboxMap({ trucks }: Props) {
         // Only auto-trigger geolocate when we fell back to the US view
         // (user's position wasn't known yet at init time).
         if (zoom < USER_ZOOM) {
-          setTimeout(() => {
+          geolocateTimerRef.current = setTimeout(() => {
             try { geolocate.trigger(); } catch { /* denied — stays at US view */ }
           }, 300);
         }
@@ -81,6 +82,12 @@ export default function MapboxMap({ trucks }: Props) {
       setGeoState("denied");
       buildMap(US_CENTER, US_ZOOM);
     }
+
+    return () => {
+      if (geolocateTimerRef.current) clearTimeout(geolocateTimerRef.current);
+      map.current?.remove();
+      map.current = null;
+    };
   }, []);
 
   // Re-run whenever trucks data changes OR map finishes loading

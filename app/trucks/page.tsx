@@ -117,7 +117,7 @@ export default function TrucksListPage() {
     );
   }
 
-  const activeFilterCount = dietary.length + (cuisine !== "All" ? 1 : 0) + (openNow ? 1 : 0);
+  const activeFilterCount = dietary.length + (cuisine !== "All" ? 1 : 0);
 
   return (
     <div className="min-h-screen bg-neutral-100">

@@ -691,7 +691,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
                 </div>
               </div>
             )}
-            {truck.instagram && (
+            {truck.instagram && /^[\w.]+$/.test(truck.instagram) && (
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center flex-shrink-0">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E8481C" strokeWidth="2" strokeLinecap="round">
@@ -702,7 +702,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
                 </div>
                 <div>
                   <p className="text-xs text-neutral-400 font-medium">Instagram</p>
-                  <a href={"https://instagram.com/" + truck.instagram} target="_blank" rel="noopener noreferrer"
+                  <a href={"https://instagram.com/" + encodeURIComponent(truck.instagram)} target="_blank" rel="noopener noreferrer"
                     className="text-sm font-semibold text-neutral-800">@{truck.instagram}</a>
                 </div>
               </div>

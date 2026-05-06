@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
@@ -33,6 +33,11 @@ export default function HomePage() {
   const [showFilter, setShowFilter] = useState(false);
   const [showList, setShowList] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     setMounted(true);
@@ -63,11 +68,11 @@ export default function HomePage() {
         .select("*, locations(*)")
         .order("is_live", { ascending: false })
         .limit(200);
-      setTrucks(data ?? []);
+      if (mountedRef.current) setTrucks(data ?? []);
     } catch {
       // network error — keep showing whatever was loaded before
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }
 

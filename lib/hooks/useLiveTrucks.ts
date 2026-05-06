@@ -23,6 +23,7 @@ export function useLiveTrucks(filters: MapFilters) {
   const [error, setError] = useState(false);
 
   useEffect(() => {
+    let mounted = true;
     const supabase = createClient();
 
     async function fetchTrucks() {
@@ -38,6 +39,7 @@ export function useLiveTrucks(filters: MapFilters) {
           .eq("is_live", true)
           .order("created_at", { ascending: false });
 
+        if (!mounted) return;
         if (queryError) {
           console.error("useLiveTrucks fetch error:", queryError.message);
           setError(true);
@@ -52,9 +54,9 @@ export function useLiveTrucks(filters: MapFilters) {
         }
       } catch (err) {
         console.error("useLiveTrucks network error:", err);
-        setError(true);
+        if (mounted) setError(true);
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     }
 
@@ -65,11 +67,14 @@ export function useLiveTrucks(filters: MapFilters) {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "locations" },
-        () => fetchTrucks()
+        () => { if (mounted) fetchTrucks(); }
       )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      mounted = false;
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // NOTE: filters.maxDistance is intentionally not applied here because the

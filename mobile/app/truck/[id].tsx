@@ -17,6 +17,7 @@ export default function TruckScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
   const mountedRef = useRef(true);
+  const followInFlightRef = useRef(false);
   const [truck, setTruck] = useState<TruckDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [following, setFollowing] = useState(false);
@@ -82,15 +83,22 @@ export default function TruckScreen() {
 
   async function toggleFollow() {
     if (!userId) { Alert.alert('Sign in required', 'Please sign in to follow trucks.'); return; }
-
-    if (following) {
-      setFollowing(false); // optimistic
-      const { error } = await supabase.from('follows').delete().eq('user_id', userId).eq('truck_id', id);
-      if (error) { setFollowing(true); Alert.alert('Error', 'Could not unfollow. Please try again.'); }
-    } else {
-      setFollowing(true); // optimistic
-      const { error } = await supabase.from('follows').insert({ user_id: userId, truck_id: id });
-      if (error) { setFollowing(false); Alert.alert('Error', 'Could not follow. Please try again.'); }
+    if (followInFlightRef.current) return; // prevent double-tap race
+    followInFlightRef.current = true;
+    try {
+      if (following) {
+        const { error } = await supabase.from('follows').delete().eq('user_id', userId).eq('truck_id', id);
+        if (error) { Alert.alert('Error', 'Could not unfollow. Please try again.'); }
+        else if (mountedRef.current) setFollowing(false);
+      } else {
+        const { error } = await supabase.from('follows').insert({ user_id: userId, truck_id: id });
+        if (error) { Alert.alert('Error', 'Could not follow. Please try again.'); }
+        else if (mountedRef.current) setFollowing(true);
+      }
+    } catch {
+      Alert.alert('Error', 'Network error. Please try again.');
+    } finally {
+      followInFlightRef.current = false;
     }
   }
 
