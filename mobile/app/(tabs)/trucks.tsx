@@ -53,7 +53,7 @@ export default function TrucksTab() {
         setRefreshing(false);
       }
     }
-  }, []);
+  }, [trucks.length]);
 
   const loadTopTrucks = useCallback(async () => {
     try {

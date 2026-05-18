@@ -4,6 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 
+/** Escape a value for safe insertion into an HTML string. */
+function esc(v: unknown): string {
+  return String(v ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
+
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
 
 type Props = {
@@ -28,6 +38,7 @@ export default function MapboxMap({ trucks }: Props) {
 
   useEffect(() => {
     if (map.current || !mapboxgl.accessToken || !mapContainer.current) return;
+    let geolocateTimerId: ReturnType<typeof setTimeout> | null = null;
 
     function buildMap(center: [number, number], zoom: number) {
       map.current = new mapboxgl.Map({
@@ -85,6 +96,8 @@ export default function MapboxMap({ trucks }: Props) {
 
     return () => {
       if (geolocateTimerRef.current) clearTimeout(geolocateTimerRef.current);
+      markers.current.forEach((m) => m.remove());
+      markers.current = [];
       map.current?.remove();
       map.current = null;
     };
@@ -135,7 +148,7 @@ export default function MapboxMap({ trucks }: Props) {
         ? `<p style="margin:0 0 6px;font-size:11px;color:#555;display:flex;align-items:center;gap:3px">
             <span style="color:#F5A623">★</span>
             <span style="font-weight:700">${Number(truck.avg_rating).toFixed(1)}</span>
-            <span style="color:#aaa">(${Number(truck.review_count ?? 0)})</span>
+            <span style="color:#aaa">(${esc(String(truck.review_count ?? 0))})</span>
            </p>`
         : "";
       const popup = new mapboxgl.Popup({ offset: 28, closeButton: false }).setHTML(

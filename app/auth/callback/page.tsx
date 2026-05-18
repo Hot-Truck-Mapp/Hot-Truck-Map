@@ -4,9 +4,19 @@ import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-// useSearchParams() must be inside a <Suspense> boundary to satisfy the
-// Next.js static-generation constraint.  The outer page component renders
-// the spinner while the inner component mounts and reads the query string.
+// Spinner shown while the Suspense boundary is resolving (or during redirect)
+function Spinner() {
+  return (
+    <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-10 h-10 rounded-full border-4 border-brand-red border-t-transparent animate-spin" />
+        <p className="text-neutral-400 text-sm">Signing you in...</p>
+      </div>
+    </div>
+  );
+}
+
+// useSearchParams() must be inside a Suspense boundary — Next.js requirement for static export
 function AuthCallbackInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -48,17 +58,8 @@ function AuthCallbackInner() {
     handleRedirect();
   }, [router, searchParams]);
 
-  return null;
+  return <Spinner />;
 }
-
-const Spinner = () => (
-  <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
-    <div className="flex flex-col items-center gap-3">
-      <div className="w-10 h-10 rounded-full border-4 border-brand-red border-t-transparent animate-spin" />
-      <p className="text-neutral-400 text-sm">Signing you in...</p>
-    </div>
-  </div>
-);
 
 export default function AuthCallback() {
   return (

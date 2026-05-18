@@ -46,14 +46,14 @@ export default function OrdersTab() {
         .order('created_at', { ascending: false })
         .limit(50);
       if (error) throw error;
-      if (mounted && data) {
+      if (mountedRef.current && data) {
         setOrders(data);
         setLoadError(false);
       }
     } catch {
-      if (mounted) setLoadError(true);
+      if (mountedRef.current) setLoadError(true);
     } finally {
-      if (mounted) {
+      if (mountedRef.current) {
         setLoading(false);
         setRefreshing(false);
       }
@@ -82,6 +82,7 @@ export default function OrdersTab() {
               filter: `customer_id=eq.${user.id}`,
             },
             (payload) => {
+              if (!mountedRef.current) return;
               const { id, status, updated_at } = payload.new as { id: string; status: string; updated_at?: string };
               setOrders((prev) =>
                 prev.map((o) => o.id === id ? { ...o, status, ...(updated_at ? { updated_at } : {}) } : o)
@@ -93,7 +94,7 @@ export default function OrdersTab() {
     }
     init();
     return () => {
-      mounted = false;
+      mountedRef.current = false;
       if (channelRef.current) supabase.removeChannel(channelRef.current);
     };
   }, []);

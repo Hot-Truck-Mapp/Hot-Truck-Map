@@ -19,6 +19,7 @@ export default function ForgotPasswordPage() {
   async function handleReset() {
     if (loading) return; // in-flight guard
     if (!email.trim()) return;
+    if (!email.includes("@")) { setError("Please enter a valid email address."); return; }
     setLoading(true);
     setError(null);
     try {
@@ -84,6 +85,7 @@ export default function ForgotPasswordPage() {
                     onKeyDown={(e) => e.key === "Enter" && handleReset()}
                     placeholder="you@example.com"
                     autoComplete="email"
+                    maxLength={254}
                     className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
                   />
                 </div>

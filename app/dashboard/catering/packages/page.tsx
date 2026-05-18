@@ -56,6 +56,8 @@ export default function CateringPackagesPage() {
     }, 4000);
   }
 
+  useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
+
   useEffect(() => {
     loadPackages();
   }, []);
@@ -175,6 +177,7 @@ export default function CateringPackagesPage() {
       if (mountedRef.current) setForm({ ...form, photo: url });
     } catch (err: any) {
       showToast(err?.message ?? "Photo upload failed");
+      if (fileRef.current) fileRef.current.value = ""; // reset so same file re-triggers onChange
     } finally {
       if (mountedRef.current) setUploading(false);
     }

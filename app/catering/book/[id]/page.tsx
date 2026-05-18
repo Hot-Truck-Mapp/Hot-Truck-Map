@@ -331,7 +331,7 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
                           {pkg.description}
                         </p>
                       )}
-                      {pkg.includes?.length > 0 && (
+                      {Array.isArray(pkg.includes) && pkg.includes.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-2">
                           {pkg.includes.map((item: string) => (
                             <span

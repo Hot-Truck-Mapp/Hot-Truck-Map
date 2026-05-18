@@ -46,7 +46,10 @@ export default function AccountPage() {
     }, 3500);
   }
 
+  useEffect(() => () => { if (avatarToastTimerRef.current) clearTimeout(avatarToastTimerRef.current); }, []);
+
   async function uploadAvatar(file: File) {
+    if (!file.type.startsWith("image/")) { showAvatarToast("Please choose an image file."); return; }
     if (file.size > 5 * 1024 * 1024) { showAvatarToast("Photo must be under 5 MB"); return; }
     const allowed = ["image/jpeg", "image/png", "image/webp"];
     if (!allowed.includes(file.type)) {

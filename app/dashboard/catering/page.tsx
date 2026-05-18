@@ -44,6 +44,8 @@ export default function CateringDashboardPage() {
     }, 3500);
   }
 
+  useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
+
   useEffect(() => {
     loadRequests();
   }, []);

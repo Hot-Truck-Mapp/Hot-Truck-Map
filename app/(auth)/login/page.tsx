@@ -48,6 +48,8 @@ export default function LoginPage() {
   }
 
   async function handleGoogle() {
+    if (loading) return;
+    setLoading(true);
     setError(null);
     try {
       const supabase = createClient();
@@ -56,9 +58,13 @@ export default function LoginPage() {
         provider: "google",
         options: { redirectTo: window.location.origin + "/auth/callback" },
       });
-      if (oauthError) setError(oauthError.message);
+      if (oauthError) { setError(oauthError.message); setLoading(false); }
+      // On success the browser redirects — no need to reset loading
     } catch {
-      setError("Network error — please check your connection and try again.");
+      if (mountedRef.current) {
+        setError("Network error — please check your connection and try again.");
+        setLoading(false);
+      }
     }
   }
 
@@ -155,7 +161,8 @@ export default function LoginPage() {
             {/* Google */}
             <button
               onClick={handleGoogle}
-              className="w-full py-3.5 bg-white border border-neutral-200 rounded-2xl font-semibold text-neutral-700 flex items-center justify-center gap-3 shadow-sm hover:border-neutral-300 transition-colors"
+              disabled={loading}
+              className="w-full py-3.5 bg-white border border-neutral-200 rounded-2xl font-semibold text-neutral-700 flex items-center justify-center gap-3 shadow-sm hover:border-neutral-300 transition-colors disabled:opacity-50"
             >
               <svg width="18" height="18" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>

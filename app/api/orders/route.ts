@@ -104,6 +104,7 @@ export async function POST(req: NextRequest) {
       } catch { /* anonymous order — verifiedCustomerId stays null */ }
     }
 
+
     let body: any;
     try {
       body = await req.json();

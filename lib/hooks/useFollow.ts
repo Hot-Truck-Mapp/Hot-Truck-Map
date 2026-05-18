@@ -15,26 +15,24 @@ export function useFollow(truckId: string, initialFollowing = false) {
   }, []);
 
   async function toggle() {
-    // Prevent double-tap race conditions
+    // Prevent double-tap race conditions (ref-based, not state-based, to avoid stale closures)
     if (inFlightRef.current) return;
     inFlightRef.current = true;
     setLoading(true);
+    const wasFollowing = following;
+    setFollowing(!wasFollowing); // optimistic update
     try {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) { if (mountedRef.current) setFollowing(wasFollowing); return; }
 
-      if (following) {
-        const { error } = await supabase.from("follows").delete().eq("user_id", user.id).eq("truck_id", truckId);
-        if (!error && mountedRef.current) setFollowing(false);
-        // On error: leave state as-is (still following) — UI stays correct
-      } else {
-        const { error } = await supabase.from("follows").insert({ user_id: user.id, truck_id: truckId });
-        if (!error && mountedRef.current) setFollowing(true);
-        // On error: leave state as-is (still not following) — UI stays correct
-      }
+      const { error } = wasFollowing
+        ? await supabase.from("follows").delete().eq("user_id", user.id).eq("truck_id", truckId)
+        : await supabase.from("follows").insert({ user_id: user.id, truck_id: truckId });
+
+      if (error && mountedRef.current) setFollowing(wasFollowing); // rollback on DB error
     } catch {
-      // Network error — leave state unchanged so UI stays in sync with DB
+      if (mountedRef.current) setFollowing(wasFollowing); // rollback on network error
     } finally {
       if (mountedRef.current) setLoading(false);
       inFlightRef.current = false;

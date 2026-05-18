@@ -7,17 +7,15 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession()
-      .then(({ data: { session } }) => {
-        setSession(session);
-        setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-      });
-
+    // Use INITIAL_SESSION to initialise state — eliminates the race condition
+    // that arises when getSession() and onAuthStateChange() fire independently.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => setSession(session)
+      (event, session) => {
+        setSession(session);
+        // INITIAL_SESSION fires once synchronously with the current session on
+        // subscription, so we can safely clear the loading flag here.
+        if (event === 'INITIAL_SESSION') setLoading(false);
+      }
     );
 
     return () => subscription.unsubscribe();

@@ -1,4 +1,4 @@
-import { RefObject } from 'react';
+import React, { RefObject } from 'react';
 import { StyleSheet, View, Text } from 'react-native';
 import MapView, { Marker, type Region } from 'react-native-maps';
 import { useRouter } from 'expo-router';
@@ -10,7 +10,7 @@ export type TruckWithLocation = Truck & { location?: Location };
 type Props = {
   trucks: TruckWithLocation[];
   initialRegion: Region;
-  mapRef?: RefObject<MapView>;
+  mapRef?: RefObject<MapView | null>;
   /** Only show the blue dot when location permission is actually granted */
   showsUserLocation?: boolean;
 };
@@ -20,7 +20,7 @@ export function TruckMap({ trucks, initialRegion, mapRef, showsUserLocation = fa
 
   return (
     <MapView
-      ref={mapRef}
+      ref={mapRef as React.RefObject<MapView>}
       style={styles.map}
       // provider omitted — uses Apple Maps on iOS, Google Maps on Android via
       // the device's built-in tile service. If you want to pin a specific
