@@ -49,9 +49,11 @@ async function notifyOperatorBySMS(phone: string, truckName: string, pickupName:
   if (!sid || !token || !from || !phone) return;
 
   const itemLines = items.map((i: any) => `  ${i.quantity}× ${i.name}`).join("\n");
+  const safeTruckName  = truckName.replace(/[\r\n]/g, " ");
+  const safePickupName = pickupName.replace(/[\r\n]/g, " ");
   const body = [
-    `🔔 New order at ${truckName}!`,
-    `Customer: ${pickupName}`,
+    `🔔 New order at ${safeTruckName}!`,
+    `Customer: ${safePickupName}`,
     `Items:\n${itemLines}`,
     `Total: $${total.toFixed(2)}`,
     `Open your dashboard to update the status.`,
@@ -86,16 +88,36 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Identify customer from the Authorization header — never trust body for this
+    let verifiedCustomerId: string | null = null;
+    const authHeader = req.headers.get("authorization") ?? "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (token) {
+      try {
+        const userClient = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          { global: { headers: { Authorization: `Bearer ${token}` } } }
+        );
+        const { data: { user } } = await userClient.auth.getUser();
+        if (user) verifiedCustomerId = user.id;
+      } catch { /* anonymous order — verifiedCustomerId stays null */ }
+    }
+
     let body: any;
     try {
       body = await req.json();
     } catch {
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
-    const { truck_id, pickup_name, notes, items, total, customer_id } = body;
+    const { truck_id, pickup_name, notes, items, total } = body;
 
     if (!truck_id || !pickup_name || !items?.length || total == null) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (typeof truck_id !== "string" || !UUID_RE.test(truck_id)) {
+      return NextResponse.json({ error: "Invalid truck_id" }, { status: 400 });
     }
     if (!Array.isArray(items) || items.length > 50) {
       return NextResponse.json({ error: "Order must contain between 1 and 50 items" }, { status: 400 });
@@ -121,8 +143,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "This truck is not currently accepting orders" }, { status: 409 });
     }
 
-    // Validate all items belong to this truck
-    const itemIds = items.map((i: any) => i.menu_item_id);
+    // Validate all items belong to this truck — deduplicate IDs first so
+    // ordering the same item twice doesn't cause a false "Invalid menu items" rejection
+    const itemIds = [...new Set(items.map((i: any) => i.menu_item_id))];
     const { data: dbItems, error: itemErr } = await supabase
       .from("menu_items")
       .select("id, name, price, is_sold_out")
@@ -139,8 +162,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "One or more items are sold out" }, { status: 400 });
     }
 
-    // Validate quantities — must be positive integers, max 99 each
+    // Validate item UUIDs and quantities
     for (const item of items) {
+      if (typeof item.menu_item_id !== "string" || !UUID_RE.test(item.menu_item_id)) {
+        return NextResponse.json({ error: "Invalid menu_item_id" }, { status: 400 });
+      }
       if (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 99) {
         return NextResponse.json({ error: "Invalid item quantity" }, { status: 400 });
       }
@@ -168,7 +194,7 @@ export async function POST(req: NextRequest) {
         items,
         total: serverTotal,
         status: "pending",
-        ...(customer_id ? { customer_id } : {}),
+        ...(verifiedCustomerId ? { customer_id: verifiedCustomerId } : {}),
       })
       .select("id")
       .maybeSingle();
@@ -189,7 +215,7 @@ export async function POST(req: NextRequest) {
         const { data: truck } = await supabase
           .from("trucks").select("name, phone").eq("id", truck_id).maybeSingle();
         if (truck?.phone) {
-          await notifyOperatorBySMS(truck.phone, truck.name, pickup_name, smsItems, serverTotal);
+          await notifyOperatorBySMS(truck.phone, truck.name, trimmedName, smsItems, serverTotal);
         }
       } catch (err) {
         console.error("SMS notification error:", err);
@@ -218,8 +244,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { createClient: createSupabaseClient } = await import("@supabase/supabase-js");
-    const userClient = createSupabaseClient(
+    const userClient = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       { global: { headers: { Authorization: `Bearer ${token}` } } }
@@ -244,7 +269,7 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await admin
       .from("orders")
-      .select("*")
+      .select("id, truck_id, pickup_name, notes, items, total, status, created_at, customer_id")
       .eq("truck_id", truck_id)
       .order("created_at", { ascending: false })
       .limit(100);

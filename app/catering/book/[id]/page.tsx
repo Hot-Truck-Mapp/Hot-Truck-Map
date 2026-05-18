@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, useRef, use } from "react";
 import Image from "next/image";
-import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
 
 const EVENT_TYPES = [
   "Corporate Lunch", "Wedding", "Birthday Party",
@@ -20,6 +20,7 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
+  const mountedRef = useRef(true);
 
   const [form, setForm] = useState({
     customer_name: "",
@@ -35,6 +36,11 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
   });
 
   useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
     loadData();
   }, []);
 
@@ -43,9 +49,10 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
       const supabase = createClient();
       const [{ data: { user } }, { data: truckData }, { data: pkgData }] = await Promise.all([
         supabase.auth.getUser(),
-        supabase.from("trucks").select("*").eq("id", id).maybeSingle(),
-        supabase.from("catering_packages").select("*").eq("truck_id", id).eq("is_active", true),
+        supabase.from("trucks").select("id, name, cuisine, profile_photo, catering_description, catering_starting_price, catering_min_guests").eq("id", id).maybeSingle(),
+        supabase.from("catering_packages").select("id, truck_id, name, description, price_per_person, minimum_guests, maximum_guests, includes, photo, is_active").eq("truck_id", id).eq("is_active", true).limit(50),
       ]);
+      if (!mountedRef.current) return;
       setUser(user ?? null);
       setTruck(truckData ?? null);
       setPackages(pkgData ?? []);
@@ -53,11 +60,12 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
     } catch {
       // network error — truck stays null, page shows "not found"
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }
 
   async function handleSubmit() {
+    if (submitting) return;
     if (
       !form.customer_name ||
       !form.customer_email ||
@@ -65,6 +73,12 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
       !form.event_location ||
       !form.guest_count
     ) return;
+
+    // Email validation
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.customer_email.trim())) {
+      setSubmitError("Please enter a valid email address.");
+      return;
+    }
 
     // Reject past dates
     const today = new Date().toISOString().split("T")[0];
@@ -89,14 +103,11 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
     setSubmitting(true);
 
     try {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-
-      const { error } = await supabase
-        .from("catering_requests")
-        .insert({
+      const res = await fetch("/api/catering-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           truck_id: id,
-          customer_id: user?.id ?? null,
           customer_name: form.customer_name.trim(),
           customer_email: form.customer_email.trim(),
           customer_phone: form.customer_phone.trim() || null,
@@ -107,18 +118,25 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
           budget: parsedBudget,
           event_type: form.event_type,
           notes: form.notes,
-          status: "pending",
-        });
+          selected_package_id: selectedPackage ?? null,
+        }),
+      });
 
-      if (!error) {
+      if (!mountedRef.current) return;
+      if (res.ok) {
         setSubmitted(true);
       } else {
-        setSubmitError("Something went wrong. Please try again.");
+        const json = await res.json().catch(() => ({}));
+        if (res.status === 429) {
+          setSubmitError("Too many requests — please wait a few minutes and try again.");
+        } else {
+          setSubmitError(json?.error ?? "Something went wrong. Please try again.");
+        }
       }
     } catch {
-      setSubmitError("Network error — please check your connection and try again.");
+      if (mountedRef.current) setSubmitError("Network error — please check your connection and try again.");
     } finally {
-      setSubmitting(false);
+      if (mountedRef.current) setSubmitting(false);
     }
   }
 
@@ -220,7 +238,7 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
       <div className="bg-white border-b border-neutral-200">
         <div className="h-40 bg-neutral-200 overflow-hidden relative">
           {truck.profile_photo ? (
-            <Image src={truck.profile_photo} alt={truck.name} fill className="object-cover" />
+            <Image src={truck.profile_photo} alt={truck.name} fill sizes="(max-width: 640px) 100vw, 33vw" className="object-cover" />
           ) : (
             <div className="w-full h-full bg-neutral-800 flex items-center justify-center">
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="1.5" strokeLinecap="round">
@@ -407,6 +425,7 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
                 value={form.event_location}
                 onChange={(e) => setForm({ ...form, event_location: e.target.value })}
                 placeholder="e.g. 123 Main St, Newark NJ"
+                maxLength={300}
                 className="w-full text-sm text-neutral-800 focus:outline-none placeholder-neutral-300 bg-transparent focus:bg-neutral-50 rounded transition-colors"
               />
             </div>
@@ -456,6 +475,7 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
               placeholder="Any special requests, dietary requirements, or details about your event..."
               rows={3}
+              maxLength={1000}
               className="w-full text-sm text-neutral-800 focus:outline-none placeholder-neutral-300 resize-none"
             />
           </div>
@@ -475,6 +495,8 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
                 value={form.customer_name}
                 onChange={(e) => setForm({ ...form, customer_name: e.target.value })}
                 placeholder="Your full name"
+                maxLength={200}
+                autoComplete="name"
                 className="w-full text-sm text-neutral-800 focus:outline-none placeholder-neutral-300 bg-transparent focus:bg-neutral-50 rounded transition-colors"
               />
             </div>
@@ -487,6 +509,8 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
                 value={form.customer_email}
                 onChange={(e) => setForm({ ...form, customer_email: e.target.value })}
                 placeholder="your@email.com"
+                maxLength={320}
+                autoComplete="email"
                 className="w-full text-sm text-neutral-800 focus:outline-none placeholder-neutral-300 bg-transparent focus:bg-neutral-50 rounded transition-colors"
               />
             </div>
@@ -499,6 +523,8 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
                 value={form.customer_phone}
                 onChange={(e) => setForm({ ...form, customer_phone: e.target.value })}
                 placeholder="(201) 555-0123"
+                maxLength={30}
+                autoComplete="tel"
                 className="w-full text-sm text-neutral-800 focus:outline-none placeholder-neutral-300 bg-transparent focus:bg-neutral-50 rounded transition-colors"
               />
             </div>

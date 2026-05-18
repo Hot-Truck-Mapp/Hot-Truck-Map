@@ -1,0 +1,46 @@
+import type { MetadataRoute } from "next";
+import { createClient } from "@/lib/supabase/server";
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const base = process.env.NEXT_PUBLIC_SITE_URL ?? "https://hottruckmap.com";
+
+  const staticRoutes: MetadataRoute.Sitemap = [
+    { url: base,                          lastModified: new Date(), changeFrequency: "hourly",  priority: 1 },
+    { url: `${base}/trucks`,              lastModified: new Date(), changeFrequency: "hourly",  priority: 0.9 },
+    { url: `${base}/trucks/leaderboard`,  lastModified: new Date(), changeFrequency: "daily",   priority: 0.7 },
+    { url: `${base}/catering`,            lastModified: new Date(), changeFrequency: "daily",   priority: 0.8 },
+    { url: `${base}/reviews`,             lastModified: new Date(), changeFrequency: "daily",   priority: 0.6 },
+    { url: `${base}/contact`,             lastModified: new Date(), changeFrequency: "monthly", priority: 0.4 },
+    { url: `${base}/privacy`,             lastModified: new Date(), changeFrequency: "yearly",  priority: 0.3 },
+    { url: `${base}/terms`,               lastModified: new Date(), changeFrequency: "yearly",  priority: 0.3 },
+    // City landing pages
+    ...["newark", "new-york", "jersey-city", "hoboken", "trenton"].map((c) => ({
+      url: `${base}/trucks/${c}`,
+      lastModified: new Date(),
+      changeFrequency: "daily" as const,
+      priority: 0.7,
+    })),
+  ];
+
+  // Dynamic truck pages
+  let truckRoutes: MetadataRoute.Sitemap = [];
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("trucks")
+      .select("id, updated_at")
+      .limit(1000);
+    if (data) {
+      truckRoutes = data.map((t) => ({
+        url: `${base}/truck/${t.id}`,
+        lastModified: t.updated_at ? new Date(t.updated_at) : new Date(),
+        changeFrequency: "daily" as const,
+        priority: 0.8,
+      }));
+    }
+  } catch {
+    // DB unavailable at build time — skip dynamic routes
+  }
+
+  return [...staticRoutes, ...truckRoutes];
+}

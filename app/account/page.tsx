@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import { usePushSubscription } from "@/lib/hooks/usePushSubscription";
 
 export default function AccountPage() {
   const [user, setUser] = useState<any>(null);
@@ -17,17 +18,22 @@ export default function AccountPage() {
     weeklyDigest: false,
   });
   const [savingNotif, setSavingNotif] = useState(false);
+  const [pushToastMsg, setPushToastMsg] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string>("");
+  const push = usePushSubscription();
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarToast, setAvatarToast] = useState<string | null>(null);
   const avatarRef = useRef<HTMLInputElement>(null);
   const avatarToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pushToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const unfollowInFlightRef = useRef<Set<string>>(new Set());
   const mountedRef = useRef(true);
 
   useEffect(() => {
     return () => {
       mountedRef.current = false;
       if (avatarToastTimerRef.current) clearTimeout(avatarToastTimerRef.current);
+      if (pushToastTimerRef.current) clearTimeout(pushToastTimerRef.current);
     };
   }, []);
 
@@ -42,11 +48,17 @@ export default function AccountPage() {
 
   async function uploadAvatar(file: File) {
     if (file.size > 5 * 1024 * 1024) { showAvatarToast("Photo must be under 5 MB"); return; }
+    const allowed = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowed.includes(file.type)) {
+      showAvatarToast("Only JPG, PNG, or WebP images are allowed.");
+      return;
+    }
     if (!user) return;
     setAvatarUploading(true);
     try {
       const supabase = createClient();
-      const ext = file.name.split(".").pop();
+      const rawExt = (file.name.split(".").pop() ?? "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const ext = rawExt || "jpg";
       const path = `customers/${user.id}.${ext}`;
       const { error: uploadErr } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
       if (uploadErr) throw new Error(uploadErr.message);
@@ -54,10 +66,10 @@ export default function AccountPage() {
       if (!data?.publicUrl) throw new Error("Could not get photo URL — try again.");
       const { error: updateErr } = await supabase.auth.updateUser({ data: { avatar_url: data.publicUrl } });
       if (updateErr) throw new Error("Photo uploaded but failed to save: " + updateErr.message);
-      setAvatarUrl(data.publicUrl);
+      if (mountedRef.current) setAvatarUrl(data.publicUrl);
       showAvatarToast("Profile photo updated!");
     } catch (err: any) { showAvatarToast(err?.message ?? "Photo upload failed"); }
-    setAvatarUploading(false);
+    finally { if (mountedRef.current) setAvatarUploading(false); }
   }
 
   useEffect(() => {
@@ -70,15 +82,17 @@ export default function AccountPage() {
       const { data: { user: userData } } = await supabase.auth.getUser();
       if (!userData) return; // show sign-in prompt instead of redirecting
 
+      if (!mountedRef.current) return;
       setUser(userData);
       setAvatarUrl(userData.user_metadata?.avatar_url ?? "");
 
       const [{ data: follows }, { data: orderData }] = await Promise.all([
-        supabase.from("follows").select("truck_id, trucks(*)").eq("user_id", userData.id),
-        supabase.from("orders").select("*, trucks(name)").eq("customer_id", userData.id)
+        supabase.from("follows").select("truck_id, trucks(id, name, cuisine, profile_photo, is_live, avg_rating)").eq("user_id", userData.id).limit(200),
+        supabase.from("orders").select("id, truck_id, pickup_name, items, total, status, created_at, trucks(name)").eq("customer_id", userData.id)
           .order("created_at", { ascending: false }).limit(20),
       ]);
 
+      if (!mountedRef.current) return;
       setFollowed(follows ?? []);
       setOrders(orderData ?? []);
 
@@ -88,7 +102,7 @@ export default function AccountPage() {
     } catch {
       // network error — show sign-in prompt
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }
 
@@ -111,6 +125,8 @@ export default function AccountPage() {
   }
 
   async function unfollowTruck(truckId: string) {
+    if (unfollowInFlightRef.current.has(truckId)) return; // in-flight guard
+    unfollowInFlightRef.current.add(truckId);
     const snapshot = followed; // save before optimistic update
     setFollowed((prev) => prev.filter((f) => f.truck_id !== truckId)); // optimistic
     try {
@@ -122,8 +138,12 @@ export default function AccountPage() {
         .eq("user_id", user.id);
       if (error) throw new Error(error.message);
     } catch {
-      setFollowed(snapshot); // restore the pre-update list on failure
-      showAvatarToast("Could not remove favorite — please try again.");
+      if (mountedRef.current) {
+        setFollowed(snapshot); // restore the pre-update list on failure
+        showAvatarToast("Could not remove favorite — please try again.");
+      }
+    } finally {
+      unfollowInFlightRef.current.delete(truckId);
     }
   }
 
@@ -208,8 +228,8 @@ export default function AccountPage() {
       <div className="bg-neutral-900 px-4 pt-4 pb-6 flex flex-col items-center gap-3 relative">
         {/* Back + Sign out row */}
         <div className="w-full flex items-center justify-between mb-1">
-          <Link href="/" className="w-8 h-8 rounded-full bg-neutral-800 flex items-center justify-center text-neutral-400 hover:text-white transition-colors">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+          <Link href="/" aria-label="Back to map" className="w-8 h-8 rounded-full bg-neutral-800 flex items-center justify-center text-neutral-400 hover:text-white transition-colors">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
               <path d="M19 12H5M12 5l-7 7 7 7"/>
             </svg>
           </Link>
@@ -225,7 +245,7 @@ export default function AccountPage() {
         <div className="relative">
           <div className="w-20 h-20 rounded-full overflow-hidden bg-neutral-700 flex items-center justify-center relative">
             {avatarUrl ? (
-              <Image src={avatarUrl} alt="Profile" fill className="object-cover" />
+              <Image src={avatarUrl} alt="Profile" fill sizes="80px" className="object-cover" />
             ) : (
               <span className="text-3xl font-black text-white">
                 {(user?.email ?? "?")[0].toUpperCase()}
@@ -337,7 +357,7 @@ export default function AccountPage() {
                     {/* Photo banner */}
                     <div className="w-full h-28 bg-neutral-100 relative">
                       {truck?.profile_photo ? (
-                        <Image src={truck.profile_photo} alt={truck.name ?? ""} fill className="object-cover" />
+                        <Image src={truck.profile_photo} alt={truck.name ?? ""} fill sizes="(max-width: 640px) 100vw, 50vw" className="object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-neutral-200 to-neutral-100">
                           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
@@ -484,6 +504,65 @@ export default function AccountPage() {
                 />
               </div>
             </div>
+
+            {/* Push Notifications */}
+            {push.supported && (
+              <div className="bg-white rounded-2xl shadow-sm p-4">
+                <p className="text-sm font-bold text-neutral-800 mb-1">Push Notifications</p>
+                <p className="text-xs text-neutral-400 mb-4">
+                  Get notified on this device when a truck you follow goes live.
+                </p>
+                {push.permission === "denied" ? (
+                  <p className="text-xs text-red-500">
+                    Notifications are blocked in your browser settings. Please allow them and reload.
+                  </p>
+                ) : (
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-neutral-700">
+                        {push.subscribed ? "Enabled on this device" : "Disabled on this device"}
+                      </p>
+                      <p className="text-xs text-neutral-400 mt-0.5">
+                        {push.subscribed
+                          ? "You'll receive push alerts when followed trucks go live"
+                          : "Enable to get instant alerts when followed trucks go live"}
+                      </p>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        try {
+                          if (push.subscribed) {
+                            await push.unsubscribe();
+                            if (mountedRef.current) setPushToastMsg("Push notifications disabled");
+                          } else {
+                            await push.subscribe();
+                            if (mountedRef.current) setPushToastMsg("Push notifications enabled!");
+                          }
+                        } catch {
+                          if (mountedRef.current) setPushToastMsg("Could not update push notifications — try again.");
+                        }
+                        if (pushToastTimerRef.current) clearTimeout(pushToastTimerRef.current);
+                        pushToastTimerRef.current = setTimeout(() => {
+                          if (mountedRef.current) setPushToastMsg(null);
+                        }, 3500);
+                      }}
+                      className={`w-12 h-6 rounded-full transition-colors flex-shrink-0 ${
+                        push.subscribed ? "bg-brand-red" : "bg-neutral-200"
+                      }`}
+                    >
+                      <span
+                        className={`block w-5 h-5 bg-white rounded-full shadow transition-transform mx-0.5 ${
+                          push.subscribed ? "translate-x-6" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                )}
+                {pushToastMsg && (
+                  <p className="text-xs text-neutral-500 mt-3">{pushToastMsg}</p>
+                )}
+              </div>
+            )}
 
             {/* Account Info */}
             <div className="bg-white rounded-2xl shadow-sm p-4">

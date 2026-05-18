@@ -16,7 +16,7 @@ export function useLiveTrucks() {
       const cutoff = new Date(Date.now() - LIVE_WINDOW_MS).toISOString();
       const { data, error } = await supabase
         .from('trucks')
-        .select('*, locations!inner(*)')
+        .select('id, name, cuisine, profile_photo, is_live, avg_rating, review_count, locations!inner(id, lat, lng, address, broadcasted_at)')
         .eq('is_live', true)
         .gte('locations.broadcasted_at', cutoff);
 

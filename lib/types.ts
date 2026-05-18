@@ -6,7 +6,7 @@ export type Truck = {
   phone: string | null;
   instagram: string | null;
   profile_photo: string | null;
-  owner_id: string;
+  owner_id?: string;
   is_live: boolean;
   avg_rating: number | null;
   review_count: number | null;
@@ -27,7 +27,7 @@ export type MenuItem = {
 export type Order = {
   id: string;
   truck_id: string;
-  customer_id: string;
+  customer_id: string | null; // null for guest orders
   items: OrderItem[];
   total: number;
   status: "pending" | "preparing" | "ready" | "picked_up";

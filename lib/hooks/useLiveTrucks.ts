@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { isLive } from "@/lib/utils";
 import type { Truck, Location } from "@/lib/types";
 import type { MapFilters } from "@/components/map/FilterBar";
 
@@ -37,7 +36,8 @@ export function useLiveTrucks(filters: MapFilters) {
             )
           `)
           .eq("is_live", true)
-          .order("created_at", { ascending: false });
+          .order("created_at", { ascending: false })
+          .limit(200);
 
         if (!mounted) return;
         if (queryError) {
@@ -63,11 +63,66 @@ export function useLiveTrucks(filters: MapFilters) {
     fetchTrucks();
 
     const channel = supabase
-      .channel("locations")
+      .channel("live-trucks")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "locations" },
-        () => { if (mounted) fetchTrucks(); }
+        { event: "INSERT", schema: "public", table: "locations" },
+        (payload) => {
+          if (!mounted) return;
+          const loc = payload.new as any;
+          if (!loc?.truck_id) { fetchTrucks(); return; }
+          setTrucks((prev) => {
+            const idx = prev.findIndex((t) => t.id === loc.truck_id);
+            if (idx === -1) return prev;
+            const truck = prev[idx];
+            if (truck.is_live === false) return prev.filter((t) => t.id !== loc.truck_id);
+            const next = [...prev];
+            next[idx] = { ...truck, location: loc };
+            return next;
+          });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "locations" },
+        (payload) => {
+          if (!mounted) return;
+          const loc = payload.new as any;
+          if (!loc?.truck_id) { fetchTrucks(); return; }
+          setTrucks((prev) => {
+            const idx = prev.findIndex((t) => t.id === loc.truck_id);
+            if (idx === -1) return prev;
+            const truck = prev[idx];
+            if (truck.is_live === false) return prev.filter((t) => t.id !== loc.truck_id);
+            const next = [...prev];
+            next[idx] = { ...truck, location: loc };
+            return next;
+          });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "trucks" },
+        (payload) => {
+          if (!mounted) return;
+          const updated = payload.new as any;
+          if (!updated?.id) { fetchTrucks(); return; }
+          setTrucks((prev) => {
+            const idx = prev.findIndex((t) => t.id === updated.id);
+            if (idx === -1) {
+              // Truck just went live — trigger a full fetch to include its location join
+              fetchTrucks();
+              return prev;
+            }
+            const next = [...prev];
+            next[idx] = { ...next[idx], ...updated };
+            // If truck went offline, drop it from the live list
+            if (updated.is_live === false) {
+              return next.filter((t) => t.id !== updated.id);
+            }
+            return next;
+          });
+        }
       )
       .subscribe();
 
@@ -81,7 +136,7 @@ export function useLiveTrucks(filters: MapFilters) {
   // hook has no access to the user's current coordinates.  Distance filtering
   // should be handled by the caller once it has a geolocation fix.
   const filtered = trucks.filter((truck) => {
-    if (filters.openNow && !isLive(truck.location?.broadcasted_at ?? null)) {
+    if (filters.openNow && truck.is_live !== true) {
       return false;
     }
     if (filters.cuisine && truck.cuisine !== filters.cuisine) {

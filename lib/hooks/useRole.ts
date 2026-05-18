@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 type Role = "customer" | "operator" | "admin" | null;
@@ -8,21 +8,38 @@ type Role = "customer" | "operator" | "admin" | null;
 export function useRole() {
   const [role, setRole] = useState<Role>(null);
   const [loading, setLoading] = useState(true);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
+    mountedRef.current = true;
     const fetchRole = async () => {
       try {
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
-        setRole(user ? ((user.user_metadata?.role as Role) ?? "customer") : null);
+        if (!mountedRef.current) return;
+        if (!user) { setRole(null); return; }
+
+        // Admin: still sourced from metadata (set server-side only, not user-editable via normal flows)
+        if (user.user_metadata?.role === "admin") { setRole("admin"); return; }
+
+        // Operator: verify via DB truck ownership — user_metadata.role is user-editable
+        // and must never be trusted for access control decisions.
+        const { data: truck } = await supabase
+          .from("trucks")
+          .select("id")
+          .eq("owner_id", user.id)
+          .maybeSingle();
+        if (!mountedRef.current) return;
+        setRole(truck ? "operator" : "customer");
       } catch {
-        setRole(null);
+        if (mountedRef.current) setRole(null);
       } finally {
-        setLoading(false);
+        if (mountedRef.current) setLoading(false);
       }
     };
 
     fetchRole();
+    return () => { mountedRef.current = false; };
   }, []);
 
   return {

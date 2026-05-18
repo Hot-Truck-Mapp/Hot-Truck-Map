@@ -21,21 +21,28 @@ export default function GoLivePage() {
     return () => { mountedRef.current = false; };
   }, []);
 
-  // Auth guard — operators only
+  // Auth guard — operators only (verified via DB ownership, not user-editable metadata)
   useEffect(() => {
-    createClient()
-      .auth.getUser()
-      .then(({ data: { user } }) => {
+    async function checkAuth() {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
         if (!mountedRef.current) return;
-        if (!user || user.user_metadata?.role !== "operator") {
-          router.replace("/");
-        } else {
-          setAuthChecking(false);
-        }
-      })
-      .catch(() => {
+        if (!user) { router.replace("/"); return; }
+        // Check DB: if the user owns a truck they are an operator
+        const { data: truck } = await supabase
+          .from("trucks")
+          .select("id")
+          .eq("owner_id", user.id)
+          .maybeSingle();
+        if (!mountedRef.current) return;
+        if (!truck) { router.replace("/"); return; }
+        setAuthChecking(false);
+      } catch {
         if (mountedRef.current) router.replace("/");
-      });
+      }
+    }
+    checkAuth();
   }, [router]);
 
   async function broadcastLocation(lat: number, lng: number, place: string) {
@@ -56,7 +63,7 @@ export default function GoLivePage() {
         truck_id: truck.id,
         lat,
         lng,
-        address: place,
+        address: place.slice(0, 300), // cap geocoded addresses to prevent oversized writes
         broadcasted_at: new Date().toISOString(),
       },
       { onConflict: "truck_id" }
@@ -64,16 +71,31 @@ export default function GoLivePage() {
 
     if (upsertError) throw new Error(upsertError.message);
 
-    const { error: updateError } = await supabase
+    const { data: truckData, error: updateError } = await supabase
       .from("trucks")
       .update({ is_live: true })
-      .eq("id", truck.id);
+      .eq("id", truck.id)
+      .select("name")
+      .single();
 
     if (updateError) throw new Error(updateError.message);
 
     if (!mountedRef.current) return;
     setAddress(place);
     setStatus("live");
+
+    // Non-blocking — notify followers without affecting go-live UX
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      fetch("/api/notify-followers", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ truck_id: truck.id, truck_name: truckData?.name }),
+      }).catch(() => {});
+    }
   }
 
   async function geocode(lat: number, lng: number): Promise<string> {
@@ -105,6 +127,7 @@ export default function GoLivePage() {
   }
 
   async function goLiveGPS() {
+    if (status !== "idle") return; // in-flight guard
     if (!navigator.geolocation) {
       setError("Geolocation is not supported by your browser. Please enter your address manually.");
       setShowManual(true);
@@ -137,6 +160,7 @@ export default function GoLivePage() {
   }
 
   async function goLiveManual() {
+    if (status !== "idle") return; // in-flight guard
     if (!manualAddress.trim()) return;
     setStatus("locating");
     setError(null);

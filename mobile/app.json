@@ -13,21 +13,29 @@
     },
     "newArchEnabled": true,
     "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
       "backgroundColor": "#FF6B35"
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.hottruckmap.app",
+      "buildNumber": "1",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Hot Truck Map uses your location to show nearby food trucks.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Hot Truck Map uses your location to show nearby food trucks."
+        "NSLocationWhenInUseUsageDescription": "Hot Truck Map uses your location to show nearby food trucks on the map.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Hot Truck Map uses your location to show nearby food trucks on the map.",
+        "NSPhotoLibraryUsageDescription": "Hot Truck Map uses your photo library so you can upload photos of food trucks.",
+        "NSPhotoLibraryAddUsageDescription": "Hot Truck Map saves truck photos to your photo library."
       }
     },
     "android": {
       "package": "com.hottruckmap.app",
+      "versionCode": 1,
       "permissions": [
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
+        "ACCESS_COARSE_LOCATION",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
       ]
     },
     "web": {
@@ -43,7 +51,18 @@
           "locationAlwaysAndWhenInUsePermission": "Allow Hot Truck Map to use your location to show nearby food trucks."
         }
       ],
-      "expo-notifications"
+      [
+        "expo-notifications",
+        {
+          "iosPermissions": ["Alert", "Badge", "Sound"]
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Hot Truck Map uses your photo library so you can upload photos of food trucks."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

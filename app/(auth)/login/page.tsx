@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -11,6 +11,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   async function handleLogin() {
     if (!email || !password) return;
@@ -22,29 +28,38 @@ export default function LoginPage() {
       const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
 
       if (authError) {
-        setError(authError.message);
-        setLoading(false);
+        if (mountedRef.current) {
+          setError(authError.message);
+          setLoading(false);
+        }
         return;
       }
 
-      const role = data.user?.user_metadata?.role;
-      router.replace(role === "operator" ? "/dashboard" : "/");
+      // Always route to home — the dashboard link in the nav handles operator navigation.
+      // Never route based on user_metadata.role (user-editable).
+      router.replace("/");
       // Keep loading=true; page will navigate away — no need to reset spinner
     } catch {
-      setError("Network error — please check your connection and try again.");
-      setLoading(false);
+      if (mountedRef.current) {
+        setError("Network error — please check your connection and try again.");
+        setLoading(false);
+      }
     }
   }
 
   async function handleGoogle() {
     setError(null);
-    const supabase = createClient();
-    // After Google OAuth, the auth callback checks role and routes accordingly
-    const { error: oauthError } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: window.location.origin + "/auth/callback" },
-    });
-    if (oauthError) setError(oauthError.message);
+    try {
+      const supabase = createClient();
+      // After Google OAuth, the auth callback checks role and routes accordingly
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: window.location.origin + "/auth/callback" },
+      });
+      if (oauthError) setError(oauthError.message);
+    } catch {
+      setError("Network error — please check your connection and try again.");
+    }
   }
 
   return (
@@ -158,28 +173,32 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="text-sm font-medium text-neutral-600">Email</label>
+              <label htmlFor="login-email" className="text-sm font-medium text-neutral-600">Email</label>
               <input
+                id="login-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
+                autoComplete="email"
                 className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
               />
             </div>
 
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="text-sm font-medium text-neutral-600">Password</label>
+                <label htmlFor="login-password" className="text-sm font-medium text-neutral-600">Password</label>
                 <Link href="/forgot-password" className="text-xs text-brand-red font-semibold hover:underline">
                   Forgot password?
                 </Link>
               </div>
               <input
+                id="login-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
+                autoComplete="current-password"
                 onKeyDown={(e) => e.key === "Enter" && handleLogin()}
                 className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red transition-colors bg-white"
               />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 
@@ -13,6 +13,7 @@ const CUISINE_TYPES = [
 type Step = "choose" | "operator" | "customer" | "done-operator" | "done-customer";
 
 export default function SignupPage() {
+  const mountedRef = useRef(true);
   const [step, setStep] = useState<Step>("choose");
 
   // Operator fields
@@ -24,19 +25,31 @@ export default function SignupPage() {
   const [opError, setOpError] = useState<string | null>(null);
 
   // Customer fields
+  const [cuName, setCuName] = useState("");
   const [cuEmail, setCuEmail] = useState("");
   const [cuPassword, setCuPassword] = useState("");
   const [cuLoading, setCuLoading] = useState(false);
   const [cuError, setCuError] = useState<string | null>(null);
 
   useEffect(() => {
+    mountedRef.current = true;
     const params = new URLSearchParams(window.location.search);
     if (params.get("role") === "operator") setStep("operator");
+    return () => { mountedRef.current = false; };
   }, []);
 
   async function handleOperatorSignup() {
+    if (opLoading) return; // in-flight guard
     if (!truckName.trim() || !opEmail || !opPassword) return;
-    if (!opEmail.includes("@") || !opEmail.includes(".")) {
+    if (truckName.trim().length > 100) {
+      setOpError("Truck name must be 100 characters or fewer.");
+      return;
+    }
+    if (opEmail.length > 320) {
+      setOpError("Email address is too long.");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(opEmail)) {
       setOpError("Please enter a valid email address.");
       return;
     }
@@ -59,41 +72,45 @@ export default function SignupPage() {
       });
 
       if (error) {
-        setOpError(error.message);
-        setOpLoading(false);
+        if (mountedRef.current) { setOpError(error.message); setOpLoading(false); }
         return;
       }
 
       // Detect "email already registered" — Supabase returns a user with empty identities
       if (data.user && (!data.user.identities || data.user.identities.length === 0)) {
-        setOpError("An account with this email already exists. Please sign in instead.");
-        setOpLoading(false);
+        if (mountedRef.current) {
+          setOpError("An account with this email already exists. Please sign in instead.");
+          setOpLoading(false);
+        }
         return;
       }
 
       if (data.user) {
         // Best-effort: create the truck record now. Fails silently if email
         // confirmation is required first — dashboard handles the missing-truck state.
-        const { error: insertErr } = await supabase.from("trucks").insert({
+        await supabase.from("trucks").insert({
           owner_id: data.user.id,
           name: truckName.trim(),
           cuisine: cuisine || null,
           is_live: false,
         });
-        if (insertErr) console.error("Truck insert failed:", insertErr.message);
+        // insert error ignored — dashboard handles the missing-truck state
       }
 
-      setStep("done-operator");
+      if (mountedRef.current) setStep("done-operator");
     } catch {
-      setOpError("Network error — please check your connection and try again.");
+      if (mountedRef.current) setOpError("Network error — please check your connection and try again.");
     } finally {
-      setOpLoading(false);
+      if (mountedRef.current) setOpLoading(false);
     }
   }
 
   async function handleCustomerSignup() {
-    if (!cuEmail || !cuPassword) return;
-    if (!cuEmail.includes("@") || !cuEmail.includes(".")) {
+    if (cuLoading) return; // in-flight guard
+    if (!cuName.trim() || !cuEmail || !cuPassword) return;
+    if (cuName.trim().length < 2) { setCuError("Please enter your full name."); return; }
+    if (cuName.trim().length > 100) { setCuError("Name must be 100 characters or fewer."); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cuEmail)) {
       setCuError("Please enter a valid email address.");
       return;
     }
@@ -103,25 +120,31 @@ export default function SignupPage() {
 
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email: cuEmail,
         password: cuPassword,
         options: {
-          data: { role: "customer" },
+          data: { role: "customer", display_name: cuName.trim() },
           emailRedirectTo: window.location.origin + "/",
         },
       });
 
       if (error) {
-        setCuError(error.message);
+        if (mountedRef.current) setCuError(error.message);
         return;
       }
 
-      setStep("done-customer");
+      // Detect "email already registered" — Supabase returns a user with empty identities
+      if (data.user && (!data.user.identities || data.user.identities.length === 0)) {
+        if (mountedRef.current) setCuError("An account with this email already exists. Please sign in instead.");
+        return;
+      }
+
+      if (mountedRef.current) setStep("done-customer");
     } catch {
-      setCuError("Network error — please check your connection and try again.");
+      if (mountedRef.current) setCuError("Network error — please check your connection and try again.");
     } finally {
-      setCuLoading(false);
+      if (mountedRef.current) setCuLoading(false);
     }
   }
 
@@ -209,7 +232,7 @@ export default function SignupPage() {
 
             <div className="flex flex-col gap-4">
               {[
-                { title: "100% free, forever", desc: "No subscription, no commission on orders" },
+                { title: "100% free", desc: "No subscription, no commission on orders" },
                 { title: "Go live in one tap", desc: "Share your GPS location instantly from the app" },
                 { title: "Real-time map visibility", desc: "Appear on the map the moment you press Go Live" },
               ].map(({ title, desc }) => (
@@ -263,7 +286,7 @@ export default function SignupPage() {
               <h1 className="text-2xl md:text-3xl font-black text-neutral-900 leading-tight">
                 Get your truck on the map
               </h1>
-              <p className="text-neutral-500 text-sm mt-1">Under 2 minutes. Free forever.</p>
+              <p className="text-neutral-500 text-sm mt-1">Under 2 minutes.</p>
             </div>
 
             {/* Mobile only: value props */}
@@ -333,6 +356,7 @@ export default function SignupPage() {
                       value={opEmail}
                       onChange={(e) => setOpEmail(e.target.value)}
                       placeholder="you@example.com"
+                      autoComplete="email"
                       className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
                     />
                   </div>
@@ -345,6 +369,7 @@ export default function SignupPage() {
                       value={opPassword}
                       onChange={(e) => setOpPassword(e.target.value)}
                       placeholder="Min 6 characters"
+                      autoComplete="new-password"
                       onKeyDown={(e) => e.key === "Enter" && handleOperatorSignup()}
                       className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
                     />
@@ -420,12 +445,25 @@ export default function SignupPage() {
 
             <div className="flex flex-col gap-4">
               <div>
+                <label className="text-sm font-medium text-neutral-600">Your name</label>
+                <input
+                  type="text"
+                  value={cuName}
+                  onChange={(e) => setCuName(e.target.value)}
+                  placeholder="Jane Smith"
+                  autoComplete="name"
+                  className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
+                />
+              </div>
+
+              <div>
                 <label className="text-sm font-medium text-neutral-600">Email</label>
                 <input
                   type="email"
                   value={cuEmail}
                   onChange={(e) => setCuEmail(e.target.value)}
                   placeholder="you@example.com"
+                  autoComplete="email"
                   className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
                 />
               </div>
@@ -437,6 +475,7 @@ export default function SignupPage() {
                   value={cuPassword}
                   onChange={(e) => setCuPassword(e.target.value)}
                   placeholder="Min 6 characters"
+                  autoComplete="new-password"
                   onKeyDown={(e) => e.key === "Enter" && handleCustomerSignup()}
                   className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
                 />
@@ -450,7 +489,7 @@ export default function SignupPage() {
 
               <button
                 onClick={handleCustomerSignup}
-                disabled={cuLoading || !cuEmail || !cuPassword}
+                disabled={cuLoading || !cuName.trim() || !cuEmail || !cuPassword}
                 className="w-full py-4 bg-brand-red text-white rounded-2xl font-black text-base disabled:opacity-40"
               >
                 {cuLoading ? "Creating account..." : "Create Account"}
@@ -503,7 +542,7 @@ export default function SignupPage() {
               Just confirm your email and you'll be on the map within minutes.
             </p>
           </div>
-          <p className="text-neutral-600 text-xs relative z-10">HotTruckMap · Free forever</p>
+          <p className="text-neutral-600 text-xs relative z-10">HotTruckMap</p>
         </div>
 
         {/* Right panel */}

@@ -1,25 +1,31 @@
 "use client";
 
-import { use, Suspense } from "react";
+import { use, Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
 function ConfirmationContent({ id }: { id: string }) {
   const searchParams = useSearchParams();
-  const orderId = searchParams.get("orderId") ?? "";
-  const name = searchParams.get("name") ?? "there";
+  const rawName = searchParams.get("name") ?? "there";
+  const name = (() => { try { return decodeURIComponent(rawName); } catch { return rawName; } })();
 
-  // Guard: if no orderId the user navigated here directly — send them back
-  if (!orderId) {
-    return (
-      <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center gap-4 p-6">
-        <p className="text-neutral-600 font-semibold text-center">No order found.</p>
-        <a href={`/truck/${id}`} className="px-5 py-2.5 bg-brand-red text-white rounded-xl font-semibold text-sm">
-          Back to Truck
-        </a>
-      </div>
-    );
-  }
+  // Read orderId from sessionStorage (written by the order page after successful submission)
+  // Fall back gracefully if sessionStorage is unavailable or stale
+  const [orderId, setOrderId] = useState<string>("");
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem("confirmed-order");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        // Validate it belongs to this truck
+        if (parsed.truckId === id && typeof parsed.orderId === "string") {
+          setOrderId(parsed.orderId);
+          // Clear after reading so the confirmation can't be replayed
+          sessionStorage.removeItem("confirmed-order");
+        }
+      }
+    } catch { /* sessionStorage unavailable — orderId stays empty */ }
+  }, [id]);
 
   return (
     <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center px-6 pb-16">
@@ -32,13 +38,14 @@ function ConfirmationContent({ id }: { id: string }) {
 
       <h1 className="text-3xl font-black text-neutral-900 text-center mb-2">Order Sent!</h1>
       <p className="text-neutral-500 text-center mb-1">
-        Hey <span className="font-bold text-neutral-700">{decodeURIComponent(name)}</span>, your order is on its way to the truck.
+        Hey <span className="font-bold text-neutral-700">{name}</span>, your order is on its way to the truck.
       </p>
       {orderId && (
         <p className="text-xs text-neutral-400 mb-8">
           Order #{orderId.slice(0, 8).toUpperCase()}
         </p>
       )}
+      {!orderId && <div className="mb-8" />}
 
       {/* What happens next */}
       <div className="w-full max-w-sm bg-white rounded-2xl shadow-sm p-5 mb-6">

@@ -20,20 +20,27 @@ function AuthCallbackInner() {
         // Without this, getUser() returns null and every OAuth login silently fails.
         const code = searchParams.get("code");
         if (code) {
-          await supabase.auth.exchangeCodeForSession(code);
+          const { data } = await supabase.auth.exchangeCodeForSession(code);
+
+          // If this code exchange was for a password recovery flow, redirect to
+          // the reset-password page instead of the homepage so the user can
+          // set a new password.
+          if (data?.session?.user?.recovery_sent_at) {
+            const recoverySent = new Date(data.session.user.recovery_sent_at).getTime();
+            const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+            if (recoverySent > fiveMinutesAgo) {
+              router.replace("/reset-password");
+              return;
+            }
+          }
         }
 
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) { router.replace("/"); return; }
 
-        // OAuth signups (Google) don't carry a role — assign "customer" by default
-        if (!user.user_metadata?.role) {
-          await supabase.auth.updateUser({ data: { role: "customer" } });
-          router.replace("/");
-          return;
-        }
-
-        router.replace(user.user_metadata.role === "operator" ? "/dashboard" : "/");
+        // Redirect to "/" — the dashboard's own auth guard handles
+        // operator routing based on DB truck ownership (not user-editable metadata).
+        router.replace("/");
       } catch {
         router.replace("/");
       }
@@ -56,7 +63,6 @@ const Spinner = () => (
 export default function AuthCallback() {
   return (
     <Suspense fallback={<Spinner />}>
-      <Spinner />
       <AuthCallbackInner />
     </Suspense>
   );

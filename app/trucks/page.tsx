@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import { TruckCardSkeleton } from "@/components/ui/Skeleton";
 
 const CUISINES = [
   "All", "Tacos", "BBQ", "Burgers", "Asian Fusion",
@@ -25,6 +26,7 @@ export default function TrucksListPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const inFlightFavRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     mountedRef.current = true;
@@ -42,7 +44,7 @@ export default function TrucksListPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user || !mountedRef.current) return;
       setUserId(user.id);
-      const { data } = await supabase.from("follows").select("truck_id").eq("user_id", user.id);
+      const { data } = await supabase.from("follows").select("truck_id").eq("user_id", user.id).limit(1000);
       if (!mountedRef.current) return;
       setFavorites(new Set((data ?? []).map((f: any) => f.truck_id)));
     } catch {
@@ -54,7 +56,8 @@ export default function TrucksListPage() {
     e.preventDefault();
     e.stopPropagation();
     if (!userId) { router.push("/login"); return; }
-    const supabase = createClient();
+    if (inFlightFavRef.current.has(truckId)) return; // prevent double-tap race
+    inFlightFavRef.current.add(truckId);
     const isFaved = favorites.has(truckId);
 
     // Optimistic update
@@ -64,17 +67,31 @@ export default function TrucksListPage() {
       return next;
     });
 
-    const { error } = isFaved
-      ? await supabase.from("follows").delete().eq("truck_id", truckId).eq("user_id", userId)
-      : await supabase.from("follows").insert({ truck_id: truckId, user_id: userId });
+    try {
+      const supabase = createClient();
+      const { error } = isFaved
+        ? await supabase.from("follows").delete().eq("truck_id", truckId).eq("user_id", userId)
+        : await supabase.from("follows").insert({ truck_id: truckId, user_id: userId });
 
-    if (error) {
-      // Roll back on failure
-      setFavorites((prev) => {
-        const next = new Set(prev);
-        if (isFaved) next.add(truckId); else next.delete(truckId);
-        return next;
-      });
+      if (error && mountedRef.current) {
+        // Roll back on DB error
+        setFavorites((prev) => {
+          const next = new Set(prev);
+          if (isFaved) next.add(truckId); else next.delete(truckId);
+          return next;
+        });
+      }
+    } catch {
+      // Roll back on network error
+      if (mountedRef.current) {
+        setFavorites((prev) => {
+          const next = new Set(prev);
+          if (isFaved) next.add(truckId); else next.delete(truckId);
+          return next;
+        });
+      }
+    } finally {
+      inFlightFavRef.current.delete(truckId);
     }
   }
 
@@ -83,8 +100,9 @@ export default function TrucksListPage() {
       const supabase = createClient();
       const { data } = await supabase
         .from("trucks")
-        .select("*, locations(*), follows(count)")
-        .order("is_live", { ascending: false });
+        .select("id, name, cuisine, description, profile_photo, is_live, dietary_tags, avg_rating, review_count, locations(*), follows_agg:follows(count)")
+        .order("is_live", { ascending: false })
+        .limit(200);
       if (!mountedRef.current) return;
       setTrucks(data ?? []);
     } catch {
@@ -117,7 +135,7 @@ export default function TrucksListPage() {
     );
   }
 
-  const activeFilterCount = dietary.length + (cuisine !== "All" ? 1 : 0);
+  const activeFilterCount = dietary.length + (cuisine !== "All" ? 1 : 0) + (openNow ? 1 : 0);
 
   return (
     <div className="min-h-screen bg-neutral-100">
@@ -144,6 +162,12 @@ export default function TrucksListPage() {
 
         <div className="flex items-center gap-2">
           <Link
+            href="/trucks/leaderboard"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-neutral-700 text-neutral-300 text-xs font-semibold hover:border-neutral-500 hover:text-white transition-colors"
+          >
+            🏆 Leaderboard
+          </Link>
+          <Link
             href="/catering"
             className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-neutral-700 text-neutral-300 text-xs font-semibold hover:border-neutral-500 hover:text-white transition-colors"
           >
@@ -160,6 +184,7 @@ export default function TrucksListPage() {
           </Link>
           <Link
             href="/account"
+            aria-label="Account"
             className="w-8 h-8 rounded-full border border-neutral-700 flex items-center justify-center text-neutral-400 hover:text-white hover:border-neutral-500 transition-colors"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -325,40 +350,54 @@ export default function TrucksListPage() {
       {/* Truck List */}
       <div className="max-w-5xl mx-auto w-full px-0 md:px-4 md:py-4">
         {loading && (
-          <div className="flex items-center justify-center py-24">
-            <div className="flex flex-col items-center gap-3">
-              <div className="w-8 h-8 border-2 border-brand-red border-t-transparent rounded-full animate-spin" />
-              <p className="text-neutral-400 text-sm">Loading trucks...</p>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 md:gap-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <TruckCardSkeleton key={i} />
+            ))}
           </div>
         )}
 
         {!loading && filtered.length === 0 && (
           <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
-            <div className="w-14 h-14 bg-neutral-200 rounded-2xl flex items-center justify-center mb-4">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round">
-                <path d="M1 3h15v13H1z"/>
-                <path d="M16 8h4l3 3v5h-7V8z"/>
-                <circle cx="5.5" cy="18.5" r="2.5"/>
-                <circle cx="18.5" cy="18.5" r="2.5"/>
-              </svg>
+            <div className="relative w-20 h-20 mb-5">
+              <div className="w-20 h-20 bg-neutral-100 rounded-full flex items-center justify-center">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
+                  <path d="M1 3h15v13H1z"/>
+                  <path d="M16 8h4l3 3v5h-7V8z"/>
+                  <circle cx="5.5" cy="18.5" r="2.5"/>
+                  <circle cx="18.5" cy="18.5" r="2.5"/>
+                </svg>
+              </div>
+              <div className="absolute -top-1 -right-1 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-sm border border-neutral-100">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="2.5" strokeLinecap="round">
+                  <circle cx="11" cy="11" r="8"/>
+                  <path d="m21 21-4.35-4.35"/>
+                </svg>
+              </div>
             </div>
-            <p className="font-bold text-neutral-800 mb-1">No trucks found</p>
-            <p className="text-sm text-neutral-400 mb-4">
-              {openNow ? "Turn off Open Now to see all trucks" : "Try a different search or clear filters"}
+            <p className="font-black text-neutral-800 text-lg mb-1">No trucks found</p>
+            <p className="text-sm text-neutral-400 mb-1 max-w-xs leading-relaxed">
+              {openNow
+                ? "No trucks are open right now. Turn off Open Now to browse all trucks."
+                : search
+                  ? `No results for "${search}". Try a broader search or clear your filters.`
+                  : "No trucks match your current filters. Try adjusting or clearing them."}
+            </p>
+            <p className="text-xs text-neutral-300 mb-5">
+              New trucks are added regularly — check back soon!
             </p>
             <button
               onClick={() => { setSearch(""); setCuisine("All"); setDietary([]); setOpenNow(false); }}
-              className="px-4 py-2 bg-brand-red text-white rounded-lg text-sm font-semibold"
+              className="px-5 py-2.5 bg-brand-red text-white rounded-xl text-sm font-bold shadow-sm hover:bg-red-600 transition-colors"
             >
-              Clear Filters
+              Clear All Filters
             </button>
           </div>
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 md:gap-3">
         {filtered.map((truck) => {
-          const followerCount = truck.follows?.[0]?.count ?? 0;
+          const followerCount = Number(truck.follows_agg?.[0]?.count ?? 0);
           const address = truck.locations?.[0]?.address ?? null;
           return (
             <Link
@@ -371,7 +410,7 @@ export default function TrucksListPage() {
                 {/* Photo */}
                 <div className="w-[88px] h-[88px] rounded-2xl bg-neutral-100 flex-shrink-0 overflow-hidden shadow-sm relative">
                   {truck.profile_photo ? (
-                    <Image src={truck.profile_photo} alt={truck.name} fill className="object-cover" />
+                    <Image src={truck.profile_photo} alt={truck.name} fill sizes="80px" className="object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-neutral-200 to-neutral-100">
                       <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#bbb" strokeWidth="1.5" strokeLinecap="round">

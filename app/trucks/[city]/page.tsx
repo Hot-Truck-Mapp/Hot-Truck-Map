@@ -24,6 +24,12 @@ export async function generateMetadata({ params }: Props) {
 
 export default async function CityPage({ params }: Props) {
   const { city: citySlug } = await params;
+
+  // Guard against absurdly long slugs before doing any work
+  if (citySlug.length > 100) {
+    const { notFound } = await import("next/navigation");
+    notFound();
+  }
   const city = citySlug
     .split("-")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
@@ -39,8 +45,9 @@ export default async function CityPage({ params }: Props) {
   try {
     const { data, error } = await supabase
       .from("trucks")
-      .select("*, locations(*)")
-      .eq("is_live", true);
+      .select("id, name, cuisine, description, profile_photo, is_live, locations(id, address, broadcasted_at)")
+      .eq("is_live", true)
+      .limit(100);
 
     if (!error && data) {
       trucks = data.filter((truck: any) =>

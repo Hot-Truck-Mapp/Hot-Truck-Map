@@ -1,12 +1,18 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 export function useFollow(truckId: string, initialFollowing = false) {
   const [following, setFollowing] = useState(initialFollowing);
   const [loading, setLoading] = useState(false);
   const inFlightRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   async function toggle() {
     // Prevent double-tap race conditions
@@ -20,17 +26,17 @@ export function useFollow(truckId: string, initialFollowing = false) {
 
       if (following) {
         const { error } = await supabase.from("follows").delete().eq("user_id", user.id).eq("truck_id", truckId);
-        if (!error) setFollowing(false);
+        if (!error && mountedRef.current) setFollowing(false);
         // On error: leave state as-is (still following) — UI stays correct
       } else {
         const { error } = await supabase.from("follows").insert({ user_id: user.id, truck_id: truckId });
-        if (!error) setFollowing(true);
+        if (!error && mountedRef.current) setFollowing(true);
         // On error: leave state as-is (still not following) — UI stays correct
       }
     } catch {
       // Network error — leave state unchanged so UI stays in sync with DB
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
       inFlightRef.current = false;
     }
   }

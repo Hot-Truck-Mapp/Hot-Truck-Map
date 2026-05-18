@@ -49,7 +49,7 @@ export default function AccountTab() {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.7,
@@ -68,10 +68,16 @@ export default function AccountTab() {
 
     setUploading(true);
     try {
-      // Use MIME type for extension — Android content URIs don't have file extensions
-      const mimeType = asset.mimeType ?? 'image/jpeg';
-      const ext = mimeType.split('/')[1] ?? 'jpg';
-      const path = `customers/${session.user.id}.${ext}`;
+      // Derive a safe MIME type and extension from the asset
+      const rawMime = (asset.mimeType ?? 'image/jpeg').toLowerCase();
+      const mimeToExt: Record<string, string> = {
+        'image/jpeg': 'jpg', 'image/jpg': 'jpg',
+        'image/png': 'png', 'image/webp': 'webp',
+        'image/heic': 'jpg', // HEIC fetched as blob becomes JPEG on iOS
+      };
+      const safeExt = mimeToExt[rawMime] ?? 'jpg';
+      const safeContentType = safeExt === 'jpg' ? 'image/jpeg' : `image/${safeExt}`;
+      const path = `customers/${session.user.id}.${safeExt}`;
 
       // Fetch the image as a blob
       const response = await fetch(asset.uri);
@@ -80,7 +86,7 @@ export default function AccountTab() {
 
       const { error: uploadErr } = await supabase.storage
         .from('avatars')
-        .upload(path, blob, { upsert: true, contentType: `image/${ext}` });
+        .upload(path, blob, { upsert: true, contentType: safeContentType });
 
       if (uploadErr) throw new Error(uploadErr.message);
 
@@ -106,7 +112,12 @@ export default function AccountTab() {
     return (
       <SafeAreaView style={[styles.container, styles.centered]}>
         <Text style={styles.message}>Sign in to view your account</Text>
-        <TouchableOpacity style={styles.primaryButton} onPress={() => router.push('/(auth)/login')}>
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={() => router.push('/(auth)/login')}
+          accessibilityLabel="Sign in to your account"
+          accessibilityRole="button"
+        >
           <Text style={styles.primaryButtonText}>Sign In</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -117,7 +128,13 @@ export default function AccountTab() {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Avatar */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.avatarWrapper} onPress={pickAndUploadAvatar} disabled={uploading}>
+        <TouchableOpacity
+          style={styles.avatarWrapper}
+          onPress={pickAndUploadAvatar}
+          disabled={uploading}
+          accessibilityLabel={uploading ? 'Uploading profile photo' : 'Change profile photo'}
+          accessibilityRole="button"
+        >
           {avatarUrl ? (
             <Image source={{ uri: avatarUrl }} style={styles.avatarImage} resizeMode="cover" />
           ) : (
@@ -141,17 +158,35 @@ export default function AccountTab() {
       </View>
 
       <View style={styles.section}>
-        <TouchableOpacity activeOpacity={0.7} style={styles.row} onPress={() => router.push('/(tabs)/trucks')}>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          style={styles.row}
+          onPress={() => router.push('/(tabs)/trucks')}
+          accessibilityLabel="Browse trucks"
+          accessibilityRole="button"
+        >
           <Text style={styles.rowText}>Browse Trucks</Text>
           <Text style={styles.chevron}>›</Text>
         </TouchableOpacity>
-        <TouchableOpacity activeOpacity={0.7} style={[styles.row, styles.rowLast]} onPress={() => router.push('/(tabs)/orders')}>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          style={[styles.row, styles.rowLast]}
+          onPress={() => router.push('/(tabs)/orders')}
+          accessibilityLabel="My orders"
+          accessibilityRole="button"
+        >
           <Text style={styles.rowText}>My Orders</Text>
           <Text style={styles.chevron}>›</Text>
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity activeOpacity={0.7} style={styles.signOutButton} onPress={handleSignOut}>
+      <TouchableOpacity
+        activeOpacity={0.7}
+        style={styles.signOutButton}
+        onPress={handleSignOut}
+        accessibilityLabel="Sign out"
+        accessibilityRole="button"
+      >
         <Text style={styles.signOutText}>Sign Out</Text>
       </TouchableOpacity>
     </SafeAreaView>

@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
 
 type Platform = {
   id: string;
@@ -57,19 +59,110 @@ const PREVIEW_TEMPLATES = [
   "📍 Lunch is served! Find us at {location} today until {close_time} 🍽️",
 ];
 
+const MAX_BROADCAST = 160;
+const RATE_LIMIT_SECS = 60;
+
 export default function SocialPage() {
+  const router = useRouter();
+  const mountedRef = useRef(true);
   const [platforms, setPlatforms] = useState(PLATFORMS);
   const [selectedTemplate, setSelectedTemplate] = useState(0);
   const [customMessage, setCustomMessage] = useState("");
   const [useCustom, setUseCustom] = useState(false);
   const [showComingSoon, setShowComingSoon] = useState(false);
 
+  // Broadcast state
+  const [truckId, setTruckId] = useState<string | null>(null);
+  const [broadcastMsg, setBroadcastMsg] = useState("");
+  const [broadcastSending, setBroadcastSending] = useState(false);
+  const [broadcastCooldown, setBroadcastCooldown] = useState(0);
+  const [broadcastToast, setBroadcastToast] = useState<{ msg: string; isError: boolean } | null>(null);
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const broadcastToastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    // Load truck id for broadcast
+    (async () => {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user || !mountedRef.current) return;
+        const { data: truck } = await supabase
+          .from("trucks")
+          .select("id")
+          .eq("owner_id", user.id)
+          .maybeSingle();
+        if (!mountedRef.current) return;
+        if (!truck) { router.replace("/"); return; }
+        setTruckId(truck.id);
+      } catch { /* ignore */ }
+    })();
+    return () => {
+      mountedRef.current = false;
+      if (cooldownRef.current) clearInterval(cooldownRef.current);
+      if (broadcastToastRef.current) clearTimeout(broadcastToastRef.current);
+    };
+  }, []);
+
+  function showBroadcastToast(msg: string, isError: boolean) {
+    if (broadcastToastRef.current) clearTimeout(broadcastToastRef.current);
+    setBroadcastToast({ msg, isError });
+    broadcastToastRef.current = setTimeout(() => {
+      if (mountedRef.current) setBroadcastToast(null);
+    }, 4000);
+  }
+
+  function startCooldown() {
+    setBroadcastCooldown(RATE_LIMIT_SECS);
+    cooldownRef.current = setInterval(() => {
+      setBroadcastCooldown((n) => {
+        if (n <= 1) {
+          if (cooldownRef.current) clearInterval(cooldownRef.current);
+          return 0;
+        }
+        return n - 1;
+      });
+    }, 1000);
+  }
+
+  async function sendBroadcast() {
+    if (!broadcastMsg.trim() || !truckId || broadcastCooldown > 0) return;
+    setBroadcastSending(true);
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch("/api/notify-followers", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session?.access_token ?? ""}`,
+        },
+        body: JSON.stringify({ truck_id: truckId, message: broadcastMsg.trim() }),
+      });
+      if (!mountedRef.current) return;
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error ?? `Error ${res.status}`);
+      }
+      const data = await res.json();
+      showBroadcastToast(
+        `Broadcast sent to ${data.sent ?? 0} follower${data.sent !== 1 ? "s" : ""}!`,
+        false
+      );
+      setBroadcastMsg("");
+      startCooldown();
+    } catch (err: any) {
+      if (mountedRef.current) showBroadcastToast(err?.message ?? "Broadcast failed — try again.", true);
+    } finally {
+      if (mountedRef.current) setBroadcastSending(false);
+    }
+  }
+
   function toggleConnect(id: string) {
-    setPlatforms((prev) => prev.map((p) =>
-      p.id === id && !p.comingSoon
-        ? { ...p, connected: !p.connected }
-        : p
-    ));
+    const platform = platforms.find((p) => p.id === id);
+    if (!platform || platform.comingSoon) return;
+    // TODO: implement OAuth connections
   }
 
   const connectedCount = platforms.filter((p) => p.connected).length;
@@ -88,18 +181,78 @@ export default function SocialPage() {
         </p>
       </div>
 
+      {/* Broadcast Toast */}
+      {broadcastToast && (
+        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-2xl shadow-lg text-sm font-semibold transition-all ${
+          broadcastToast.isError ? "bg-red-600 text-white" : "bg-green-600 text-white"
+        }`}>
+          {broadcastToast.msg}
+        </div>
+      )}
+
       <div className="p-4 flex flex-col gap-5 max-w-lg mx-auto">
 
-        {/* Phase 5 Banner */}
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex gap-3">
-          <span className="text-2xl flex-shrink-0">🚧</span>
+        {/* ── Broadcast to Followers ── */}
+        <div className="bg-white rounded-2xl shadow-sm p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-8 h-8 rounded-full bg-brand-red flex items-center justify-center flex-shrink-0">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/>
+              </svg>
+            </div>
+            <p className="text-sm font-bold text-neutral-800">Broadcast to Followers</p>
+          </div>
+          <p className="text-xs text-neutral-400 mb-3">
+            Send a push notification directly to everyone who follows your truck.
+          </p>
+          <textarea
+            value={broadcastMsg}
+            onChange={(e) => setBroadcastMsg(e.target.value.slice(0, MAX_BROADCAST))}
+            placeholder="e.g. We're out of Al Pastor today — try the Birria instead! 🔥"
+            rows={3}
+            maxLength={MAX_BROADCAST}
+            className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-brand-red resize-none"
+          />
+          <div className="flex items-center justify-between mt-2">
+            <span className={`text-xs font-medium ${broadcastMsg.length >= MAX_BROADCAST - 10 ? "text-brand-red" : "text-neutral-400"}`}>
+              {broadcastMsg.length}/{MAX_BROADCAST}
+            </span>
+            <button
+              onClick={sendBroadcast}
+              disabled={broadcastSending || broadcastCooldown > 0 || !broadcastMsg.trim() || !truckId}
+              aria-label="Send broadcast message to followers"
+              className="px-4 py-2 bg-brand-red text-white rounded-xl text-sm font-bold disabled:opacity-40 transition-opacity flex items-center gap-2"
+            >
+              {broadcastSending
+                ? "Sending..."
+                : broadcastCooldown > 0
+                ? `Wait ${broadcastCooldown}s`
+                : "Send Broadcast"}
+            </button>
+          </div>
+          {broadcastCooldown > 0 && (
+            <div className="mt-2">
+              <div className="h-1 bg-neutral-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-brand-red rounded-full transition-all duration-1000"
+                  style={{ width: `${(broadcastCooldown / RATE_LIMIT_SECS) * 100}%` }}
+                />
+              </div>
+              <p className="text-xs text-neutral-400 mt-1">You can send another broadcast in {broadcastCooldown}s</p>
+            </div>
+          )}
+        </div>
+
+        {/* Auto-post coming soon banner */}
+        <div className="bg-brand-red/5 border border-brand-red/20 rounded-2xl p-4 flex gap-3">
+          <span className="text-2xl flex-shrink-0">📡</span>
           <div>
-            <p className="text-sm font-semibold text-amber-800">
-              Full integration coming in Phase 5
+            <p className="text-sm font-semibold text-neutral-800">
+              Auto-posting coming soon
             </p>
-            <p className="text-xs text-amber-600 mt-0.5">
-              Connect your accounts below to be ready when it launches.
-              Your location will auto-post every time you tap Go Live.
+            <p className="text-xs text-neutral-500 mt-0.5">
+              Connect your accounts now to be ready. When live, your location will
+              automatically post every time you tap Go Live.
             </p>
           </div>
         </div>
