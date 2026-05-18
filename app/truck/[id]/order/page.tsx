@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, useRef, use } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -28,7 +28,12 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [customerId, setCustomerId] = useState<string | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     // Load cart
@@ -44,10 +49,10 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
     } catch {
       router.replace(`/truck/${id}`);
     }
-    // Get logged-in user for order attribution
-    createClient().auth.getUser().then(({ data }) => {
-      setCustomerId(data.user?.id ?? null);
-    });
+    // Get session token for order attribution (fire-and-forget; orders work anonymously too)
+    createClient().auth.getSession()
+      .then(({ data }) => { if (mountedRef.current) setAccessToken(data.session?.access_token ?? null); })
+      .catch(() => { /* not signed in — proceed as guest */ });
   }, [id, router]);
 
   function updateQty(itemId: string, delta: number) {
@@ -68,6 +73,7 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
   }
 
   async function placeOrder() {
+    if (submitting) return; // in-flight guard
     if (!cart || !pickupName.trim()) {
       setError("Please enter your name for pickup.");
       return;
@@ -75,9 +81,12 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
     setError("");
     setSubmitting(true);
     try {
+      const orderHeaders: Record<string, string> = { "Content-Type": "application/json" };
+      if (accessToken) orderHeaders["Authorization"] = `Bearer ${accessToken}`;
+
       const res = await fetch("/api/orders", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: orderHeaders,
         body: JSON.stringify({
           truck_id: id,
           pickup_name: pickupName.trim(),
@@ -89,18 +98,26 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
             quantity: i.quantity,
           })),
           total: subtotal,
-          ...(customerId ? { customer_id: customerId } : {}),
         }),
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
+        if (res.status === 409) {
+          throw new Error("__409__");
+        }
         throw new Error((errData as { error?: string }).error ?? "Failed to place order. Please try again.");
       }
       const data = await res.json();
       localStorage.removeItem("hot-truck-cart");
-      router.replace(`/truck/${id}/order/confirmation?orderId=${data.orderId}&name=${encodeURIComponent(pickupName.trim())}`);
+      // Store confirmed order in sessionStorage so the confirmation page doesn't rely on URL params
+      try { sessionStorage.setItem("confirmed-order", JSON.stringify({ orderId: data.orderId, name: pickupName.trim(), truckId: id })); } catch { /* ignore */ }
+      router.replace(`/truck/${id}/order/confirmation?name=${encodeURIComponent(pickupName.trim())}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      const msg = err instanceof Error ? err.message : "Something went wrong. Please try again.";
+      setError(msg === "__409__"
+        ? "This truck is no longer accepting orders. Please go back and try another truck."
+        : msg
+      );
       setSubmitting(false);
     }
   }
@@ -126,9 +143,10 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
       <div className="bg-neutral-900 px-5 py-4 flex items-center gap-4 sticky top-0 z-10">
         <button
           onClick={() => router.push(`/truck/${id}`)}
+          aria-label="Back to truck"
           className="text-neutral-400 hover:text-white transition-colors"
         >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
             <path d="M19 12H5M12 5l-7 7 7 7"/>
           </svg>
         </button>
@@ -190,7 +208,7 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
                 {/* Photo */}
                 <div className="w-12 h-12 rounded-lg bg-neutral-100 flex-shrink-0 overflow-hidden relative">
                   {item.photo ? (
-                    <Image src={item.photo} alt={item.name} fill className="object-cover" />
+                    <Image src={item.photo} alt={item.name} fill sizes="48px" className="object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-neutral-100">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
@@ -251,29 +269,34 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
           <p className="text-xs font-black text-neutral-400 uppercase tracking-wider mb-3">Pickup Details</p>
 
           <div className="mb-3">
-            <label className="block text-sm font-bold text-neutral-700 mb-1.5">
+            <label htmlFor="pickup-name" className="block text-sm font-bold text-neutral-700 mb-1.5">
               Your Name <span className="text-brand-red">*</span>
             </label>
             <input
+              id="pickup-name"
               type="text"
               value={pickupName}
               onChange={(e) => setPickupName(e.target.value)}
               placeholder="Name for your pickup order"
+              maxLength={100}
+              autoComplete="name"
               className="w-full border border-neutral-200 rounded-xl px-4 py-3 text-base focus:outline-none focus:border-brand-red transition-colors bg-white"
             />
             <p className="text-xs text-neutral-400 mt-1.5">The truck will call this name when your order is ready.</p>
           </div>
 
           <div>
-            <label className="block text-sm font-bold text-neutral-700 mb-1.5">
+            <label htmlFor="order-notes" className="block text-sm font-bold text-neutral-700 mb-1.5">
               Special Instructions{" "}
               <span className="text-neutral-400 font-normal">(optional)</span>
             </label>
             <textarea
+              id="order-notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Allergies, substitutions, extra sauce..."
               rows={3}
+              maxLength={500}
               className="w-full border border-neutral-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-red transition-colors resize-none bg-white"
             />
           </div>
@@ -292,6 +315,14 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
           {error && (
             <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 mb-3">
               <p className="text-sm text-red-600 font-semibold">{error}</p>
+              {error.startsWith("This truck is no longer accepting orders") && (
+                <button
+                  onClick={() => router.push(`/truck/${id}`)}
+                  className="mt-2 text-sm font-bold text-brand-red hover:underline"
+                >
+                  ← Go Back
+                </button>
+              )}
             </div>
           )}
 

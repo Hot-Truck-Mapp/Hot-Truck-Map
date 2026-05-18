@@ -1,28 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 
 export default function ForgotPasswordPage() {
+  const mountedRef = useRef(true);
   const [email, setEmail]       = useState("");
   const [loading, setLoading]   = useState(false);
   const [sent, setSent]         = useState(false);
   const [error, setError]       = useState<string | null>(null);
 
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   async function handleReset() {
-    if (loading) return;
+    if (loading) return; // in-flight guard
     if (!email.trim()) return;
     if (!email.includes("@")) { setError("Please enter a valid email address."); return; }
     setLoading(true);
     setError(null);
-    const supabase = createClient();
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: window.location.origin + "/reset-password",
-    });
-    setLoading(false);
-    if (error) { setError(error.message); return; }
-    setSent(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: window.location.origin + "/reset-password",
+      });
+      if (!mountedRef.current) return;
+      if (error) { setError(error.message); return; }
+      setSent(true);
+    } catch {
+      if (mountedRef.current) setError("Network error — please check your connection and try again.");
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
   }
 
   return (
@@ -64,13 +76,15 @@ export default function ForgotPasswordPage() {
 
               <div className="flex flex-col gap-4">
                 <div>
-                  <label className="text-sm font-medium text-neutral-600">Email address</label>
+                  <label htmlFor="forgot-email" className="text-sm font-medium text-neutral-600">Email address</label>
                   <input
+                    id="forgot-email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleReset()}
                     placeholder="you@example.com"
+                    autoComplete="email"
                     maxLength={254}
                     className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
                   />

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import VerificationBanner from "@/components/auth/VerificationBanner";
@@ -72,7 +73,7 @@ export default function Dashboard() {
   // Toast notifications
   const [toast, setToast] = useState<{msg: string; isError?: boolean} | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  function showToast(msg: string, isError = true) {
+  function showToast(msg: string, isError = false) {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ msg, isError });
     toastTimerRef.current = setTimeout(() => setToast(null), 4000);
@@ -107,10 +108,25 @@ export default function Dashboard() {
   // Orders
   const [orders, setOrders]           = useState<any[]>([]);
   const [newOrderCount, setNewOrderCount] = useState(0);
+  const [exportCsvLoading, setExportCsvLoading] = useState(false);
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
 
+  // Email confirmation
+  const [emailConfirmed, setEmailConfirmed] = useState(true);
+  const [userEmail, setUserEmail]           = useState<string>("");
+  const [resendingEmail, setResendingEmail] = useState(false);
+  const [resendEmailMsg, setResendEmailMsg] = useState<string | null>(null);
+
+  // Profile completeness nudge
+  const [completenessNudgeDismissed, setCompletenessNudgeDismissed] = useState(false);
+
+  const mountedRef = useRef(true);
+
   // ── Cleanup timers on unmount ───────────────────────────────────────────────
-  useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
+  useEffect(() => () => {
+    mountedRef.current = false;
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+  }, []);
 
   // ── Initial load ────────────────────────────────────────────────────────────
   useEffect(() => { loadAll(); }, []);
@@ -124,15 +140,24 @@ export default function Dashboard() {
         router.replace("/login");
         return;
       }
-      // Redirect non-operators back to home
-      if (user.user_metadata?.role !== "operator") {
+      setUserId(user.id);
+      setUserEmail(user.email ?? "");
+      // Block dashboard if email is not confirmed
+      if (!user.email_confirmed_at) {
+        setEmailConfirmed(false);
+        setLoading(false);
+        return;
+      }
+
+      const { data: truck } = await supabase
+        .from("trucks").select("id, name, description, cuisine, phone, instagram, profile_photo, is_live, dietary_tags").eq("owner_id", user.id).maybeSingle();
+
+      // Redirect users who are not operators — DB truck ownership is the only authority.
+      // Never trust user-editable user_metadata.role for access control.
+      if (!truck) {
         router.replace("/");
         return;
       }
-      setUserId(user.id);
-
-      const { data: truck } = await supabase
-        .from("trucks").select("*").eq("owner_id", user.id).maybeSingle();
 
       if (truck) {
         setTruckId(truck.id);
@@ -155,10 +180,10 @@ export default function Dashboard() {
         }
 
         const [menuRes, schedRes, ordersRes, followsRes] = await Promise.all([
-          supabase.from("menu_items").select("*").eq("truck_id", truck.id).order("created_at"),
-          supabase.from("schedules").select("*").eq("truck_id", truck.id).order("day_of_week"),
-          supabase.from("orders").select("*").eq("truck_id", truck.id).order("created_at", { ascending: false }).limit(100),
-          supabase.from("follows").select("*", { count: "exact", head: true }).eq("truck_id", truck.id),
+          supabase.from("menu_items").select("id, truck_id, name, description, price, category, allergens, is_popular, is_sold_out, photo, sort_order, created_at").eq("truck_id", truck.id).order("created_at").limit(200),
+          supabase.from("schedules").select("id, truck_id, day_of_week, open_time, close_time, location, notes").eq("truck_id", truck.id).order("day_of_week").limit(7),
+          supabase.from("orders").select("id, truck_id, pickup_name, notes, items, total, status, created_at, customer_id").eq("truck_id", truck.id).order("created_at", { ascending: false }).limit(100),
+          supabase.from("follows").select("id", { count: "exact", head: true }).eq("truck_id", truck.id),
         ]);
         setMenuItems(menuRes.data ?? []);
         setSchedule(schedRes.data ?? []);
@@ -174,9 +199,9 @@ export default function Dashboard() {
         setActiveTab("profile");
       }
     } catch (err: any) {
-      setError("Could not connect to the server. Check your internet and try again.");
+      if (mountedRef.current) setError("Could not connect to the server. Check your internet and try again.");
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }
 
@@ -211,11 +236,22 @@ export default function Dashboard() {
   async function uploadProfilePhoto(file: File) {
     if (!file.type.startsWith("image/")) { showToast("Please choose an image file."); return; }
     if (file.size > 5 * 1024 * 1024) { showToast("Photo must be under 5 MB"); return; }
+    const allowed = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowed.includes(file.type)) {
+      showToast("Only JPG, PNG, or WebP images are allowed.");
+      return;
+    }
     setPhotoUploading(true);
     try {
       const supabase = createClient();
-      const ext = file.name.split(".").pop();
-      const path = `trucks/${Date.now()}.${ext}`;
+      const rawExt = (file.name.split(".").pop() ?? "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const ext = rawExt || "jpg";
+      const safeName = file.name
+        .replace(/\.[^.]+$/, "")
+        .replace(/[^a-zA-Z0-9._-]/g, "-")
+        .slice(0, 64);
+      const scopeId = truckId ?? userId ?? "unknown";
+      const path = `trucks/${scopeId}/${safeName}-${Date.now()}.${ext}`;
       const { error: uploadErr } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
       if (uploadErr) throw new Error(uploadErr.message);
       const { data } = supabase.storage.from("avatars").getPublicUrl(path);
@@ -223,29 +259,40 @@ export default function Dashboard() {
       setProfile(p => ({ ...p, profile_photo: data.publicUrl }));
       if (truckId) {
         const { error: saveErr } = await supabase.from("trucks").update({ profile_photo: data.publicUrl }).eq("id", truckId);
-        if (saveErr) throw new Error("Photo uploaded but failed to save: " + saveErr.message);
+        if (saveErr) {
+          // Clean up orphaned storage file before surfacing the error
+          void supabase.storage.from("avatars").remove([path]).catch(() => {});
+          throw new Error("Photo uploaded but failed to save: " + saveErr.message);
+        }
       }
     } catch (err: any) { showToast(err?.message ?? "Photo upload failed"); }
     setPhotoUploading(false);
   }
 
   async function saveProfile() {
+    if (profileSaving) return; // in-flight guard
     if (!profile.name.trim() || !userId) return;
+    if (profile.name.trim().length > 100) {
+      showToast("Truck name must be 100 characters or fewer.", true);
+      return;
+    }
     setProfileSaving(true);
     try {
       const supabase = createClient();
       if (truckId) {
         const { error } = await supabase.from("trucks").update({
-          name: profile.name.trim(), description: profile.description,
-          cuisine: profile.cuisine, phone: profile.phone,
-          instagram: profile.instagram, profile_photo: profile.profile_photo,
+          name: profile.name.trim(), description: profile.description.slice(0, 1000),
+          cuisine: profile.cuisine,
+          phone: profile.phone.replace(/[^\d\s().+\-x]/g, "").slice(0, 20),
+          instagram: profile.instagram.replace(/[^\w.]/g, "").slice(0, 30),
+          profile_photo: profile.profile_photo,
           dietary_tags: profile.dietary_tags,
-        }).eq("id", truckId);
+        }).eq("id", truckId).eq("owner_id", userId ?? "");
         if (error) throw new Error(error.message);
       } else {
         const { data: newTruck, error } = await supabase.from("trucks").insert({
           owner_id: userId, name: profile.name.trim(),
-          description: profile.description, cuisine: profile.cuisine,
+          description: profile.description.slice(0, 1000), cuisine: profile.cuisine,
           phone: profile.phone, instagram: profile.instagram,
           profile_photo: profile.profile_photo, is_live: false,
           dietary_tags: profile.dietary_tags,
@@ -264,11 +311,21 @@ export default function Dashboard() {
   async function uploadMenuPhoto(file: File) {
     if (!file.type.startsWith("image/")) { showToast("Please choose an image file."); return; }
     if (file.size > 5 * 1024 * 1024) { showToast("Photo must be under 5 MB"); return; }
+    const allowed = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowed.includes(file.type)) {
+      showToast("Only JPG, PNG, or WebP images are allowed.");
+      return;
+    }
     setMenuUploading(true);
     try {
       const supabase = createClient();
-      const ext = file.name.split(".").pop();
-      const path = `menu/${Date.now()}.${ext}`;
+      const rawExt = (file.name.split(".").pop() ?? "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const ext = rawExt || "jpg";
+      const safeName = file.name
+        .replace(/\.[^.]+$/, "")
+        .replace(/[^a-zA-Z0-9._-]/g, "-")
+        .slice(0, 64);
+      const path = `menu/${truckId ?? "unknown"}/${safeName}-${Date.now()}.${ext}`;
       const { error: uploadErr } = await supabase.storage.from("menu-photos").upload(path, file, { upsert: true });
       if (uploadErr) throw new Error(uploadErr.message);
       const { data } = supabase.storage.from("menu-photos").getPublicUrl(path);
@@ -276,7 +333,11 @@ export default function Dashboard() {
       setItemForm(f => ({ ...f, photo: data.publicUrl }));
       if (editingItem) {
         const { error: saveErr } = await supabase.from("menu_items").update({ photo: data.publicUrl }).eq("id", editingItem.id);
-        if (saveErr) throw new Error("Photo uploaded but failed to save: " + saveErr.message);
+        if (saveErr) {
+          // Clean up orphaned storage file before surfacing the error
+          void supabase.storage.from("menu-photos").remove([path]).catch(() => {});
+          throw new Error("Photo uploaded but failed to save: " + saveErr.message);
+        }
         setMenuItems(items => items.map(i => i.id === editingItem.id ? { ...i, photo: data.publicUrl } : i));
       }
     } catch (err: any) { showToast(err?.message ?? "Photo upload failed"); }
@@ -300,14 +361,11 @@ export default function Dashboard() {
   }
 
   async function saveMenuItem() {
+    if (menuSaving) return; // in-flight guard
     if (!truckId || !itemForm.name || !itemForm.price) return;
     const parsedPrice = parseFloat(itemForm.price);
-    if (isNaN(parsedPrice) || parsedPrice <= 0) {
-      showToast("Please enter a valid price greater than $0.00");
-      return;
-    }
-    if (parsedPrice > 9999.99) {
-      showToast("Price cannot exceed $9,999.99");
+    if (isNaN(parsedPrice) || parsedPrice <= 0 || parsedPrice > 10_000) {
+      showToast("Please enter a valid price between $0.01 and $10,000.00");
       return;
     }
     setMenuSaving(true);
@@ -327,7 +385,7 @@ export default function Dashboard() {
         const { error } = await supabase.from("menu_items").insert(payload);
         if (error) throw new Error(error.message);
       }
-      const { data } = await supabase.from("menu_items").select("*").eq("truck_id", truckId).order("created_at");
+      const { data } = await supabase.from("menu_items").select("id, truck_id, name, description, price, category, allergens, is_popular, is_sold_out, photo, sort_order, created_at").eq("truck_id", truckId).order("created_at").limit(200);
       setMenuItems(data ?? []);
       showToast(editingItem ? "Item updated!" : "Item added!", false);
       setMenuModal(false);
@@ -340,9 +398,13 @@ export default function Dashboard() {
   async function deleteMenuItem(id: string) {
     if (deletingMenuId !== id) { setDeletingMenuId(id); return; }
     setDeletingMenuId(null);
+    if (!truckId || !userId) return;
     try {
       const supabase = createClient();
-      const { error } = await supabase.from("menu_items").delete().eq("id", id).eq("truck_id", truckId!);
+      // Verify ownership via truck before delete (defense-in-depth on top of RLS)
+      const { data: ownerCheck } = await supabase.from("trucks").select("id").eq("id", truckId).eq("owner_id", userId).maybeSingle();
+      if (!ownerCheck) { showToast("Permission denied"); return; }
+      const { error } = await supabase.from("menu_items").delete().eq("id", id).eq("truck_id", truckId);
       if (!error) setMenuItems(items => items.filter(i => i.id !== id));
       else showToast("Delete failed: " + error.message);
     } catch {
@@ -391,7 +453,12 @@ export default function Dashboard() {
     setSchedSaving(true);
     try {
       const supabase = createClient();
-      const payload = { truck_id: truckId, ...schedForm };
+      const payload = {
+        truck_id: truckId,
+        ...schedForm,
+        location: schedForm.location.trim().slice(0, 200),
+        notes: (schedForm.notes ?? "").trim().slice(0, 500),
+      };
       if (editingSched?.id) {
         const { error } = await supabase.from("schedules").update(payload).eq("id", editingSched.id).eq("truck_id", truckId);
         if (error) throw new Error(error.message);
@@ -399,7 +466,7 @@ export default function Dashboard() {
         const { error } = await supabase.from("schedules").insert(payload);
         if (error) throw new Error(error.message);
       }
-      const { data } = await supabase.from("schedules").select("*").eq("truck_id", truckId).order("day_of_week");
+      const { data } = await supabase.from("schedules").select("id, truck_id, day_of_week, open_time, close_time, location, notes").eq("truck_id", truckId).order("day_of_week").limit(7);
       setSchedule(data ?? []);
       showToast("Schedule saved!", false);
       setSchedModal(false);
@@ -410,9 +477,12 @@ export default function Dashboard() {
   async function deleteSchedEntry(id: string) {
     if (deletingSchedId !== id) { setDeletingSchedId(id); return; }
     setDeletingSchedId(null);
+    if (!truckId || !userId) return;
     try {
       const supabase = createClient();
-      const { error } = await supabase.from("schedules").delete().eq("id", id).eq("truck_id", truckId!);
+      const { data: ownerCheck } = await supabase.from("trucks").select("id").eq("id", truckId).eq("owner_id", userId).maybeSingle();
+      if (!ownerCheck) { showToast("Permission denied"); return; }
+      const { error } = await supabase.from("schedules").delete().eq("id", id).eq("truck_id", truckId);
       if (!error) setSchedule(s => s.filter(e => e.id !== id));
       else showToast("Delete failed: " + error.message);
     } catch {
@@ -425,11 +495,11 @@ export default function Dashboard() {
     const supabase = createClient();
     if (!truckId) return;
     const { error: upsertErr } = await supabase.from("locations").upsert(
-      { truck_id: truckId, lat, lng, address, broadcasted_at: new Date().toISOString() },
+      { truck_id: truckId, lat, lng, address: address.slice(0, 300), broadcasted_at: new Date().toISOString() },
       { onConflict: "truck_id" }
     );
     if (upsertErr) throw new Error(upsertErr.message);
-    const { error: updateErr } = await supabase.from("trucks").update({ is_live: true }).eq("id", truckId);
+    const { error: updateErr } = await supabase.from("trucks").update({ is_live: true }).eq("id", truckId).eq("owner_id", userId ?? "");
     if (updateErr) throw new Error(updateErr.message);
     setLiveAddress(address);
     setLiveStatus("live");
@@ -438,13 +508,13 @@ export default function Dashboard() {
 
   async function reverseGeocode(lat: number, lng: number): Promise<string> {
     const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
-    if (!token) return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    if (!token) return "Location updated (address unavailable)";
     try {
       const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${token}`);
-      if (!res.ok) return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      if (!res.ok) return "Location updated (address unavailable)";
       const data = await res.json();
-      return data.features?.[0]?.place_name ?? `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-    } catch { return `${lat.toFixed(5)}, ${lng.toFixed(5)}`; }
+      return data.features?.[0]?.place_name ?? "Location updated (address unavailable)";
+    } catch { return "Location updated (address unavailable)"; }
   }
 
   // Stop watching GPS and clear the auto-refresh interval
@@ -537,7 +607,7 @@ export default function Dashboard() {
     stopLocationTracking();
     try {
       const supabase = createClient();
-      const { error } = await supabase.from("trucks").update({ is_live: false }).eq("id", truckId);
+      const { error } = await supabase.from("trucks").update({ is_live: false }).eq("id", truckId).eq("owner_id", userId ?? "");
       if (error) { showToast("Could not go offline: " + error.message); return; }
       setLiveStatus("idle"); setIsLive(false); setLiveAddress(null);
       setManualAddr(""); setShowManual(false);
@@ -584,15 +654,16 @@ export default function Dashboard() {
       }
 
       const [followsRes, ordersRes, viewsRes, totalFollowsRes, allOrdersRes, allRevenueRes] = await Promise.all([
-        supabase.from("follows").select("created_at").eq("truck_id", id).gte("created_at", startDate.toISOString()),
+        supabase.from("follows").select("created_at").eq("truck_id", id).gte("created_at", startDate.toISOString()).limit(2000),
         // All orders in period (for order count chart)
-        supabase.from("orders").select("created_at,total,status").eq("truck_id", id).gte("created_at", startDate.toISOString()),
-        supabase.from("truck_views").select("created_at").eq("truck_id", id).gte("created_at", startDate.toISOString()),
+        supabase.from("orders").select("created_at,total,status").eq("truck_id", id).gte("created_at", startDate.toISOString()).limit(2000),
+        supabase.from("truck_views").select("created_at").eq("truck_id", id).gte("created_at", startDate.toISOString()).limit(5000),
         supabase.from("follows").select("*",{count:"exact",head:true}).eq("truck_id", id),
-        // All-time order count (any status)
+        // All-time order count (any status) — use server-side count, not row scan
         supabase.from("orders").select("id",{count:"exact",head:true}).eq("truck_id", id),
         // All-time revenue = only picked_up (completed) orders
-        supabase.from("orders").select("total").eq("truck_id", id).eq("status", "picked_up"),
+        // Limit is high to minimise silent truncation; true server-side SUM requires an RPC
+        supabase.from("orders").select("total").eq("truck_id", id).eq("status", "picked_up").limit(10000),
       ]);
 
       const fw = followsRes.data ?? [], or = ordersRes.data ?? [], vw = viewsRes.data ?? [];
@@ -659,6 +730,8 @@ export default function Dashboard() {
   }
 
   async function updateOrderStatus(orderId: string, status: string) {
+    const VALID_STATUSES = ["preparing", "ready", "picked_up"] as const;
+    if (!VALID_STATUSES.includes(status as typeof VALID_STATUSES[number])) return;
     if (updatingOrderId) return; // prevent double-tap
     setUpdatingOrderId(orderId);
     try {
@@ -671,6 +744,71 @@ export default function Dashboard() {
       showToast("Failed to update order status — check your connection");
     } finally {
       setUpdatingOrderId(null);
+    }
+  }
+
+  // ── Export CSV ──────────────────────────────────────────────────────────────
+  async function exportOrdersCsv() {
+    if (!truckId) return;
+    setExportCsvLoading(true);
+    try {
+      const supabase = createClient();
+      const { data: allOrders, error: fetchErr } = await supabase
+        .from("orders")
+        .select("id, pickup_name, items, total, status, created_at")
+        .eq("truck_id", truckId)
+        .order("created_at", { ascending: false })
+        .limit(5000); // cap export at 5000 rows to prevent memory exhaustion
+      if (fetchErr) throw new Error(fetchErr.message);
+
+      const rows: string[] = [
+        ["Order ID", "Customer Name", "Items", "Total", "Status", "Date"].join(","),
+      ];
+      for (const order of allOrders ?? []) {
+        const items: any[] = Array.isArray(order.items) ? order.items : [];
+        const itemsStr = items.map((i: any) => `${i.quantity}x ${i.name}`).join("; ");
+        const csvRow = [
+          order.id,
+          JSON.stringify(order.pickup_name ?? ""),
+          JSON.stringify(itemsStr),
+          (order.total ?? 0).toFixed(2),
+          order.status,
+          new Date(order.created_at).toLocaleString(),
+        ].join(",");
+        rows.push(csvRow);
+      }
+
+      const csv = rows.join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `orders-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      showToast("Export failed: " + (err?.message ?? "Please try again."));
+    } finally {
+      setExportCsvLoading(false);
+    }
+  }
+
+  // ── Email confirmation resend ────────────────────────────────────────────────
+  async function resendConfirmationEmail() {
+    if (resendingEmail || !userEmail) return;
+    setResendingEmail(true);
+    setResendEmailMsg(null);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.resend({ type: "signup", email: userEmail });
+      if (error) throw new Error(error.message);
+      setResendEmailMsg("Confirmation email sent! Check your inbox.");
+    } catch (err: any) {
+      setResendEmailMsg(err?.message ?? "Could not send email. Please try again.");
+    } finally {
+      setResendingEmail(false);
     }
   }
 
@@ -690,6 +828,45 @@ export default function Dashboard() {
         className="px-5 py-2.5 bg-brand-red text-white rounded-xl font-semibold text-sm">
         Try Again
       </button>
+    </div>
+  );
+
+  if (!emailConfirmed) return (
+    <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center gap-6 p-6 text-center">
+      <div className="w-16 h-16 bg-amber-500/20 rounded-full flex items-center justify-center">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round">
+          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+          <polyline points="22,6 12,13 2,6"/>
+        </svg>
+      </div>
+      <div className="max-w-sm">
+        <h1 className="text-xl font-black text-white mb-2">Confirm Your Email</h1>
+        <p className="text-neutral-400 text-sm leading-relaxed">
+          Please confirm your email before accessing your dashboard. Check your inbox for a confirmation link.
+        </p>
+        {userEmail && (
+          <p className="text-neutral-500 text-xs mt-2">
+            Sent to <span className="text-neutral-300 font-semibold">{userEmail}</span>
+          </p>
+        )}
+      </div>
+      {resendEmailMsg && (
+        <p className={`text-sm font-semibold px-4 py-2 rounded-lg ${
+          resendEmailMsg.startsWith("Confirmation") ? "bg-green-900/40 text-green-400" : "bg-red-900/40 text-red-400"
+        }`}>
+          {resendEmailMsg}
+        </p>
+      )}
+      <button
+        onClick={resendConfirmationEmail}
+        disabled={resendingEmail}
+        className="px-6 py-3 bg-brand-red text-white rounded-xl font-bold text-sm disabled:opacity-50 hover:bg-red-600 transition-colors"
+      >
+        {resendingEmail ? "Sending..." : "Resend Confirmation Email"}
+      </button>
+      <a href="/" className="text-neutral-500 text-sm hover:text-neutral-300 transition-colors">
+        ← Back to Hot Truck Map
+      </a>
     </div>
   );
 
@@ -768,6 +945,70 @@ export default function Dashboard() {
       {/* Email verification reminder */}
       <VerificationBanner />
 
+      {/* Profile completeness nudge */}
+      {(() => {
+        if (completenessNudgeDismissed) return null;
+        const score =
+          (profile.profile_photo ? 25 : 0) +
+          (profile.description ? 25 : 0) +
+          (profile.cuisine ? 25 : 0) +
+          (profile.phone ? 25 : 0);
+        if (score >= 100) return null;
+        return (
+          <div className="bg-amber-50 border-b border-amber-100 px-4 py-3">
+            <div className="max-w-3xl mx-auto flex items-start gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <p className="text-sm font-black text-amber-900">
+                    Complete your profile — more customers find you
+                  </p>
+                  <button
+                    onClick={() => setCompletenessNudgeDismissed(true)}
+                    className="flex-shrink-0 text-amber-400 hover:text-amber-600 transition-colors"
+                    aria-label="Dismiss"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                      <path d="M18 6 6 18M6 6l12 12"/>
+                    </svg>
+                  </button>
+                </div>
+                {/* Progress bar */}
+                <div className="w-full bg-amber-200 rounded-full h-1.5 mb-2">
+                  <div
+                    className="bg-amber-500 h-1.5 rounded-full transition-all"
+                    style={{ width: `${score}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-amber-700">{score}% complete</p>
+                  <button
+                    onClick={() => setActiveTab("profile")}
+                    className="text-xs font-bold text-amber-800 hover:underline"
+                  >
+                    Go to Profile →
+                  </button>
+                </div>
+                {/* What's missing */}
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {!profile.profile_photo && (
+                    <span className="text-[11px] font-semibold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">+ Photo</span>
+                  )}
+                  {!profile.description && (
+                    <span className="text-[11px] font-semibold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">+ Description</span>
+                  )}
+                  {!profile.cuisine && (
+                    <span className="text-[11px] font-semibold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">+ Cuisine type</span>
+                  )}
+                  {!profile.phone && (
+                    <span className="text-[11px] font-semibold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">+ Phone number</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Mobile Tab Bar (hidden on desktop) ── */}
       <div className="md:hidden bg-white border-b border-neutral-100 sticky top-[61px] z-10"
         style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
@@ -793,6 +1034,15 @@ export default function Dashboard() {
               </span>
             </button>
           ))}
+          {/* Extra pages — not inline tabs, navigate to dedicated routes */}
+          <Link href="/dashboard/catering"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all flex-shrink-0 text-neutral-500 hover:text-neutral-800 hover:bg-neutral-100">
+            Catering
+          </Link>
+          <Link href="/dashboard/social"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all flex-shrink-0 text-neutral-500 hover:text-neutral-800 hover:bg-neutral-100">
+            Social
+          </Link>
         </div>
       </div>
 
@@ -824,6 +1074,20 @@ export default function Dashboard() {
                 </span>
               </button>
             ))}
+          </div>
+          {/* More links — separate pages */}
+          <div className="p-3 border-t border-neutral-100 flex flex-col gap-1">
+            <p className="text-[10px] text-neutral-400 font-semibold px-4 mb-1 uppercase tracking-wider">More</p>
+            <Link href="/dashboard/catering"
+              className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-neutral-500 hover:text-neutral-800 hover:bg-neutral-100 transition-all">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0 text-neutral-400"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Catering Requests
+            </Link>
+            <Link href="/dashboard/social"
+              className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-neutral-500 hover:text-neutral-800 hover:bg-neutral-100 transition-all">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0 text-neutral-400"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+              Social
+            </Link>
           </div>
           <div className="p-3 border-t border-neutral-100">
             <p className="text-[10px] text-neutral-300 font-medium px-4">HOT TRUCK MAP</p>
@@ -878,6 +1142,25 @@ export default function Dashboard() {
                 </div>
               );
             })()}
+
+            {/* ── Get the App nudge ─────────────────────────────────────── */}
+            <div className="w-full bg-neutral-900 rounded-2xl p-4 flex items-start gap-3">
+              <div className="w-10 h-10 bg-brand-red rounded-xl flex items-center justify-center flex-shrink-0">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-black text-white leading-tight">Go live faster with the app</p>
+                <p className="text-xs text-neutral-400 mt-0.5 leading-relaxed">The HotTruckMap mobile app uses your phone&apos;s GPS to broadcast your exact location in one tap.</p>
+                <a
+                  href="https://expo.dev"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block mt-2 text-xs font-bold text-brand-red hover:underline"
+                >
+                  Download the operator app →
+                </a>
+              </div>
+            </div>
 
             {/* Stats row */}
             <div className="grid grid-cols-3 gap-3 w-full">
@@ -1010,7 +1293,7 @@ export default function Dashboard() {
               <div onClick={() => photoRef.current?.click()}
                 className="w-28 h-28 rounded-full bg-neutral-200 overflow-hidden cursor-pointer relative mb-3 border-4 border-white shadow-md">
                 {profile.profile_photo
-                  ? <Image src={profile.profile_photo} alt="Truck" fill className="object-cover"/>
+                  ? <Image src={profile.profile_photo} alt="Truck" fill sizes="80px" className="object-cover"/>
                   : <div className="w-full h-full flex items-center justify-center">
                       <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="1.5" strokeLinecap="round">
                         <path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7V8z"/>
@@ -1122,8 +1405,9 @@ export default function Dashboard() {
                 </div>
                 <input
                   value={profile.instagram}
-                  onChange={e => setProfile(p => ({ ...p, instagram: e.target.value.replace("@","") }))}
+                  onChange={e => setProfile(p => ({ ...p, instagram: e.target.value.replace("@","").slice(0, 30) }))}
                   placeholder="yourtruck"
+                  maxLength={30}
                   className="flex-1 px-3 py-3 text-base focus:outline-none bg-white text-neutral-800 placeholder-neutral-300"
                 />
               </div>
@@ -1219,7 +1503,7 @@ export default function Dashboard() {
                           className={`flex gap-3 p-4 ${idx < items.length - 1 ? "border-b border-neutral-100" : ""} ${item.is_sold_out ? "opacity-50" : ""}`}>
                           <div className="w-20 h-20 rounded-xl bg-neutral-100 flex-shrink-0 overflow-hidden relative">
                             {item.photo
-                              ? <Image src={item.photo} alt={item.name} fill className="object-cover"/>
+                              ? <Image src={item.photo} alt={item.name} fill sizes="64px" className="object-cover"/>
                               : <div className="w-full h-full flex items-center justify-center bg-neutral-200">
                                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
                                     <rect x="3" y="3" width="18" height="18" rx="2"/>
@@ -1656,11 +1940,36 @@ export default function Dashboard() {
                 <h2 className="font-black text-neutral-800 text-xl">Incoming Orders</h2>
                 <p className="text-xs text-neutral-400 mt-0.5">Updates in real time — no refresh needed</p>
               </div>
-              {orders.length > 0 && (
-                <span className="text-xs font-bold text-neutral-400 bg-neutral-100 px-3 py-1.5 rounded-full">
-                  {orders.length} total
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {orders.length > 0 && (
+                  <span className="text-xs font-bold text-neutral-400 bg-neutral-100 px-3 py-1.5 rounded-full">
+                    {orders.length} total
+                  </span>
+                )}
+                {truckId && (
+                  <button
+                    onClick={exportOrdersCsv}
+                    disabled={exportCsvLoading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-800 text-white text-xs font-bold disabled:opacity-50 transition-opacity"
+                  >
+                    {exportCsvLoading ? (
+                      <>
+                        <span className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin inline-block" />
+                        Exporting...
+                      </>
+                    ) : (
+                      <>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                          <polyline points="7 10 12 15 17 10"/>
+                          <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        Export CSV
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
             </div>
 
             {!truckId ? (
@@ -1809,9 +2118,9 @@ export default function Dashboard() {
           <div className="bg-white w-full rounded-t-3xl max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100 sticky top-0 bg-white z-10">
               <h2 className="text-lg font-black text-neutral-900">{editingItem ? "Edit Item" : "New Item"}</h2>
-              <button onClick={() => setMenuModal(false)}
+              <button onClick={() => setMenuModal(false)} aria-label="Close menu item editor"
                 className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
                   <path d="M18 6 6 18M6 6l12 12"/>
                 </svg>
               </button>
@@ -1821,7 +2130,7 @@ export default function Dashboard() {
               <div onClick={() => menuPhotoRef.current?.click()}
                 className="w-full h-36 rounded-2xl overflow-hidden cursor-pointer bg-neutral-100 border-2 border-dashed border-neutral-200 hover:border-brand-red transition-colors flex items-center justify-center relative">
                 {itemForm.photo
-                  ? <Image src={itemForm.photo} alt="preview" fill className="object-cover"/>
+                  ? <Image src={itemForm.photo} alt="preview" fill sizes="96px" className="object-cover"/>
                   : <p className="text-sm text-neutral-400">{menuUploading ? "Uploading..." : "Tap to add photo"}</p>}
                 {itemForm.photo && (
                   <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
@@ -1856,7 +2165,8 @@ export default function Dashboard() {
                       onChange={e => setItemForm(f => ({ ...f, price: e.target.value }))}
                       placeholder="0.00"
                       step="0.01"
-                      min="0"
+                      min="0.01"
+                      max="10000"
                       className="flex-1 px-3 py-3 text-base focus:outline-none bg-white text-neutral-800 placeholder-neutral-300"
                     />
                   </div>
@@ -1926,9 +2236,9 @@ export default function Dashboard() {
                   {["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][schedForm.day_of_week]}
                 </p>
               </div>
-              <button onClick={() => setSchedModal(false)}
+              <button onClick={() => setSchedModal(false)} aria-label="Close schedule editor"
                 className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500 hover:bg-neutral-200">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
                   <path d="M18 6 6 18M6 6l12 12"/>
                 </svg>
               </button>

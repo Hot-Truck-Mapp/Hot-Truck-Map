@@ -1,7 +1,10 @@
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
+import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { supabase } from './supabase';
+
+const PUSH_TOKEN_KEY = 'expo_push_token_v1';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -12,6 +15,36 @@ Notifications.setNotificationHandler({
     shouldShowList: true,
   }),
 });
+
+async function registerTokenWithServer(token: string): Promise<void> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    // User not signed in yet — will retry after login via registerStoredTokenAfterLogin()
+    return;
+  }
+
+  const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (!apiUrl) {
+    console.warn('EXPO_PUBLIC_API_URL not set — skipping push token registration with server');
+    return;
+  }
+
+  const res = await fetch(`${apiUrl}/api/push-subscribe`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ platform: 'expo', endpoint: token }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Push token registration failed (${res.status})`);
+  }
+}
 
 export async function setupNotifications(): Promise<string | null> {
   if (!Device.isDevice) return null;
@@ -46,17 +79,28 @@ export async function setupNotifications(): Promise<string | null> {
     return null;
   }
 
-  // Only save token if the user is already signed in
+  // Avoid re-registering if the token hasn't changed since last launch
+  const cachedToken = await SecureStore.getItemAsync(PUSH_TOKEN_KEY).catch(() => null);
+  if (cachedToken === token) return token;
+
+  // Register with the server
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      await supabase.auth.updateUser({ data: { push_token: token } });
-    }
-  } catch { /* ignore — token will be registered on next sign-in */ }
+    await registerTokenWithServer(token);
+    await SecureStore.setItemAsync(PUSH_TOKEN_KEY, token).catch(() => {});
+  } catch (err) {
+    console.warn('Failed to register push token with server:', err);
+    // Non-fatal — will retry on next launch
+  }
 
   return token;
 }
 
-// OneSignal note: to migrate from the web's react-onesignal setup, replace
-// getExpoPushTokenAsync above with OneSignal.initialize() + getDeviceState()
-// using the react-native-onesignal package.
+// Call this after a successful sign-in to ensure the token is registered
+// even if the user was not logged in when setupNotifications() first ran.
+export async function registerStoredTokenAfterLogin(): Promise<void> {
+  try {
+    const token = await SecureStore.getItemAsync(PUSH_TOKEN_KEY).catch(() => null);
+    if (!token) return;
+    await registerTokenWithServer(token);
+  } catch { /* ignore */ }
+}

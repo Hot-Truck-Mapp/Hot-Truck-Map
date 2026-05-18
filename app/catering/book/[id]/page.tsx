@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef, use } from "react";
 import Image from "next/image";
-import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
 
 const EVENT_TYPES = [
   "Corporate Lunch", "Wedding", "Birthday Party",
@@ -20,6 +20,7 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
+  const mountedRef = useRef(true);
 
   const [form, setForm] = useState({
     customer_name: "",
@@ -34,10 +35,13 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
     notes: "",
   });
 
-  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   useEffect(() => {
     loadData();
-    return () => { mountedRef.current = false; };
   }, []);
 
   async function loadData() {
@@ -45,8 +49,8 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
       const supabase = createClient();
       const [{ data: { user } }, { data: truckData }, { data: pkgData }] = await Promise.all([
         supabase.auth.getUser(),
-        supabase.from("trucks").select("*").eq("id", id).maybeSingle(),
-        supabase.from("catering_packages").select("*").eq("truck_id", id).eq("is_active", true),
+        supabase.from("trucks").select("id, name, cuisine, profile_photo, catering_description, catering_starting_price, catering_min_guests").eq("id", id).maybeSingle(),
+        supabase.from("catering_packages").select("id, truck_id, name, description, price_per_person, minimum_guests, maximum_guests, includes, photo, is_active").eq("truck_id", id).eq("is_active", true).limit(50),
       ]);
       if (!mountedRef.current) return;
       setUser(user ?? null);
@@ -70,23 +74,9 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
       !form.guest_count
     ) return;
 
-    // Basic email format check
-    if (!form.customer_email.includes("@")) {
+    // Email validation
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.customer_email.trim())) {
       setSubmitError("Please enter a valid email address.");
-      return;
-    }
-
-    // Guest count sanity bounds
-    const guestCount = parseInt(form.guest_count);
-    if (isNaN(guestCount) || guestCount < 1 || guestCount > 100000) {
-      setSubmitError("Guest count must be between 1 and 100,000.");
-      return;
-    }
-
-    // Budget cannot be negative
-    const budget = form.budget ? parseFloat(form.budget) : null;
-    if (budget !== null && (isNaN(budget) || budget < 0)) {
-      setSubmitError("Please enter a valid budget amount.");
       return;
     }
 
@@ -97,37 +87,51 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
       return;
     }
 
+    // Validate numeric fields
+    const parsedGuests = parseInt(form.guest_count, 10);
+    if (!Number.isFinite(parsedGuests) || parsedGuests < 1 || parsedGuests > 100000) {
+      setSubmitError("Please enter a valid guest count.");
+      return;
+    }
+    const parsedBudget = form.budget ? parseFloat(form.budget) : null;
+    if (parsedBudget !== null && (!Number.isFinite(parsedBudget) || parsedBudget < 0)) {
+      setSubmitError("Please enter a valid budget amount.");
+      return;
+    }
+
     setSubmitError(null);
     setSubmitting(true);
 
     try {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-
-      const { error } = await supabase
-        .from("catering_requests")
-        .insert({
+      const res = await fetch("/api/catering-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           truck_id: id,
-          customer_id: user?.id ?? null,
-          customer_name: form.customer_name,
-          customer_email: form.customer_email,
-          customer_phone: form.customer_phone,
+          customer_name: form.customer_name.trim(),
+          customer_email: form.customer_email.trim(),
+          customer_phone: form.customer_phone.trim() || null,
           event_date: form.event_date,
-          event_time: form.event_time,
-          event_location: form.event_location,
-          guest_count: guestCount,
-          budget,
+          event_time: form.event_time || null,
+          event_location: form.event_location.trim(),
+          guest_count: parsedGuests,
+          budget: parsedBudget,
           event_type: form.event_type,
           notes: form.notes,
-          status: "pending",
-        });
+          selected_package_id: selectedPackage ?? null,
+        }),
+      });
 
       if (!mountedRef.current) return;
-
-      if (!error) {
+      if (res.ok) {
         setSubmitted(true);
       } else {
-        setSubmitError("Something went wrong. Please try again.");
+        const json = await res.json().catch(() => ({}));
+        if (res.status === 429) {
+          setSubmitError("Too many requests — please wait a few minutes and try again.");
+        } else {
+          setSubmitError(json?.error ?? "Something went wrong. Please try again.");
+        }
       }
     } catch {
       if (mountedRef.current) setSubmitError("Network error — please check your connection and try again.");
@@ -234,7 +238,7 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
       <div className="bg-white border-b border-neutral-200">
         <div className="h-40 bg-neutral-200 overflow-hidden relative">
           {truck.profile_photo ? (
-            <Image src={truck.profile_photo} alt={truck.name} fill className="object-cover" />
+            <Image src={truck.profile_photo} alt={truck.name} fill sizes="(max-width: 640px) 100vw, 33vw" className="object-cover" />
           ) : (
             <div className="w-full h-full bg-neutral-800 flex items-center justify-center">
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="1.5" strokeLinecap="round">
@@ -421,6 +425,7 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
                 value={form.event_location}
                 onChange={(e) => setForm({ ...form, event_location: e.target.value })}
                 placeholder="e.g. 123 Main St, Newark NJ"
+                maxLength={300}
                 className="w-full text-sm text-neutral-800 focus:outline-none placeholder-neutral-300 bg-transparent focus:bg-neutral-50 rounded transition-colors"
               />
             </div>
@@ -470,6 +475,7 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
               placeholder="Any special requests, dietary requirements, or details about your event..."
               rows={3}
+              maxLength={1000}
               className="w-full text-sm text-neutral-800 focus:outline-none placeholder-neutral-300 resize-none"
             />
           </div>
@@ -489,6 +495,8 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
                 value={form.customer_name}
                 onChange={(e) => setForm({ ...form, customer_name: e.target.value })}
                 placeholder="Your full name"
+                maxLength={200}
+                autoComplete="name"
                 className="w-full text-sm text-neutral-800 focus:outline-none placeholder-neutral-300 bg-transparent focus:bg-neutral-50 rounded transition-colors"
               />
             </div>
@@ -501,6 +509,8 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
                 value={form.customer_email}
                 onChange={(e) => setForm({ ...form, customer_email: e.target.value })}
                 placeholder="your@email.com"
+                maxLength={320}
+                autoComplete="email"
                 className="w-full text-sm text-neutral-800 focus:outline-none placeholder-neutral-300 bg-transparent focus:bg-neutral-50 rounded transition-colors"
               />
             </div>
@@ -513,6 +523,8 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
                 value={form.customer_phone}
                 onChange={(e) => setForm({ ...form, customer_phone: e.target.value })}
                 placeholder="(201) 555-0123"
+                maxLength={30}
+                autoComplete="tel"
                 className="w-full text-sm text-neutral-800 focus:outline-none placeholder-neutral-300 bg-transparent focus:bg-neutral-50 rounded transition-colors"
               />
             </div>

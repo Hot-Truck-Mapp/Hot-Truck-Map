@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 
-// ── Owner emails — add yours here ────────────────────────────────────────────
-const OWNER_EMAILS = ["Hottruckmap@gmail.com"];
+// ── Owner emails — stored lower-cased for case-insensitive comparison ────────
+const OWNER_EMAILS = ["hottruckmap@gmail.com"];
 
 type Stats = {
   totalTrucks: number;
@@ -27,22 +27,30 @@ type Truck = {
   followers?: number;
 };
 
-type RecentSignup = {
-  id: string;
-  email: string;
-  role: string;
-  created_at: string;
-};
-
 export default function AdminPage() {
+  const mountedRef = useRef(true);
   const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [trucks, setTrucks] = useState<Truck[]>([]);
-  const [recentSignups, setRecentSignups] = useState<RecentSignup[]>([]);
   const [liveTrucks, setLiveTrucks] = useState<Truck[]>([]);
-  const [activeTab, setActiveTab] = useState<"overview" | "trucks" | "users" | "live">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "trucks" | "users" | "live" | "totw">("overview");
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(new Date());
+
+  // Truck of the Week state
+  const [totwTruckId, setTotwTruckId] = useState("");
+  const [totwMessage, setTotwMessage] = useState("");
+  const [totwSaving, setTotwSaving] = useState(false);
+  const [totwSaved, setTotwSaved] = useState(false);
+  const [totwError, setTotwError] = useState<string | null>(null);
+  const totwSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      if (totwSavedTimerRef.current) clearTimeout(totwSavedTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     checkAuth();
@@ -53,7 +61,7 @@ export default function AdminPage() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
 
-      if (!user || !OWNER_EMAILS.includes(user.email ?? "")) {
+      if (!user || !OWNER_EMAILS.includes((user.email ?? "").toLowerCase())) {
         setAuthorized(false);
         setLoading(false);
         return;
@@ -84,33 +92,27 @@ export default function AdminPage() {
         { data: truckList },
         { data: liveTruckList },
       ] = await Promise.all([
-        supabase.from("trucks").select("*", { count: "exact", head: true }),
-        supabase.from("trucks").select("*", { count: "exact", head: true }).eq("is_live", true),
-        supabase.from("follows").select("*", { count: "exact", head: true }),
-        supabase.from("truck_views").select("*", { count: "exact", head: true }),
-        supabase.from("trucks").select("*", { count: "exact", head: true }).gte("created_at", weekAgoISO),
+        supabase.from("trucks").select("id", { count: "exact", head: true }),
+        supabase.from("trucks").select("id", { count: "exact", head: true }).eq("is_live", true),
+        supabase.from("follows").select("id", { count: "exact", head: true }),
+        supabase.from("truck_views").select("id", { count: "exact", head: true }),
+        supabase.from("trucks").select("id", { count: "exact", head: true }).gte("created_at", weekAgoISO),
         supabase
           .from("trucks")
-          .select("id, name, cuisine, is_live, created_at")
+          .select("id, name, cuisine, is_live, created_at, follows_agg:follows(count)")
           .order("created_at", { ascending: false })
-          .limit(20),
+          .limit(500),
         supabase
           .from("trucks")
           .select("id, name, cuisine, is_live, created_at, locations(address, broadcasted_at)")
-          .eq("is_live", true),
+          .eq("is_live", true)
+          .limit(200),
       ]);
 
-      // Batch follower counts in a single query instead of N+1
-      const { data: followCounts } = await supabase
-        .from("follows")
-        .select("truck_id");
-      const followerMap: Record<string, number> = {};
-      for (const f of followCounts ?? []) {
-        followerMap[f.truck_id] = (followerMap[f.truck_id] ?? 0) + 1;
-      }
-      const trucksWithFollowers = (truckList ?? []).map((truck) => ({
+      // Follower counts come from the embedded follows_agg count — no row scanning
+      const trucksWithFollowers = (truckList ?? []).map((truck: any) => ({
         ...truck,
-        followers: followerMap[truck.id] ?? 0,
+        followers: Number(truck.follows_agg?.[0]?.count ?? 0),
       }));
 
       setStats({
@@ -126,6 +128,18 @@ export default function AdminPage() {
       setTrucks(trucksWithFollowers);
       setLiveTrucks(liveTruckList ?? []);
       setLastRefresh(new Date());
+
+      // Load Truck of the Week settings
+      const { data: settingsData } = await supabase
+        .from("site_settings")
+        .select("key, value")
+        .in("key", ["featured_truck_id", "featured_message"]);
+      if (mountedRef.current && settingsData) {
+        const sm: Record<string, string> = {};
+        for (const row of settingsData) sm[row.key] = row.value ?? "";
+        setTotwTruckId(sm["featured_truck_id"] ?? "");
+        setTotwMessage(sm["featured_message"] ?? "");
+      }
     } catch {
       // Network error — keep showing last loaded data (or empty state on first load)
     } finally {
@@ -136,6 +150,38 @@ export default function AdminPage() {
   async function refresh() {
     setLoading(true);
     await loadData();
+  }
+
+  async function saveTotw() {
+    if (totwSaving) return; // in-flight guard
+    // Validate truck ID is a proper UUID if provided
+    const trimmedTruckId = totwTruckId.trim();
+    if (trimmedTruckId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmedTruckId)) {
+      setTotwError("Invalid truck ID — paste a valid UUID from the trucks list.");
+      return;
+    }
+    setTotwSaving(true);
+    setTotwError(null);
+    try {
+      const res = await fetch("/api/admin/save-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ featured_truck_id: trimmedTruckId || null, featured_message: totwMessage }),
+      });
+      if (!mountedRef.current) return;
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json?.error ?? "Failed to save settings");
+      }
+      setTotwSaved(true);
+      totwSavedTimerRef.current = setTimeout(() => {
+        if (mountedRef.current) setTotwSaved(false);
+      }, 3000);
+    } catch (err: any) {
+      if (mountedRef.current) setTotwError(err?.message ?? "Failed to save. Please try again.");
+    } finally {
+      if (mountedRef.current) setTotwSaving(false);
+    }
   }
 
   // ── Not authorized ──────────────────────────────────────────────────────────
@@ -290,6 +336,7 @@ export default function AdminPage() {
               { id: "live", label: "Live Now", badge: stats?.liveTrucks },
               { id: "trucks", label: "All Trucks", badge: stats?.totalTrucks },
               { id: "users", label: "Recent Signups" },
+              { id: "totw", label: "🏆 Truck of the Week" },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -475,10 +522,7 @@ export default function AdminPage() {
                 <div>
                   <p className="text-sm font-semibold text-neutral-700">User data requires a Supabase service role key</p>
                   <p className="text-xs text-neutral-500 mt-0.5">
-                    To see full user signups, add <code className="bg-white px-1 py-0.5 rounded text-xs">SUPABASE_SERVICE_ROLE_KEY</code> to your environment variables, then view{" "}
-                    <a href="https://supabase.com/dashboard/project/ikrhlifpznzdtgxleubz/auth/users" target="_blank" rel="noopener noreferrer" className="text-brand-red font-semibold hover:underline">
-                      Supabase Auth → Users →
-                    </a>
+                    To see full user signups, add <code className="bg-white px-1 py-0.5 rounded text-xs">SUPABASE_SERVICE_ROLE_KEY</code> to your environment variables, then view the Supabase Auth → Users tab in your project dashboard.
                   </p>
                 </div>
               </div>
@@ -486,8 +530,8 @@ export default function AdminPage() {
               <div className="flex flex-col gap-3">
                 <p className="text-xs font-black text-neutral-400 uppercase tracking-widest">Quick Links</p>
                 {[
-                  { label: "View all users in Supabase", href: "https://supabase.com/dashboard/project/ikrhlifpznzdtgxleubz/auth/users", desc: "Full user list with emails, sign-in history" },
-                  { label: "Database tables", href: "https://supabase.com/dashboard/project/ikrhlifpznzdtgxleubz/editor", desc: "Browse trucks, follows, orders, reviews" },
+                  { label: "View all users in Supabase", href: "https://supabase.com/dashboard", desc: "Full user list with emails, sign-in history" },
+                  { label: "Database tables", href: "https://supabase.com/dashboard", desc: "Browse trucks, follows, orders, reviews" },
                   { label: "Vercel Analytics", href: "https://vercel.com/dashboard", desc: "Page views, traffic sources, top pages" },
                 ].map((link) => (
                   <a
@@ -506,6 +550,90 @@ export default function AdminPage() {
                     </svg>
                   </a>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Truck of the Week Tab */}
+          {activeTab === "totw" && (
+            <div className="p-6 max-w-lg">
+              <p className="text-sm font-black text-neutral-500 uppercase tracking-widest mb-5">
+                Truck of the Week
+              </p>
+
+              <div className="flex flex-col gap-4">
+                <div>
+                  <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-1.5">
+                    Select Truck
+                  </label>
+                  <select
+                    value={totwTruckId}
+                    onChange={(e) => setTotwTruckId(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 focus:outline-none focus:border-brand-red bg-white"
+                  >
+                    <option value="">— None (clear featured truck) —</option>
+                    {trucks.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}{t.cuisine ? ` · ${t.cuisine}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-1.5">
+                    Featured Message
+                  </label>
+                  <textarea
+                    value={totwMessage}
+                    onChange={(e) => setTotwMessage(e.target.value)}
+                    rows={3}
+                    maxLength={500}
+                    placeholder="e.g. This week's must-try truck!"
+                    className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-300 focus:outline-none focus:border-brand-red resize-none"
+                  />
+                </div>
+
+                {totwError && (
+                  <p className="text-xs text-red-500 font-semibold">{totwError}</p>
+                )}
+
+                {totwSaved ? (
+                  <div className="flex items-center gap-2 py-3 px-4 bg-green-50 rounded-xl">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                    <p className="text-sm font-semibold text-green-700">Saved! Homepage banner updated.</p>
+                  </div>
+                ) : (
+                  <button
+                    onClick={saveTotw}
+                    disabled={totwSaving}
+                    className="py-2.5 bg-brand-red text-white rounded-xl font-black text-sm uppercase tracking-wide disabled:opacity-40 hover:bg-red-600 transition-colors active:scale-95"
+                  >
+                    {totwSaving ? "Saving..." : "Save Truck of the Week"}
+                  </button>
+                )}
+
+                {totwTruckId && (
+                  <div className="bg-neutral-50 rounded-xl p-4 flex items-start gap-3">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E8481C" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0 mt-0.5">
+                      <circle cx="12" cy="12" r="10"/>
+                      <line x1="12" y1="8" x2="12" y2="12"/>
+                      <line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                    <div>
+                      <p className="text-sm font-semibold text-neutral-700">Currently featured</p>
+                      <p className="text-xs text-neutral-500 mt-0.5">
+                        {trucks.find((t) => t.id === totwTruckId)?.name ?? totwTruckId}
+                        {totwMessage && ` — "${totwMessage}"`}
+                      </p>
+                      <Link href="/" target="_blank" rel="noopener noreferrer" className="text-xs text-brand-red font-semibold mt-1 inline-block hover:underline">
+                        Preview homepage →
+                      </Link>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

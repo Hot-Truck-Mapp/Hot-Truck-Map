@@ -22,6 +22,7 @@ export default function CateringPackagesPage() {
   const [packages, setPackages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [truckId, setTruckId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
   const [form, setForm] = useState(EMPTY_PACKAGE);
@@ -37,12 +38,22 @@ export default function CateringPackagesPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const mountedRef = useRef(true);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   function showToast(msg: string) {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast(msg);
-    toastTimerRef.current = setTimeout(() => setToast(null), 4000);
+    toastTimerRef.current = setTimeout(() => {
+      if (mountedRef.current) setToast(null);
+    }, 4000);
   }
 
   useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
@@ -56,6 +67,7 @@ export default function CateringPackagesPage() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.replace("/"); return; }
+      setUserId(user.id);
 
       const { data: truck } = await supabase
         .from("trucks")
@@ -64,6 +76,7 @@ export default function CateringPackagesPage() {
         .maybeSingle();
 
       if (!truck) return;
+      if (!mountedRef.current) return;
       setTruckId(truck.id);
       setCateringInfo({
         catering_description: truck.catering_description ?? "",
@@ -77,45 +90,73 @@ export default function CateringPackagesPage() {
 
       const { data } = await supabase
         .from("catering_packages")
-        .select("*")
+        .select("id, truck_id, name, description, price_per_person, minimum_guests, maximum_guests, includes, photo, is_active, created_at")
         .eq("truck_id", truck.id)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: true })
+        .limit(50);
 
+      if (!mountedRef.current) return;
       setPackages(data ?? []);
     } catch {
       // network error — keep empty state
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }
 
   async function saveCateringInfo() {
+    if (savingInfo) return; // in-flight guard
     if (!truckId) return;
+    if (cateringInfo.catering_description.length > 1000) {
+      showToast("Description must be 1000 characters or fewer.");
+      return;
+    }
+    const parsedPrice = cateringInfo.catering_starting_price
+      ? parseFloat(cateringInfo.catering_starting_price)
+      : null;
+    const parsedMinGuests = cateringInfo.catering_min_guests
+      ? parseInt(cateringInfo.catering_min_guests, 10)
+      : null;
+    if (parsedPrice !== null && (!Number.isFinite(parsedPrice) || parsedPrice < 0 || parsedPrice > 100_000)) {
+      showToast("Starting price must be between $0 and $100,000.");
+      return;
+    }
+    if (parsedMinGuests !== null && (!Number.isFinite(parsedMinGuests) || parsedMinGuests < 1 || parsedMinGuests > 100_000)) {
+      showToast("Minimum guests must be between 1 and 100,000.");
+      return;
+    }
     setSavingInfo(true);
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("trucks")
-      .update({
-        catering_description: cateringInfo.catering_description,
-        catering_starting_price: cateringInfo.catering_starting_price
-          ? parseFloat(cateringInfo.catering_starting_price)
-          : null,
-        catering_min_guests: cateringInfo.catering_min_guests
-          ? parseInt(cateringInfo.catering_min_guests)
-          : null,
-      })
-      .eq("id", truckId);
-    if (error) showToast("Save failed: " + error.message);
-    else showToast("Catering info saved!");
-    setSavingInfo(false);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("trucks")
+        .update({
+          catering_description: cateringInfo.catering_description,
+          catering_starting_price: parsedPrice,
+          catering_min_guests: parsedMinGuests,
+        })
+        .eq("id", truckId);
+      if (error) showToast("Save failed: " + error.message);
+      else showToast("Catering info saved!");
+    } catch {
+      showToast("Network error — please try again.");
+    } finally {
+      setSavingInfo(false);
+    }
   }
 
   async function uploadPhoto(file: File): Promise<string> {
-    if (!file.type.startsWith("image/")) throw new Error("Please choose an image file.");
-    if (file.size > 5 * 1024 * 1024) throw new Error("Photo must be under 5 MB.");
+    if (file.size > 5 * 1024 * 1024) throw new Error("Photo must be under 5 MB");
+    const allowed = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowed.includes(file.type)) throw new Error("Only JPG, PNG, or WebP images are allowed.");
     const supabase = createClient();
-    const ext = file.name.split(".").pop() ?? "jpg";
-    const path = "catering/" + Date.now() + "." + ext;
+    const rawExt = (file.name.split(".").pop() ?? "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const ext = rawExt || "jpg";
+    const safeName = file.name
+      .replace(/\.[^.]+$/, "")
+      .replace(/[^a-zA-Z0-9._-]/g, "-")
+      .slice(0, 64);
+    const path = `catering/${truckId ?? "unknown"}/${safeName}-${Date.now()}.${ext}`;
     const { error: uploadErr } = await supabase.storage
       .from("menu-photos")
       .upload(path, file, { upsert: true });
@@ -123,6 +164,7 @@ export default function CateringPackagesPage() {
     const { data } = supabase.storage
       .from("menu-photos")
       .getPublicUrl(path);
+    if (!data?.publicUrl) throw new Error("Could not get photo URL");
     return data.publicUrl;
   }
 
@@ -132,17 +174,19 @@ export default function CateringPackagesPage() {
     setUploading(true);
     try {
       const url = await uploadPhoto(file);
-      setForm({ ...form, photo: url });
+      if (mountedRef.current) setForm({ ...form, photo: url });
     } catch (err: any) {
       showToast(err?.message ?? "Photo upload failed");
       if (fileRef.current) fileRef.current.value = ""; // reset so same file re-triggers onChange
     } finally {
-      setUploading(false);
+      if (mountedRef.current) setUploading(false);
     }
   }
 
   function addInclude() {
     if (!includeInput.trim()) return;
+    if (includeInput.trim().length > 100) { showToast("Item must be 100 characters or fewer."); return; }
+    if (form.includes.length >= 20) { showToast("Maximum 20 included items allowed."); return; }
     setForm({
       ...form,
       includes: [...form.includes, includeInput.trim()],
@@ -179,10 +223,25 @@ export default function CateringPackagesPage() {
   }
 
   async function savePackage() {
+    if (saving) return; // in-flight guard
     if (!truckId || !form.name.trim() || !form.price_per_person) return;
+    if (form.name.trim().length > 100) {
+      showToast("Package name must be 100 characters or fewer.");
+      return;
+    }
+    if (form.description.length > 1000) {
+      showToast("Description must be 1000 characters or fewer.");
+      return;
+    }
     const price = parseFloat(form.price_per_person);
-    if (isNaN(price) || price <= 0) {
-      showToast("Please enter a valid price per person.");
+    if (!Number.isFinite(price) || price <= 0 || price > 100_000) {
+      showToast("Price per person must be between $0.01 and $100,000.");
+      return;
+    }
+    const minGuests = parseInt(form.minimum_guests, 10);
+    const maxGuests = parseInt(form.maximum_guests, 10);
+    if (Number.isFinite(minGuests) && Number.isFinite(maxGuests) && maxGuests > 0 && maxGuests < minGuests) {
+      showToast("Maximum guests must be greater than or equal to minimum guests.");
       return;
     }
     setSaving(true);
@@ -193,43 +252,56 @@ export default function CateringPackagesPage() {
       name: form.name.trim(),
       description: form.description,
       price_per_person: price,
-      minimum_guests: parseInt(form.minimum_guests) || 1,
-      maximum_guests: parseInt(form.maximum_guests) || 500,
+      minimum_guests: Number.isFinite(minGuests) ? minGuests : 1,
+      maximum_guests: Number.isFinite(maxGuests) ? maxGuests : 500,
       includes: form.includes,
       photo: form.photo,
       is_active: form.is_active,
     };
 
-    let error;
-    if (editing) {
-      ({ error } = await supabase
-        .from("catering_packages")
-        .update(payload)
-        .eq("id", editing.id)
-        .eq("truck_id", truckId!));
-    } else {
-      ({ error } = await supabase.from("catering_packages").insert(payload));
+    try {
+      let error;
+      if (editing) {
+        ({ error } = await supabase
+          .from("catering_packages")
+          .update(payload)
+          .eq("id", editing.id)
+          .eq("truck_id", truckId));
+      } else {
+        ({ error } = await supabase.from("catering_packages").insert(payload));
+      }
+      if (error) { showToast("Save failed: " + error.message); return; }
+      if (!mountedRef.current) return;
+      setIsAdding(false);
+      setEditing(null);
+      loadPackages();
+    } catch {
+      showToast("Network error — please try again.");
+    } finally {
+      if (mountedRef.current) setSaving(false);
     }
-
-    setSaving(false);
-    if (error) { showToast("Save failed: " + error.message); return; }
-    setIsAdding(false);
-    setEditing(null);
-    loadPackages();
   }
 
   async function deletePackage(id: string) {
+    if (!truckId || !userId) return;
     if (deletingId !== id) { setDeletingId(id); return; }
     setDeletingId(null);
-    const supabase = createClient();
-    const { error } = await supabase.from("catering_packages").delete().eq("id", id).eq("truck_id", truckId!);
-    if (!error) setPackages(packages.filter((p) => p.id !== id));
-    else showToast("Delete failed: " + error.message);
+    try {
+      const supabase = createClient();
+      // Verify ownership (defense-in-depth on top of RLS)
+      const { data: ownerCheck } = await supabase.from("trucks").select("id").eq("id", truckId).eq("owner_id", userId).maybeSingle();
+      if (!ownerCheck) { showToast("Permission denied"); return; }
+      const { error } = await supabase.from("catering_packages").delete().eq("id", id).eq("truck_id", truckId);
+      if (!error) { if (mountedRef.current) setPackages((prev) => prev.filter((p) => p.id !== id)); }
+      else showToast("Delete failed: " + error.message);
+    } catch {
+      showToast("Network error — please try again.");
+    }
   }
 
   async function toggleActive(pkg: any) {
-    const snapshot = packages; // save for rollback
-    setPackages(packages.map((p) => // optimistic
+    const snapshot = [...packages]; // save for rollback
+    setPackages((prev) => prev.map((p) => // optimistic
       p.id === pkg.id ? { ...p, is_active: !p.is_active } : p
     ));
     try {
@@ -238,7 +310,7 @@ export default function CateringPackagesPage() {
         .from("catering_packages")
         .update({ is_active: !pkg.is_active })
         .eq("id", pkg.id)
-        .eq("truck_id", truckId!);
+        .eq("truck_id", truckId ?? "");
       if (error) throw new Error(error.message);
     } catch {
       setPackages(snapshot); // revert on failure
@@ -420,7 +492,7 @@ export default function CateringPackagesPage() {
                     {/* Photo */}
                     <div className="w-20 h-20 rounded-xl bg-neutral-100 flex-shrink-0 overflow-hidden relative">
                       {pkg.photo ? (
-                        <Image src={pkg.photo} alt={pkg.name} fill className="object-cover" />
+                        <Image src={pkg.photo} alt={pkg.name} fill sizes="80px" className="object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center bg-neutral-200">
                           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
@@ -522,9 +594,10 @@ export default function CateringPackagesPage() {
               </h2>
               <button
                 onClick={() => setIsAdding(false)}
+                aria-label="Close package editor"
                 className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500 hover:bg-neutral-200"
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
                   <path d="M18 6 6 18M6 6l12 12"/>
                 </svg>
               </button>
@@ -542,7 +615,7 @@ export default function CateringPackagesPage() {
                   className="w-full h-36 rounded-2xl overflow-hidden cursor-pointer bg-neutral-100 border-2 border-dashed border-neutral-200 hover:border-brand-red transition-colors flex items-center justify-center relative"
                 >
                   {form.photo ? (
-                    <Image src={form.photo} alt="preview" fill className="object-cover" />
+                    <Image src={form.photo} alt="preview" fill sizes="(max-width: 640px) 100vw, 50vw" className="object-cover" />
                   ) : (
                     <div className="text-center">
                       <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round" className="mx-auto mb-2">
@@ -574,6 +647,7 @@ export default function CateringPackagesPage() {
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   placeholder="e.g. Classic Taco Package"
+                  maxLength={100}
                   className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-brand-red transition-colors"
                 />
               </div>
@@ -588,6 +662,7 @@ export default function CateringPackagesPage() {
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
                   placeholder="What's included in this package..."
                   rows={2}
+                  maxLength={1000}
                   className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-brand-red transition-colors resize-none"
                 />
               </div>

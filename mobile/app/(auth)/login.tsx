@@ -3,6 +3,7 @@ import {
   StyleSheet, View, Text, TextInput, TouchableOpacity,
   Alert, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/colors';
@@ -16,6 +17,14 @@ export default function LoginScreen() {
   async function handleLogin() {
     if (!email.trim() || !password) {
       Alert.alert('Missing fields', 'Please enter your email and password.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      Alert.alert('Invalid email', 'Please enter a valid email address.');
+      return;
+    }
+    if (password.length < 6) {
+      Alert.alert('Password too short', 'Password must be at least 6 characters.');
       return;
     }
     setLoading(true);
@@ -34,12 +43,25 @@ export default function LoginScreen() {
   }
 
   return (
+    <SafeAreaView style={styles.flex}>
     <KeyboardAvoidingView
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>HOT TRUCK MAP</Text>
+        {/* Brand header */}
+        <View style={styles.brandRow}>
+          <View style={styles.brandIcon}>
+            <Text style={styles.brandIconText}>🚚</Text>
+          </View>
+          <View>
+            <Text style={styles.brandName}>
+              <Text style={styles.brandNameHot}>HOT </Text>
+              <Text style={styles.brandNameTruck}>TRUCK</Text>
+            </Text>
+            <Text style={styles.brandNameMap}>MAP</Text>
+          </View>
+        </View>
         <Text style={styles.subtitle}>Find food trucks near you</Text>
 
         <TextInput
@@ -66,26 +88,48 @@ export default function LoginScreen() {
         />
 
         <TouchableOpacity
+          onPress={() => router.push('/(auth)/forgot-password')}
+          style={styles.forgotPassword}
+          accessibilityLabel="Forgot password"
+          accessibilityRole="button"
+        >
+          <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
           onPress={handleLogin}
           disabled={loading}
+          accessibilityLabel={loading ? 'Signing in' : 'Sign in'}
+          accessibilityRole="button"
         >
           <Text style={styles.buttonText}>{loading ? 'Signing in…' : 'Sign In'}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => router.push('/(auth)/signup')}>
+        <TouchableOpacity
+          onPress={() => router.push('/(auth)/signup')}
+          accessibilityLabel="Don't have an account? Sign up"
+          accessibilityRole="button"
+        >
           <Text style={styles.link}>Don't have an account? Sign up</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: Colors.background },
   container: { flexGrow: 1, padding: 24, justifyContent: 'center' },
-  title: { fontSize: 32, fontWeight: '800', color: Colors.primary, textAlign: 'center', marginBottom: 8 },
-  subtitle: { fontSize: 16, color: Colors.textSecondary, textAlign: 'center', marginBottom: 40 },
+  brandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 6 },
+  brandIcon: { width: 52, height: 52, borderRadius: 14, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
+  brandIconText: { fontSize: 26 },
+  brandName: { fontSize: 22, fontWeight: '900', letterSpacing: 1 },
+  brandNameHot: { color: Colors.primary },
+  brandNameTruck: { color: Colors.text },
+  brandNameMap: { fontSize: 22, fontWeight: '900', color: '#FF9A5C', letterSpacing: 1, lineHeight: 24 },
+  subtitle: { fontSize: 15, color: Colors.textSecondary, textAlign: 'center', marginBottom: 36 },
   input: {
     backgroundColor: Colors.card,
     borderRadius: 10,
@@ -108,4 +152,6 @@ const styles = StyleSheet.create({
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   link: { textAlign: 'center', color: Colors.primary, fontSize: 14 },
+  forgotPassword: { alignSelf: 'flex-end', marginBottom: 4 },
+  forgotPasswordText: { color: Colors.primary, fontSize: 13, fontWeight: '600' },
 });

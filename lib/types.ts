@@ -1,15 +1,15 @@
 export type Truck = {
   id: string;
   name: string;
-  cuisine: string;
-  description: string;
-  phone: string;
-  instagram: string;
-  profile_photo: string;
-  owner_id: string;
+  cuisine: string | null;
+  description: string | null;
+  phone: string | null;
+  instagram: string | null;
+  profile_photo: string | null;
+  owner_id?: string;
   is_live: boolean;
-  avg_rating: number;
-  review_count: number;
+  avg_rating: number | null;
+  review_count: number | null;
   created_at: string;
 };
 
@@ -17,9 +17,9 @@ export type MenuItem = {
   id: string;
   truck_id: string;
   name: string;
-  description: string;
+  description: string | null;
   price: number;
-  photo: string;
+  photo: string | null;
   allergens: string[];
   is_sold_out: boolean;
 };
@@ -27,7 +27,7 @@ export type MenuItem = {
 export type Order = {
   id: string;
   truck_id: string;
-  customer_id: string;
+  customer_id: string | null; // null for guest orders
   items: OrderItem[];
   total: number;
   status: "pending" | "preparing" | "ready" | "picked_up";

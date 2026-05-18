@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 export default function VerificationBanner() {
@@ -8,18 +8,28 @@ export default function VerificationBanner() {
   const [resent, setResent] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(false);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
+    mountedRef.current = true;
     const checkVerification = async () => {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      setVerified(!!user.email_confirmed_at);
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!mountedRef.current) return;
+        if (!user) return;
+        setVerified(!!user.email_confirmed_at);
+      } catch {
+        // Network error — assume verified so the banner doesn't incorrectly
+        // appear. It will correct itself on the next successful check.
+      }
     };
     checkVerification();
+    return () => { mountedRef.current = false; };
   }, []);
 
   const resendEmail = async () => {
+    if (sending) return;
     setSending(true);
     setError(false);
     try {
@@ -31,11 +41,11 @@ export default function VerificationBanner() {
         email: user.email,
       });
       if (resendError) throw resendError;
-      setResent(true);
+      if (mountedRef.current) setResent(true);
     } catch {
-      setError(true);
+      if (mountedRef.current) setError(true);
     } finally {
-      setSending(false);
+      if (mountedRef.current) setSending(false);
     }
   };
 

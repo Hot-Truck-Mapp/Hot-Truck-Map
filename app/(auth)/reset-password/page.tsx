@@ -12,8 +12,16 @@ export default function ResetPasswordPage() {
   const [error, setError]         = useState<string | null>(null);
   const [ready, setReady]         = useState(false);
   const [timedOut, setTimedOut]   = useState(false);
-  const redirectTimerRef          = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
+  const mountedRef = useRef(true);
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const supabase = createClient();
@@ -25,19 +33,34 @@ export default function ResetPasswordPage() {
       }
     });
 
+    // PKCE flow: Supabase redirects here with ?code=... — exchange it to
+    // establish the recovery session, which fires the PASSWORD_RECOVERY event.
+    const url = new URL(window.location.href);
+    const code = url.searchParams.get("code");
+    if (code) {
+      supabase.auth.exchangeCodeForSession(code)
+        .then(() => {
+          // Clean the code from the URL so a reload doesn't re-attempt exchange
+          window.history.replaceState({}, "", url.pathname);
+        })
+        .catch(() => {
+          // Code exchange failed — link expired or already used
+          if (!fired && mountedRef.current) setTimedOut(true);
+        });
+    }
+
     const timeout = setTimeout(() => {
       if (!fired) setTimedOut(true);
-    }, 15000);
+    }, 45000); // 45s — enough for slow connections and email link redirects
 
     return () => {
       subscription.unsubscribe();
       clearTimeout(timeout);
-      if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
     };
   }, []);
 
   async function handleUpdate() {
-    if (loading) return;
+    if (loading) return; // in-flight guard
     if (!password || password !== confirm) {
       setError("Passwords don't match.");
       return;
@@ -52,12 +75,18 @@ export default function ResetPasswordPage() {
     }
     setLoading(true);
     setError(null);
-    const supabase = createClient();
-    const { error } = await supabase.auth.updateUser({ password });
-    setLoading(false);
-    if (error) { setError(error.message); return; }
-    setDone(true);
-    redirectTimerRef.current = setTimeout(() => router.push("/login"), 2500);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) { setError(error.message); return; }
+      if (!mountedRef.current) return;
+      setDone(true);
+      redirectTimerRef.current = setTimeout(() => { if (mountedRef.current) router.push("/login"); }, 2500);
+    } catch {
+      if (mountedRef.current) setError("Network error — please check your connection and try again.");
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
   }
 
   return (
@@ -101,23 +130,29 @@ export default function ResetPasswordPage() {
 
               <div className="flex flex-col gap-4">
                 <div>
-                  <label className="text-sm font-medium text-neutral-600">New password</label>
+                  <label htmlFor="new-password" className="text-sm font-medium text-neutral-600">New password</label>
                   <input
+                    id="new-password"
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Min. 6 characters"
+                    maxLength={72}
+                    autoComplete="new-password"
                     className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-neutral-600">Confirm password</label>
+                  <label htmlFor="confirm-password" className="text-sm font-medium text-neutral-600">Confirm password</label>
                   <input
+                    id="confirm-password"
                     type="password"
                     value={confirm}
                     onChange={(e) => setConfirm(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleUpdate()}
                     placeholder="Repeat your password"
+                    maxLength={72}
+                    autoComplete="new-password"
                     className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
                   />
                 </div>

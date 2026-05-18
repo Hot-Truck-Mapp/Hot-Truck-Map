@@ -25,24 +25,34 @@ export default function OrdersTab() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const mountedRef = useRef(true);
 
-  const loadOrders = useCallback(async (uid?: string) => {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const loadOrders = useCallback(async (uid?: string, mounted = true) => {
     const id = uid ?? userId;
-    if (!id) { setLoading(false); return; }
+    if (!id) { if (mounted) setLoading(false); return; }
     try {
       const { data, error } = await supabase
         .from('orders')
-        .select('*, trucks(name)')
+        .select('id, truck_id, pickup_name, items, total, status, created_at, trucks(name)')
         .eq('customer_id', id)
         .order('created_at', { ascending: false })
         .limit(50);
-      if (!mountedRef.current) return;
-      if (error) console.error('loadOrders error:', error.message);
-      if (data) setOrders(data);
-    } catch { /* network error — keep existing list */ } finally {
+      if (error) throw error;
+      if (mountedRef.current && data) {
+        setOrders(data);
+        setLoadError(false);
+      }
+    } catch {
+      if (mountedRef.current) setLoadError(true);
+    } finally {
       if (mountedRef.current) {
         setLoading(false);
         setRefreshing(false);
@@ -51,14 +61,16 @@ export default function OrdersTab() {
   }, [userId]);
 
   useEffect(() => {
+    let mounted = true;
     async function init() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { setLoading(false); return; }
-        setUserId(user.id);
-        await loadOrders(user.id);
+        if (!user || !mounted) { if (mounted) setLoading(false); return; }
+        if (mounted) setUserId(user.id);
+        await loadOrders(user.id, mounted);
 
         // Realtime — update order card immediately when operator changes status
+        if (!mounted) return;
         channelRef.current = supabase
           .channel(`customer-orders-${user.id}`)
           .on(
@@ -71,14 +83,14 @@ export default function OrdersTab() {
             },
             (payload) => {
               if (!mountedRef.current) return;
-              const updated = payload.new as Partial<typeof orders[0]>;
+              const { id, status, updated_at } = payload.new as { id: string; status: string; updated_at?: string };
               setOrders((prev) =>
-                prev.map((o) => o.id === updated.id ? { ...o, ...updated } : o)
+                prev.map((o) => o.id === id ? { ...o, status, ...(updated_at ? { updated_at } : {}) } : o)
               );
             }
           )
           .subscribe();
-      } catch { setLoading(false); }
+      } catch { if (mounted) setLoading(false); }
     }
     init();
     return () => {
@@ -89,7 +101,8 @@ export default function OrdersTab() {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    loadOrders(userId ?? undefined);
+    setLoadError(false);
+    loadOrders(userId ?? undefined, mountedRef.current);
   }, [loadOrders, userId]);
 
   if (loading) {
@@ -110,6 +123,21 @@ export default function OrdersTab() {
           onPress={() => router.push('/(auth)/login')}
         >
           <Text style={styles.signInButtonText}>Sign In</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  if (loadError && !loading && orders.length === 0) {
+    return (
+      <SafeAreaView style={[styles.container, styles.loading]} edges={['top', 'bottom']}>
+        <Text style={styles.emptyTitle}>Could not load orders</Text>
+        <Text style={[styles.emptyBody, { marginBottom: 24 }]}>Check your connection and try again</Text>
+        <TouchableOpacity
+          style={styles.signInButton}
+          onPress={() => { setLoadError(false); setLoading(true); loadOrders(userId ?? undefined); }}
+        >
+          <Text style={styles.signInButtonText}>Try Again</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );

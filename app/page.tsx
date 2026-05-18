@@ -22,6 +22,14 @@ const CUISINES = [
 
 const DIETARY = ["Vegan", "Gluten-Free", "Halal", "Vegetarian"];
 
+type FeaturedTruck = {
+  id: string;
+  name: string;
+  cuisine: string | null;
+  profile_photo: string | null;
+  message: string;
+};
+
 export default function HomePage() {
   const [trucks, setTrucks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,25 +42,54 @@ export default function HomePage() {
   const [showFilter, setShowFilter] = useState(false);
   const [showList, setShowList] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [featuredTruck, setFeaturedTruck] = useState<FeaturedTruck | null>(null);
+  const [featuredDismissed, setFeaturedDismissed] = useState(false);
   const mountedRef = useRef(true);
   const searchBlurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setMounted(true);
     loadTrucks();
+    loadFeaturedTruck();
 
-    // Real-time: refresh whenever a truck goes live/offline OR updates its location
+    // Real-time: merge individual truck/location updates into state rather than
+    // re-fetching all trucks on every event. This prevents dozens of full-table
+    // fetches per minute when multiple trucks are live.
     const supabase = createClient();
     const channel = supabase
       .channel("home-trucks-live")
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "trucks" }, () => {
-        loadTrucks();
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "trucks" }, (payload) => {
+        const updated = payload.new as any;
+        if (!updated?.id) { loadTrucks(); return; }
+        setTrucks((prev) => {
+          const idx = prev.findIndex((t) => t.id === updated.id);
+          if (idx === -1) {
+            // New truck — trigger a full refresh to pick up the joined location data
+            loadTrucks();
+            return prev;
+          }
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...updated };
+          return next;
+        });
       })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "locations" }, () => {
-        loadTrucks();
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "locations" }, (payload) => {
+        const loc = payload.new as any;
+        if (!loc?.truck_id) return;
+        setTrucks((prev) =>
+          prev.map((t) =>
+            t.id === loc.truck_id ? { ...t, locations: [loc] } : t
+          )
+        );
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "locations" }, () => {
-        loadTrucks();
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "locations" }, (payload) => {
+        const loc = payload.new as any;
+        if (!loc?.truck_id) return;
+        setTrucks((prev) =>
+          prev.map((t) =>
+            t.id === loc.truck_id ? { ...t, locations: [loc] } : t
+          )
+        );
       })
       .subscribe();
     return () => {
@@ -62,13 +99,42 @@ export default function HomePage() {
     };
   }, []);
 
+  async function loadFeaturedTruck() {
+    try {
+      const supabase = createClient();
+      const { data: settings } = await supabase
+        .from("site_settings")
+        .select("key, value")
+        .in("key", ["featured_truck_id", "featured_message"]);
+      if (!mountedRef.current || !settings) return;
+      const sm: Record<string, string> = {};
+      for (const row of settings) sm[row.key] = row.value ?? "";
+      const truckId = sm["featured_truck_id"];
+      if (!truckId) return;
+      const { data: truckData } = await supabase
+        .from("trucks")
+        .select("id, name, cuisine, profile_photo")
+        .eq("id", truckId)
+        .maybeSingle();
+      if (!mountedRef.current || !truckData) return;
+      setFeaturedTruck({
+        ...truckData,
+        message: sm["featured_message"] ?? "",
+      });
+    } catch {
+      // non-critical — just won't show the banner
+    }
+  }
+
   async function loadTrucks() {
     try {
       const supabase = createClient();
       const { data } = await supabase
         .from("trucks")
-        .select("*, locations(*)")
+        // Fetch only the most recent location per truck via inner relation
+        .select("id, name, cuisine, description, profile_photo, is_live, avg_rating, review_count, dietary_tags, locations(id, lat, lng, address, broadcasted_at)")
         .order("is_live", { ascending: false })
+        .order("broadcasted_at", { referencedTable: "locations", ascending: false })
         .limit(200);
       if (!mountedRef.current) return;
       setTrucks(data ?? []);
@@ -198,6 +264,7 @@ export default function HomePage() {
             </Link>
             <Link
               href="/account"
+              aria-label="Account"
               className="w-8 h-8 rounded-full border border-neutral-600 flex items-center justify-center text-neutral-400 hover:text-white transition-colors"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -207,6 +274,57 @@ export default function HomePage() {
             </Link>
           </div>
         </div>
+
+        {/* Featured truck banner */}
+        {featuredTruck && !featuredDismissed && (
+          <div className="px-3 md:px-4 pt-2 md:max-w-2xl md:mx-auto">
+            <div className="bg-brand-red rounded-2xl p-3 flex items-center gap-3 shadow-lg">
+              {/* Truck photo */}
+              <div className="w-12 h-12 rounded-xl bg-red-700 overflow-hidden flex-shrink-0 relative">
+                {featuredTruck.profile_photo ? (
+                  <Image src={featuredTruck.profile_photo} alt={featuredTruck.name} fill sizes="(max-width: 640px) 100vw, 50vw" className="object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" strokeLinecap="round">
+                      <path d="M1 3h15v13H1z"/>
+                      <path d="M16 8h4l3 3v5h-7V8z"/>
+                      <circle cx="5.5" cy="18.5" r="2.5"/>
+                      <circle cx="18.5" cy="18.5" r="2.5"/>
+                    </svg>
+                  </div>
+                )}
+              </div>
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-black text-red-200 uppercase tracking-widest">🏆 Truck of the Week</p>
+                <p className="font-black text-white text-sm uppercase tracking-wide leading-tight truncate">{featuredTruck.name}</p>
+                {featuredTruck.cuisine && (
+                  <p className="text-[11px] text-red-200">{featuredTruck.cuisine}</p>
+                )}
+                {featuredTruck.message && (
+                  <p className="text-[11px] text-red-100 mt-0.5 line-clamp-1">{featuredTruck.message}</p>
+                )}
+              </div>
+              {/* View button */}
+              <Link
+                href={`/truck/${featuredTruck.id}`}
+                className="flex-shrink-0 px-3 py-1.5 bg-white text-brand-red text-xs font-black rounded-full hover:bg-red-50 transition-colors"
+              >
+                View
+              </Link>
+              {/* Dismiss */}
+              <button
+                onClick={() => setFeaturedDismissed(true)}
+                aria-label="Dismiss featured truck"
+                className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-red-200 hover:text-white transition-colors"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
+                  <path d="M18 6 6 18M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Search card — floats over the map */}
         <div className="px-3 md:px-4 pt-2 pb-1 md:max-w-2xl md:mx-auto">
@@ -234,7 +352,7 @@ export default function HomePage() {
                 onFocus={() => setSearchFocused(true)}
                 onBlur={() => {
                   if (searchBlurTimerRef.current) clearTimeout(searchBlurTimerRef.current);
-                  searchBlurTimerRef.current = setTimeout(() => setSearchFocused(false), 200);
+                  searchBlurTimerRef.current = setTimeout(() => { if (mountedRef.current) setSearchFocused(false); }, 200);
                 }}
                 placeholder="Search by name or cuisine..."
                 suppressHydrationWarning
@@ -245,9 +363,10 @@ export default function HomePage() {
               {search ? (
                 <button
                   onClick={() => setSearch("")}
+                  aria-label="Clear search"
                   className="w-6 h-6 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center flex-shrink-0 transition-colors"
                 >
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
                     <path d="M18 6 6 18M6 6l12 12"/>
                   </svg>
                 </button>
@@ -366,7 +485,7 @@ export default function HomePage() {
                       >
                         <div className="w-9 h-9 rounded-xl bg-neutral-100 overflow-hidden flex-shrink-0 relative">
                           {truck.profile_photo ? (
-                            <Image src={truck.profile_photo} alt={truck.name} fill className="object-cover" />
+                            <Image src={truck.profile_photo} alt={truck.name} fill sizes="36px" className="object-cover" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center bg-neutral-200">
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#bbb" strokeWidth="2" strokeLinecap="round">
@@ -532,7 +651,7 @@ export default function HomePage() {
                   {/* Photo */}
                   <div className="w-16 h-16 rounded-xl bg-neutral-100 flex-shrink-0 overflow-hidden relative">
                     {truck.profile_photo ? (
-                      <Image src={truck.profile_photo} alt={truck.name} fill className="object-cover" />
+                      <Image src={truck.profile_photo} alt={truck.name} fill sizes="64px" className="object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-neutral-200">
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
@@ -654,7 +773,7 @@ export default function HomePage() {
                 >
                   <div className="w-14 h-14 rounded-xl bg-neutral-100 flex-shrink-0 overflow-hidden relative">
                     {truck.profile_photo ? (
-                      <Image src={truck.profile_photo} alt={truck.name} fill className="object-cover" />
+                      <Image src={truck.profile_photo} alt={truck.name} fill sizes="56px" className="object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-neutral-200">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">

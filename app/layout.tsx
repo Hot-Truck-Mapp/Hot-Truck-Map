@@ -1,14 +1,19 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/next";
+import ConditionalFooter from "@/components/ui/ConditionalFooter";
+import ServiceWorkerRegistrar from "@/components/ui/ServiceWorkerRegistrar";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://hottruckmap.com"),
   title: "Hot Truck Map - Find Food Trucks Near You",
   description: "Real-time food truck discovery. Find the food truck. Skip the guesswork.",
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon.png", type: "image/png", sizes: "32x32" },
+    ],
+    shortcut: "/favicon.png",
     apple: "/apple-touch-icon.png",
   },
   openGraph: {
@@ -19,7 +24,7 @@ export const metadata: Metadata = {
     url: "https://hottruckmap.com",
     images: [
       {
-        url: "https://hottruckmap.com/og-image.png",
+        url: "https://hottruckmap.com/og-image.jpg",
         width: 1200,
         height: 630,
         alt: "Hot Truck Map — Find food trucks near you",
@@ -30,7 +35,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Hot Truck Map",
     description: "Real-time food truck discovery. Find the food truck. Skip the guesswork.",
-    images: ["https://hottruckmap.com/og-image.png"],
+    images: ["https://hottruckmap.com/og-image.jpg"],
   },
   appleWebApp: {
     capable: true,
@@ -54,6 +59,8 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body suppressHydrationWarning>
         {children}
+        <ConditionalFooter />
+        <ServiceWorkerRegistrar />
         <Analytics />
       </body>
     </html>

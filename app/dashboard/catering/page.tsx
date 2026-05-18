@@ -14,6 +14,8 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function CateringDashboardPage() {
   const router = useRouter();
+  const mountedRef = useRef(true);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [truckId, setTruckId] = useState<string | null>(null);
@@ -24,13 +26,22 @@ export default function CateringDashboardPage() {
   const [sending, setSending] = useState(false);
   const [cateringEnabled, setCateringEnabled] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [cateringToggling, setCateringToggling] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   function showToast(msg: string) {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast(msg);
-    toastTimerRef.current = setTimeout(() => setToast(null), 3500);
+    toastTimerRef.current = setTimeout(() => {
+      if (mountedRef.current) setToast(null);
+    }, 3500);
   }
 
   useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
@@ -43,27 +54,30 @@ export default function CateringDashboardPage() {
     try {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user || user.user_metadata?.role !== "operator") {
-        router.replace("/");
-        return;
-      }
+      if (!user) { router.replace("/"); return; }
 
+      // Verify operator status via DB ownership (not user-editable metadata)
       const { data: truck } = await supabase
         .from("trucks").select("id, offers_catering").eq("owner_id", user.id).maybeSingle();
 
       if (!truck) return;
+      if (!mountedRef.current) return;
       setTruckId(truck.id);
       setCateringEnabled(truck.offers_catering ?? false);
 
       const { data } = await supabase
-        .from("catering_requests").select("*").eq("truck_id", truck.id)
-        .order("created_at", { ascending: false });
+        .from("catering_requests")
+        .select("id, truck_id, customer_name, customer_email, customer_phone, event_date, event_time, event_location, guest_count, budget, event_type, notes, status, created_at, selected_package_id")
+        .eq("truck_id", truck.id)
+        .order("created_at", { ascending: false })
+        .limit(200);
 
+      if (!mountedRef.current) return;
       setRequests(data ?? []);
     } catch {
       // network error — keep empty state
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }
 
@@ -72,9 +86,10 @@ export default function CateringDashboardPage() {
       const supabase = createClient();
       const { data } = await supabase
         .from("catering_messages")
-        .select("*")
+        .select("id, sender_id, message, created_at")
         .eq("request_id", requestId)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: true })
+        .limit(100);
       setMessages(data ?? []);
     } catch {
       // network error — keep existing messages
@@ -87,7 +102,10 @@ export default function CateringDashboardPage() {
   }
 
   async function updateStatus(requestId: string, status: string) {
+    if (updating) return; // in-flight guard
     if (!truckId) return;
+    const VALID_STATUSES = ["pending", "confirmed", "declined", "completed"];
+    if (!VALID_STATUSES.includes(status)) return;
     setUpdating(true);
     try {
       const supabase = createClient();
@@ -99,23 +117,28 @@ export default function CateringDashboardPage() {
 
       if (error) throw new Error(error.message);
 
+      if (!mountedRef.current) return;
       setRequests((prev) => prev.map((r) =>
         r.id === requestId ? { ...r, status } : r
       ));
-      if (selected?.id === requestId) {
-        setSelected({ ...selected, status });
-      }
+      setSelected((prev: any) => prev?.id === requestId ? { ...prev, status } : prev);
     } catch {
-      showToast("Failed to update status — please try again.");
+      if (mountedRef.current) showToast("Failed to update status — please try again.");
     } finally {
-      setUpdating(false);
+      if (mountedRef.current) setUpdating(false);
     }
   }
 
   async function sendMessage() {
-    if (!message.trim() || !selected || !truckId) return;
+    if (sending) return; // in-flight guard
+    const trimmedMessage = message.trim();
+    if (!trimmedMessage || !selected || !truckId) return;
     // Verify the selected request belongs to this operator's truck
     if (selected.truck_id !== truckId) return;
+    if (trimmedMessage.length > 1000) {
+      showToast("Message must be 1000 characters or fewer.");
+      return;
+    }
     setSending(true);
     try {
       const supabase = createClient();
@@ -124,28 +147,40 @@ export default function CateringDashboardPage() {
       const { error } = await supabase.from("catering_messages").insert({
         request_id: selected.id,
         sender_id: user?.id,
-        message: message.trim(),
+        message: trimmedMessage,
       });
 
       if (error) throw new Error(error.message);
 
+      if (!mountedRef.current) return;
       setMessage("");
       await loadMessages(selected.id);
     } catch {
-      showToast("Failed to send message — please try again.");
+      if (mountedRef.current) showToast("Failed to send message — please try again.");
     } finally {
-      setSending(false);
+      if (mountedRef.current) setSending(false);
     }
   }
 
   async function toggleCatering() {
-    if (!truckId) return;
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("trucks")
-      .update({ offers_catering: !cateringEnabled })
-      .eq("id", truckId);
-    if (!error) setCateringEnabled(!cateringEnabled);
+    if (!truckId || cateringToggling) return; // in-flight guard
+    const next = !cateringEnabled;
+    setCateringToggling(true);
+    setCateringEnabled(next); // optimistic
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("trucks")
+        .update({ offers_catering: next })
+        .eq("id", truckId);
+      if (error) {
+        if (mountedRef.current) { setCateringEnabled(!next); showToast("Could not update catering — please try again."); }
+      }
+    } catch {
+      if (mountedRef.current) { setCateringEnabled(!next); showToast("Network error — please try again."); }
+    } finally {
+      if (mountedRef.current) setCateringToggling(false);
+    }
   }
 
   const filtered = requests.filter((r) =>
@@ -499,6 +534,7 @@ export default function CateringDashboardPage() {
                   onChange={(e) => setMessage(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && sendMessage()}
                   placeholder="Type a message..."
+                  maxLength={1000}
                   className="flex-1 px-3 py-2 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-brand-red transition-colors"
                 />
                 <button

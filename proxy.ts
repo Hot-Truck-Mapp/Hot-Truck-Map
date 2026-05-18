@@ -32,18 +32,21 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // Redirect unauthenticated users away from protected routes
-  // Note: /account handles its own unauthenticated state client-side (shows sign-in card)
+  // ── Authentication gate ────────────────────────────────────────────────────
+  // Unauthenticated users are redirected to /login for protected routes.
+  // /account handles its own unauthenticated state client-side.
   if (!user && (pathname.startsWith("/dashboard") || pathname.startsWith("/admin"))) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
-  // Redirect non-operators away from the dashboard (server-side guard)
-  if (user && pathname.startsWith("/dashboard")) {
-    const role = user.user_metadata?.role;
-    if (role !== "operator") {
+  // ── Admin role gate (server-side) ──────────────────────────────────────────
+  // user_metadata.role is user-editable so we gate /admin by email allowlist only.
+  // The allowlist is the same as in app/admin/page.tsx and api/admin/save-settings.
+  const OWNER_EMAILS = ["hottruckmap@gmail.com"];
+  if (pathname.startsWith("/admin") && user) {
+    if (!OWNER_EMAILS.includes((user.email ?? "").toLowerCase())) {
       const url = request.nextUrl.clone();
       url.pathname = "/";
       return NextResponse.redirect(url);
