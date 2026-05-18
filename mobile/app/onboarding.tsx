@@ -31,7 +31,7 @@ const SLIDES = [
     emoji: '⚡',
     title: 'Order Ahead',
     description:
-      'Skip the line — place your order before you arrive and pick it up when it's ready. Pay at the truck.',
+      "Skip the line — place your order before you arrive and pick it up when it's ready. Pay at the truck.",
   },
 ];
 
