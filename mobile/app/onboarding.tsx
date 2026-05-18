@@ -19,7 +19,7 @@ const SLIDES = [
     emoji: '🗺️',
     title: 'Find Food Trucks Near You',
     description:
-      'See every food truck open right now on a live map. Filter by cuisine, location, or what's trending today.',
+      "See every food truck open right now on a live map. Filter by cuisine, location, or what's trending today.",
   },
   {
     emoji: '❤️',
