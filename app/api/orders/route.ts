@@ -88,20 +88,33 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Identify customer from the Authorization header — never trust body for this
-    let verifiedCustomerId: string | null = null;
+    // ── Authentication required ─────────────────────────────────────────────
+    // Orders require a signed-in account for no-show accountability.
     const authHeader = req.headers.get("authorization") ?? "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-    if (token) {
-      try {
-        const userClient = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-          { global: { headers: { Authorization: `Bearer ${token}` } } }
-        );
-        const { data: { user } } = await userClient.auth.getUser();
-        if (user) verifiedCustomerId = user.id;
-      } catch { /* anonymous order — verifiedCustomerId stays null */ }
+    if (!token) {
+      return NextResponse.json(
+        { error: "Sign in required to place an order." },
+        { status: 401 }
+      );
+    }
+
+    let verifiedCustomerId: string | null = null;
+    try {
+      const userClient = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        { global: { headers: { Authorization: `Bearer ${token}` } } }
+      );
+      const { data: { user } } = await userClient.auth.getUser();
+      if (user) verifiedCustomerId = user.id;
+    } catch { /* token invalid */ }
+
+    if (!verifiedCustomerId) {
+      return NextResponse.json(
+        { error: "Sign in required to place an order." },
+        { status: 401 }
+      );
     }
 
 
@@ -133,6 +146,28 @@ export async function POST(req: NextRequest) {
     const trimmedNotes = notes?.trim() || null;
 
     const supabase = getAdminClient();
+
+    // ── No-show accountability check ───────────────────────────────────────
+    // Block customers with 3+ no-shows in the last 90 days
+    const NO_SHOW_LIMIT = 3;
+    const NO_SHOW_WINDOW_DAYS = 90;
+    const cutoffDate = new Date(Date.now() - NO_SHOW_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const { count: noShowCount } = await supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("customer_id", verifiedCustomerId)
+      .eq("status", "no_show")
+      .gte("created_at", cutoffDate);
+
+    if (noShowCount != null && noShowCount >= NO_SHOW_LIMIT) {
+      return NextResponse.json(
+        {
+          error: "Your account has been temporarily blocked from placing orders due to multiple missed pickups. Please visit a truck in person to order.",
+          no_show_block: true,
+        },
+        { status: 403 }
+      );
+    }
 
     // Verify the truck is currently live before accepting orders
     const { data: truckCheck } = await supabase
@@ -185,17 +220,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Order total must be greater than zero" }, { status: 400 });
     }
 
-    // Insert the order
+    // Insert the order (customer_id always set — auth is required)
     const { data: order, error: orderErr } = await supabase
       .from("orders")
       .insert({
         truck_id,
+        customer_id: verifiedCustomerId,
         pickup_name: trimmedName,
         notes: trimmedNotes,
         items,
         total: serverTotal,
         status: "pending",
-        ...(verifiedCustomerId ? { customer_id: verifiedCustomerId } : {}),
       })
       .select("id")
       .maybeSingle();

@@ -24,13 +24,22 @@ export type MenuItem = {
   is_sold_out: boolean;
 };
 
+export type OrderStatus =
+  | "pending"
+  | "preparing"
+  | "ready"
+  | "picked_up"
+  | "no_show"
+  | "cancelled";
+
 export type Order = {
   id: string;
   truck_id: string;
-  customer_id: string | null; // null for guest orders
+  customer_id: string | null;
   items: OrderItem[];
   total: number;
-  status: "pending" | "preparing" | "ready" | "picked_up";
+  status: OrderStatus;
+  status_updated_at?: string;
   created_at: string;
 };
 

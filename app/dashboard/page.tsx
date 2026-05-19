@@ -730,7 +730,7 @@ export default function Dashboard() {
   }
 
   async function updateOrderStatus(orderId: string, status: string) {
-    const VALID_STATUSES = ["preparing", "ready", "picked_up"] as const;
+    const VALID_STATUSES = ["preparing", "ready", "picked_up", "no_show"] as const;
     if (!VALID_STATUSES.includes(status as typeof VALID_STATUSES[number])) return;
     if (updatingOrderId) return; // prevent double-tap
     setUpdatingOrderId(orderId);
@@ -738,8 +738,32 @@ export default function Dashboard() {
       const supabase = createClient();
       // Scope update to this operator's truck — prevents cross-operator order tampering
       const { error } = await supabase.from("orders").update({ status }).eq("id", orderId).eq("truck_id", truckId!);
-      if (!error) setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status } : o));
-      else showToast("Failed to update order status — please try again");
+      if (!error) {
+        setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status } : o));
+
+        // Notify customer of status change (fire-and-forget)
+        const order = orders.find((o) => o.id === orderId);
+        if (order?.customer_id) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.access_token) {
+            fetch("/api/notify-customer", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${session.access_token}`,
+              },
+              body: JSON.stringify({
+                customer_id: order.customer_id,
+                order_id: orderId,
+                status,
+                truck_name: profile.name,
+              }),
+            }).catch(() => {});
+          }
+        }
+      } else {
+        showToast("Failed to update order status — please try again");
+      }
     } catch {
       showToast("Failed to update order status — check your connection");
     } finally {
@@ -1994,7 +2018,7 @@ export default function Dashboard() {
             ) : (
               <div className="flex flex-col gap-3">
                 {/* Pending first, then by time */}
-                {["pending", "preparing", "ready", "picked_up"].map((statusGroup) => {
+                {["pending", "preparing", "ready", "picked_up", "no_show", "cancelled"].map((statusGroup) => {
                   const groupOrders = orders.filter((o) => o.status === statusGroup);
                   if (groupOrders.length === 0) return null;
                   const statusLabel: Record<string, string> = {
@@ -2002,12 +2026,16 @@ export default function Dashboard() {
                     preparing: "Preparing",
                     ready: "Ready for Pickup",
                     picked_up: "Picked Up",
+                    no_show: "No-Shows",
+                    cancelled: "Cancelled",
                   };
                   const statusColor: Record<string, string> = {
                     pending: "text-amber-600 bg-amber-50 border-amber-200",
                     preparing: "text-blue-600 bg-blue-50 border-blue-200",
                     ready: "text-green-600 bg-green-50 border-green-200",
                     picked_up: "text-neutral-400 bg-neutral-50 border-neutral-200",
+                    no_show: "text-red-600 bg-red-50 border-red-200",
+                    cancelled: "text-neutral-400 bg-neutral-50 border-neutral-200",
                   };
                   return (
                     <div key={statusGroup}>
@@ -2029,6 +2057,7 @@ export default function Dashboard() {
                                 order.status === "pending"   ? "border-amber-400" :
                                 order.status === "preparing" ? "border-blue-400"  :
                                 order.status === "ready"     ? "border-green-400" :
+                                order.status === "no_show"   ? "border-red-400"   :
                                 "border-neutral-200"
                               }`}
                             >
@@ -2067,7 +2096,7 @@ export default function Dashboard() {
                               </div>
 
                               {/* Status actions */}
-                              {order.status !== "picked_up" && (
+                              {!["picked_up", "no_show", "cancelled"].includes(order.status) && (
                                 <div className="px-4 pb-4 flex gap-2">
                                   {order.status === "pending" && (
                                     <button
@@ -2088,13 +2117,26 @@ export default function Dashboard() {
                                     </button>
                                   )}
                                   {order.status === "ready" && (
-                                    <button
-                                      onClick={() => updateOrderStatus(order.id, "picked_up")}
-                                      disabled={updatingOrderId === order.id}
-                                      className="flex-1 py-2.5 bg-neutral-800 text-white rounded-xl font-bold text-sm active:scale-95 transition-all disabled:opacity-50"
-                                    >
-                                      {updatingOrderId === order.id ? "Updating..." : "Picked Up ✓"}
-                                    </button>
+                                    <>
+                                      <button
+                                        onClick={() => updateOrderStatus(order.id, "picked_up")}
+                                        disabled={updatingOrderId === order.id}
+                                        className="flex-1 py-2.5 bg-neutral-800 text-white rounded-xl font-bold text-sm active:scale-95 transition-all disabled:opacity-50"
+                                      >
+                                        {updatingOrderId === order.id ? "Updating..." : "Picked Up ✓"}
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          if (confirm("Mark this order as a no-show? This counts as a strike against the customer.")) {
+                                            updateOrderStatus(order.id, "no_show");
+                                          }
+                                        }}
+                                        disabled={updatingOrderId === order.id}
+                                        className="py-2.5 px-4 bg-red-100 text-red-600 rounded-xl font-bold text-sm active:scale-95 transition-all disabled:opacity-50"
+                                      >
+                                        No Show
+                                      </button>
+                                    </>
                                   )}
                                 </div>
                               )}

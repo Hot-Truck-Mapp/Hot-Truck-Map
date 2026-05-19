@@ -4,20 +4,24 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/colors';
-import type { Order } from '@shared/types';
+import type { Order, OrderStatus } from '@shared/types';
 
-const STATUS_COLOR: Record<Order['status'], string> = {
+const STATUS_COLOR: Record<OrderStatus, string> = {
   pending: Colors.warning,
   preparing: Colors.info,
   ready: Colors.success,
   picked_up: Colors.textSecondary,
+  no_show: Colors.error,
+  cancelled: Colors.textSecondary,
 };
 
-const STATUS_LABEL: Record<Order['status'], string> = {
+const STATUS_LABEL: Record<OrderStatus, string> = {
   pending: 'Pending',
   preparing: 'Preparing',
   ready: 'Ready for Pickup!',
   picked_up: 'Picked Up',
+  no_show: 'No Show',
+  cancelled: 'Cancelled',
 };
 
 export default function OrdersTab() {

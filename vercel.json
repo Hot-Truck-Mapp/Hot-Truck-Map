@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/orders/auto-cancel",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}

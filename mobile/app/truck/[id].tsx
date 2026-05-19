@@ -352,6 +352,10 @@ export default function TruckScreen() {
 
   async function placeOrder() {
     if (orderInFlightRef.current) return;
+    if (!authToken) {
+      Alert.alert('Sign In Required', 'You need to sign in before placing an order. This helps food trucks ensure every order gets picked up.');
+      return;
+    }
     if (!pickupName.trim()) {
       Alert.alert('Required', 'Please enter your pickup name.');
       return;
@@ -377,7 +381,7 @@ export default function TruckScreen() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify({
           truck_id: id,
@@ -389,7 +393,16 @@ export default function TruckScreen() {
       });
 
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Order failed');
+      if (!res.ok) {
+        if (json.no_show_block) {
+          Alert.alert(
+            'Ordering Blocked',
+            'Your account has been temporarily restricted due to multiple missed pickups. Please visit a food truck in person to order.',
+          );
+          return;
+        }
+        throw new Error(json.error ?? 'Order failed');
+      }
 
       if (mountedRef.current) {
         setOrderModalVisible(false);

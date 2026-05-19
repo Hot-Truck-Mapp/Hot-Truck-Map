@@ -29,6 +29,8 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [isBlocked, setIsBlocked] = useState(false);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -49,10 +51,14 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
     } catch {
       router.replace(`/truck/${id}`);
     }
-    // Get session token for order attribution (fire-and-forget; orders work anonymously too)
+    // Auth is required to place orders — check session
     createClient().auth.getSession()
-      .then(({ data }) => { if (mountedRef.current) setAccessToken(data.session?.access_token ?? null); })
-      .catch(() => { /* not signed in — proceed as guest */ });
+      .then(({ data }) => {
+        if (!mountedRef.current) return;
+        setAccessToken(data.session?.access_token ?? null);
+        setAuthChecking(false);
+      })
+      .catch(() => { if (mountedRef.current) setAuthChecking(false); });
   }, [id, router]);
 
   function updateQty(itemId: string, delta: number) {
@@ -101,11 +107,19 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
         }),
       });
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
+        const errData = await res.json().catch(() => ({})) as { error?: string; no_show_block?: boolean };
+        if (errData.no_show_block) {
+          setIsBlocked(true);
+          return;
+        }
+        if (res.status === 401) {
+          setAccessToken(null); // session expired — show sign-in gate
+          return;
+        }
         if (res.status === 409) {
           throw new Error("__409__");
         }
-        throw new Error((errData as { error?: string }).error ?? "Failed to place order. Please try again.");
+        throw new Error(errData.error ?? "Failed to place order. Please try again.");
       }
       const data = await res.json();
       localStorage.removeItem("hot-truck-cart");
@@ -122,12 +136,71 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
     }
   }
 
-  if (!cart) {
+  if (!cart || authChecking) {
     return (
       <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 rounded-full border-[3px] border-brand-red border-t-transparent animate-spin" />
           <p className="text-neutral-400 text-sm">Loading your order...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Sign-in required to place orders (no-show accountability)
+  if (!accessToken) {
+    return (
+      <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-6">
+        <div className="max-w-sm w-full bg-white rounded-2xl shadow-sm p-8 text-center">
+          <div className="w-14 h-14 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+          </div>
+          <h2 className="text-lg font-black text-neutral-900 mb-2">Sign in to Order</h2>
+          <p className="text-sm text-neutral-500 leading-relaxed mb-6">
+            Create a free account to place orders. This helps food trucks ensure every order gets picked up.
+          </p>
+          <Link
+            href={`/login?redirect=${encodeURIComponent(`/truck/${id}/order`)}`}
+            className="block w-full py-3.5 bg-brand-red text-white rounded-xl font-bold text-sm"
+          >
+            Sign In or Create Account
+          </Link>
+          <button
+            onClick={() => router.push(`/truck/${id}`)}
+            className="mt-3 text-sm text-neutral-400 hover:text-neutral-600"
+          >
+            &larr; Back to menu
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Blocked account — shown if the API returns a no_show_block error
+  if (isBlocked) {
+    return (
+      <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-6">
+        <div className="max-w-sm w-full bg-white rounded-2xl shadow-sm p-8 text-center">
+          <div className="w-14 h-14 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+            </svg>
+          </div>
+          <h2 className="text-lg font-black text-neutral-900 mb-2">Ordering Temporarily Blocked</h2>
+          <p className="text-sm text-neutral-500 leading-relaxed mb-6">
+            Your account has been restricted from placing orders due to multiple missed pickups.
+            Please visit a food truck in person to order.
+          </p>
+          <button
+            onClick={() => router.push(`/truck/${id}`)}
+            className="block w-full py-3.5 bg-neutral-800 text-white rounded-xl font-bold text-sm"
+          >
+            Go Back
+          </button>
         </div>
       </div>
     );
