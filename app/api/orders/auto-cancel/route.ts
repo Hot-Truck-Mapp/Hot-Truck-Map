@@ -36,13 +36,33 @@ export async function GET(req: NextRequest) {
   const db = getServiceClient();
   const cutoff = new Date(Date.now() - READY_TIMEOUT_MINUTES * 60 * 1000).toISOString();
 
-  // Find orders stuck in "ready" past the pickup window
-  const { data: staleOrders, error: fetchErr } = await db
+  // Find orders stuck in "ready" past the pickup window.
+  // Try status_updated_at first (set by DB trigger after migration runs),
+  // fall back to created_at if the column doesn't exist yet.
+  let staleOrders: any[] | null = null;
+  let fetchErr: any = null;
+
+  const result1 = await db
     .from("orders")
     .select("id, customer_id, truck_id")
     .eq("status", "ready")
     .lt("status_updated_at", cutoff)
     .limit(100);
+
+  if (result1.error?.message?.includes("status_updated_at")) {
+    // Column doesn't exist yet — fall back to created_at
+    const result2 = await db
+      .from("orders")
+      .select("id, customer_id, truck_id")
+      .eq("status", "ready")
+      .lt("created_at", cutoff)
+      .limit(100);
+    staleOrders = result2.data;
+    fetchErr = result2.error;
+  } else {
+    staleOrders = result1.data;
+    fetchErr = result1.error;
+  }
 
   if (fetchErr) {
     console.error("Auto-cancel fetch error:", fetchErr);
