@@ -23,6 +23,8 @@ export default function AccountPage() {
   const push = usePushSubscription();
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarToast, setAvatarToast] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const avatarRef = useRef<HTMLInputElement>(null);
   const avatarToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pushToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -156,6 +158,37 @@ export default function AccountPage() {
       await supabase.auth.signOut();
     } catch { /* ignore — redirect anyway */ }
     window.location.href = "/";
+  }
+
+  async function deleteAccount() {
+    if (!deleteConfirm) {
+      setDeleteConfirm(true);
+      return;
+    }
+    setDeleting(true);
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Not signed in");
+
+      const res = await fetch("/api/account/delete", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error ?? "Deletion failed");
+      }
+
+      window.location.href = "/";
+    } catch (err: any) {
+      if (mountedRef.current) {
+        alert(err?.message ?? "Could not delete account. Please try again.");
+        setDeleting(false);
+        setDeleteConfirm(false);
+      }
+    }
   }
 
   if (loading) {
@@ -593,6 +626,44 @@ export default function AccountPage() {
             >
               Sign Out
             </button>
+
+            {/* Delete Account — Apple Guideline 5.1.1(v) */}
+            <div className="bg-white rounded-2xl shadow-sm p-4 mt-2">
+              <p className="text-sm font-bold text-neutral-800 mb-1">
+                Delete Account
+              </p>
+              <p className="text-xs text-neutral-400 mb-4 leading-relaxed">
+                Permanently delete your account and all associated data. This action cannot be undone.
+              </p>
+              {deleteConfirm ? (
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs text-red-500 font-semibold text-center">
+                    Are you sure? This is irreversible.
+                  </p>
+                  <button
+                    onClick={deleteAccount}
+                    disabled={deleting}
+                    className="w-full py-3 bg-red-600 text-white rounded-xl font-semibold text-sm disabled:opacity-50"
+                  >
+                    {deleting ? "Deleting..." : "Yes, Delete My Account"}
+                  </button>
+                  <button
+                    onClick={() => setDeleteConfirm(false)}
+                    disabled={deleting}
+                    className="w-full py-3 border border-neutral-200 text-neutral-600 rounded-xl font-semibold text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={deleteAccount}
+                  className="w-full py-3 border-2 border-red-200 text-red-500 rounded-xl font-semibold text-sm hover:bg-red-50 transition-colors"
+                >
+                  Delete Account
+                </button>
+              )}
+            </div>
 
           </div>
         )}

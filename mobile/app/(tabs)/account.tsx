@@ -7,12 +7,15 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/colors';
 
+const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'https://hottruckmap.com';
+
 export default function AccountTab() {
   const { session } = useAuth();
   const router = useRouter();
   const mountedRef = useRef(true);
   const [avatarUrl, setAvatarUrl] = useState<string>('');
   const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     return () => { mountedRef.current = false; };
@@ -39,6 +42,46 @@ export default function AccountTab() {
         },
       },
     ]);
+  }
+
+  async function handleDeleteAccount() {
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your account and all your data. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete My Account',
+          style: 'destructive',
+          onPress: async () => {
+            if (deleting) return;
+            setDeleting(true);
+            try {
+              const { data: { session: s } } = await supabase.auth.getSession();
+              if (!s?.access_token) throw new Error('Not signed in');
+
+              const res = await fetch(`${API_BASE}/api/account/delete`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${s.access_token}` },
+              });
+
+              if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error((err as { error?: string }).error ?? 'Deletion failed');
+              }
+
+              Alert.alert('Account Deleted', 'Your account has been permanently deleted.');
+            } catch (err: any) {
+              if (mountedRef.current) {
+                Alert.alert('Error', err?.message ?? 'Could not delete account. Please try again.');
+              }
+            } finally {
+              if (mountedRef.current) setDeleting(false);
+            }
+          },
+        },
+      ]
+    );
   }
 
   async function pickAndUploadAvatar() {
@@ -189,6 +232,19 @@ export default function AccountTab() {
       >
         <Text style={styles.signOutText}>Sign Out</Text>
       </TouchableOpacity>
+
+      <TouchableOpacity
+        activeOpacity={0.7}
+        style={styles.deleteButton}
+        onPress={handleDeleteAccount}
+        disabled={deleting}
+        accessibilityLabel="Delete account"
+        accessibilityRole="button"
+      >
+        <Text style={styles.deleteText}>
+          {deleting ? 'Deleting...' : 'Delete Account'}
+        </Text>
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -242,4 +298,8 @@ const styles = StyleSheet.create({
     borderRadius: 10, paddingVertical: 14, alignItems: 'center',
   },
   signOutText: { color: Colors.error, fontSize: 16, fontWeight: '600' },
+  deleteButton: {
+    marginTop: 12, borderRadius: 10, paddingVertical: 14, alignItems: 'center',
+  },
+  deleteText: { color: Colors.textSecondary, fontSize: 14, fontWeight: '500' },
 });
