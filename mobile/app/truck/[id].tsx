@@ -60,8 +60,10 @@ function timeAgo(dateStr: string): string {
 }
 
 function fmt24to12(time24: string): string {
+  if (!time24 || !time24.includes(':')) return time24 ?? '';
   const [hStr, mStr] = time24.split(':');
   let h = parseInt(hStr, 10);
+  if (isNaN(h)) return time24;
   const m = mStr ?? '00';
   const ampm = h >= 12 ? 'PM' : 'AM';
   h = h % 12 || 12;
@@ -281,7 +283,9 @@ export default function TruckScreen() {
       const ext = mimeType.split('/')[1]?.replace('jpeg', 'jpg') ?? 'jpg';
       const path = `truck-photos/${id}/${userId}-${Date.now()}.${ext}`;
       const response = await fetch(uri);
+      if (!response.ok) throw new Error('Could not read photo from device.');
       const blob = await response.blob();
+      if (blob.size === 0) throw new Error('Photo appears to be empty. Please try a different photo.');
       const { error: uploadError } = await supabase.storage
         .from('truck-photos')
         .upload(path, blob, { upsert: false, contentType: mimeType });
@@ -392,16 +396,16 @@ export default function TruckScreen() {
         }),
       });
 
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}) as Record<string, unknown>);
       if (!res.ok) {
-        if (json.no_show_block) {
+        if ((json as any).no_show_block) {
           Alert.alert(
             'Ordering Blocked',
             'Your account has been temporarily restricted due to multiple missed pickups. Please visit a food truck in person to order.',
           );
           return;
         }
-        throw new Error(json.error ?? 'Order failed');
+        throw new Error((json as any).error ?? 'Order failed');
       }
 
       if (mountedRef.current) {
@@ -748,7 +752,7 @@ export default function TruckScreen() {
             reviews.map(review => (
               <View key={review.id} style={styles.reviewCard}>
                 <View style={styles.reviewRow}>
-                  <Text style={styles.reviewStars}>{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</Text>
+                  <Text style={styles.reviewStars}>{'★'.repeat(Math.max(0, Math.min(5, review.rating ?? 0)))}{'☆'.repeat(Math.max(0, 5 - Math.min(5, review.rating ?? 0)))}</Text>
                   <Text style={styles.reviewTime}>{timeAgo(review.created_at)}</Text>
                 </View>
                 {review.comment ? <Text style={styles.reviewComment}>{review.comment}</Text> : null}

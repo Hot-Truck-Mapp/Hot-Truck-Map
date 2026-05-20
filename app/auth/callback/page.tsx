@@ -37,8 +37,8 @@ function AuthCallbackInner() {
           // set a new password.
           if (data?.session?.user?.recovery_sent_at) {
             const recoverySent = new Date(data.session.user.recovery_sent_at).getTime();
-            const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
-            if (recoverySent > fiveMinutesAgo) {
+            const fifteenMinutesAgo = Date.now() - 15 * 60 * 1000;
+            if (recoverySent > fifteenMinutesAgo) {
               router.replace("/reset-password");
               return;
             }

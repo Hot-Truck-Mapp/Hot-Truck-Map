@@ -74,9 +74,10 @@ export default function Dashboard() {
   const [toast, setToast] = useState<{msg: string; isError?: boolean} | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   function showToast(msg: string, isError = false) {
+    if (!mountedRef.current) return;
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ msg, isError });
-    toastTimerRef.current = setTimeout(() => setToast(null), 4000);
+    toastTimerRef.current = setTimeout(() => { if (mountedRef.current) setToast(null); }, 4000);
   }
 
   // Inline delete confirms
@@ -122,10 +123,18 @@ export default function Dashboard() {
 
   const mountedRef = useRef(true);
 
-  // ── Cleanup timers on unmount ───────────────────────────────────────────────
+  // ── Cleanup timers, geolocation, and intervals on unmount ──────────────────
   useEffect(() => () => {
     mountedRef.current = false;
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    if (locationIntervalRef.current) {
+      clearInterval(locationIntervalRef.current);
+      locationIntervalRef.current = null;
+    }
   }, []);
 
   // ── Initial load ────────────────────────────────────────────────────────────

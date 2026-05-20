@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { timingSafeEqual } from "crypto";
 
 // ---------------------------------------------------------------------------
 // Auto-cancel stale orders — runs via Vercel Cron every 5 minutes.
@@ -29,7 +30,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 503 });
   }
 
-  if (authHeader !== `Bearer ${cronSecret}`) {
+  const expected = `Bearer ${cronSecret}`;
+  const supplied = authHeader ?? "";
+  // Pad both to the same length to prevent length-leaking timing oracle
+  const maxLen = Math.max(expected.length, supplied.length);
+  const a = Buffer.from(expected.padEnd(maxLen));
+  const b = Buffer.from(supplied.padEnd(maxLen));
+  if (!timingSafeEqual(a, b)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

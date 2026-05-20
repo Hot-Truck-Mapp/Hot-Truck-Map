@@ -8,7 +8,9 @@ import {
   ScrollView,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  useWindowDimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
 
@@ -65,7 +67,7 @@ export default function OnboardingScreen() {
   const isLast = currentIndex === SLIDES.length - 1;
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {/* Slides */}
       <ScrollView
         ref={scrollRef}
@@ -125,7 +127,7 @@ export default function OnboardingScreen() {
           </TouchableOpacity>
         )}
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 

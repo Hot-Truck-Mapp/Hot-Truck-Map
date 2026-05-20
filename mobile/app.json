@@ -20,7 +20,6 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "Hot Truck Map uses your location to show nearby food trucks on the map.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Hot Truck Map uses your location to show nearby food trucks on the map.",
         "NSPhotoLibraryUsageDescription": "Hot Truck Map uses your photo library so you can upload photos of food trucks.",
         "NSPhotoLibraryAddUsageDescription": "Hot Truck Map saves truck photos to your photo library.",
         "NSCameraUsageDescription": "Hot Truck Map uses your camera to take photos of food trucks."
@@ -32,7 +31,7 @@
         "backgroundColor": "#FF6B35"
       },
       "package": "com.hottruckmap.app",
-      "versionCode": 6,
+      "versionCode": 7,
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION"

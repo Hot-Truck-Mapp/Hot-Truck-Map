@@ -184,7 +184,7 @@ export default function AccountPage() {
       window.location.href = "/";
     } catch (err: any) {
       if (mountedRef.current) {
-        alert(err?.message ?? "Could not delete account. Please try again.");
+        showAvatarToast(err?.message ?? "Could not delete account. Please try again.");
         setDeleting(false);
         setDeleteConfirm(false);
       }

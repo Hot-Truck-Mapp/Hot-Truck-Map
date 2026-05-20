@@ -19,7 +19,7 @@ export default function ForgotPasswordPage() {
   async function handleReset() {
     if (loading) return; // in-flight guard
     if (!email.trim()) return;
-    if (!email.includes("@")) { setError("Please enter a valid email address."); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError("Please enter a valid email address."); return; }
     setLoading(true);
     setError(null);
     try {

@@ -37,14 +37,13 @@ export default function CateringDashboardPage() {
   }, []);
 
   function showToast(msg: string) {
+    if (!mountedRef.current) return;
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast(msg);
     toastTimerRef.current = setTimeout(() => {
       if (mountedRef.current) setToast(null);
     }, 3500);
   }
-
-  useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
 
   useEffect(() => {
     loadRequests();

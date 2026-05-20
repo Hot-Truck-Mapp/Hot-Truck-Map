@@ -22,12 +22,13 @@ function getServiceClient() {
   return createSupabaseClient(url, serviceKey);
 }
 
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
+function timingSafeEqualStr(a: string, b: string): boolean {
   try {
-    const aBytes = Buffer.from(a, "utf8");
-    const bBytes = Buffer.from(b, "utf8");
-    return require("crypto").timingSafeEqual(aBytes, bBytes);
+    // Pad to equal length so timing doesn't leak key length
+    const maxLen = Math.max(a.length, b.length);
+    const aBytes = Buffer.from(a.padEnd(maxLen), "utf8");
+    const bBytes = Buffer.from(b.padEnd(maxLen), "utf8");
+    return require("crypto").timingSafeEqual(aBytes, bBytes) && a.length === b.length;
   } catch {
     return false;
   }
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
   if (!internalKey || !expected) {
     return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
   }
-  if (!timingSafeEqual(internalKey, expected)) {
+  if (!timingSafeEqualStr(internalKey, expected)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

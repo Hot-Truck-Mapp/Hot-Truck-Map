@@ -113,6 +113,8 @@ export default function CateringRequestScreen() {
       });
 
       if (res.status === 429) {
+        inFlightRef.current = false;
+        if (mountedRef.current) setSubmitting(false);
         Alert.alert('Too many requests', 'Please wait a few minutes before submitting another request.');
         return;
       }

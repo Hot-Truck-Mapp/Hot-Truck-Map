@@ -50,7 +50,7 @@ export default function ResetPasswordPage() {
     }
 
     const timeout = setTimeout(() => {
-      if (!fired) setTimedOut(true);
+      if (!fired && mountedRef.current) setTimedOut(true);
     }, 45000); // 45s — enough for slow connections and email link redirects
 
     return () => {
