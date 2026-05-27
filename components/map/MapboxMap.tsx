@@ -138,11 +138,7 @@ export default function MapboxMap({ trucks }: Props) {
         </div>
       `;
 
-      // Escape HTML to prevent XSS via malicious truck names / cuisine strings
-      function esc(s: string) {
-        return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-                .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-      }
+      // Use the module-level esc() defined at the top of this file.
 
       const ratingHtml = (truck.avg_rating ?? 0) > 0
         ? `<p style="margin:0 0 6px;font-size:11px;color:#555;display:flex;align-items:center;gap:3px">

@@ -29,9 +29,12 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              // Next.js + Turbopack require 'unsafe-inline' and 'unsafe-eval' for hot-reload/RSC;
-              // tighten to nonce-based CSP once inline scripts are eliminated.
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              // In dev, Turbopack needs 'unsafe-inline' and 'unsafe-eval' for HMR.
+              // In production, only 'unsafe-inline' is kept (required for Next.js
+              // inline scripts); 'unsafe-eval' is stripped to block eval-based XSS.
+              process.env.NODE_ENV === "production"
+                ? "script-src 'self' 'unsafe-inline'"
+                : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
               `connect-src 'self' https://${supabaseHostname} wss://${supabaseHostname} https://api.mapbox.com https://events.mapbox.com https://exp.host`,
               `img-src 'self' data: blob: https://${supabaseHostname} https://api.mapbox.com`,
               "style-src 'self' 'unsafe-inline'",

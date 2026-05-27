@@ -2,6 +2,20 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+/**
+ * Next.js 16 Proxy (replaces deprecated middleware.ts).
+ *
+ * Responsibilities:
+ *  1. Refresh the Supabase auth session on every navigation so cookies
+ *     stay fresh and server components / route handlers see the latest token.
+ *  2. Redirect unauthenticated visitors away from protected route prefixes.
+ *  3. Server-side admin gate via email allowlist (app_metadata alone is not
+ *     verified at the proxy layer — the email check is a secondary backstop).
+ */
+
+const PROTECTED_PREFIXES = ["/dashboard", "/admin", "/account"];
+const ADMIN_EMAILS = ["hottruckmap@gmail.com"];
+
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
@@ -14,9 +28,12 @@ export async function proxy(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
+          // Write cookies to the request so downstream handlers see them.
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
+          // Re-create the response with the updated request, then write
+          // Set-Cookie headers so the browser receives the refreshed tokens.
           supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
@@ -26,27 +43,24 @@ export async function proxy(request: NextRequest) {
     }
   );
 
+  // Refresh the session — validates the token against Supabase Auth.
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
 
-  // ── Authentication gate ────────────────────────────────────────────────────
-  // Unauthenticated users are redirected to /login for protected routes.
-  // /account handles its own unauthenticated state client-side.
-  if (!user && (pathname.startsWith("/dashboard") || pathname.startsWith("/admin"))) {
+  // ── Authentication gate ──────────────────────────────────────────────
+  if (!user && PROTECTED_PREFIXES.some((p) => pathname.startsWith(p))) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    url.searchParams.set("redirect", pathname);
     return NextResponse.redirect(url);
   }
 
-  // ── Admin role gate (server-side) ──────────────────────────────────────────
-  // user_metadata.role is user-editable so we gate /admin by email allowlist only.
-  // The allowlist is the same as in app/admin/page.tsx and api/admin/save-settings.
-  const OWNER_EMAILS = ["hottruckmap@gmail.com"];
+  // ── Admin role gate (server-side backstop) ───────────────────────────
   if (pathname.startsWith("/admin") && user) {
-    if (!OWNER_EMAILS.includes((user.email ?? "").toLowerCase())) {
+    if (!ADMIN_EMAILS.includes((user.email ?? "").toLowerCase())) {
       const url = request.nextUrl.clone();
       url.pathname = "/";
       return NextResponse.redirect(url);
@@ -57,5 +71,13 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/admin/:path*"],
+  matcher: [
+    /*
+     * Run on all routes except:
+     *  - API routes (have their own auth checks)
+     *  - Static / image-optimisation assets
+     *  - Common metadata files
+     */
+    "/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|manifest.webmanifest).*)",
+  ],
 };

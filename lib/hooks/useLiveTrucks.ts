@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Truck, Location } from "@/lib/types";
 import type { MapFilters } from "@/components/map/FilterBar";
@@ -17,6 +17,7 @@ export const DEFAULT_FILTERS: MapFilters = {
 };
 
 export function useLiveTrucks(filters: MapFilters) {
+  const instanceId = useId();
   const [trucks, setTrucks] = useState<TruckWithLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -63,7 +64,7 @@ export function useLiveTrucks(filters: MapFilters) {
     fetchTrucks();
 
     const channel = supabase
-      .channel("live-trucks")
+      .channel(`live-trucks-${instanceId}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "locations" },

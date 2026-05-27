@@ -19,8 +19,10 @@ export function useRole() {
         if (!mountedRef.current) return;
         if (!user) { setRole(null); return; }
 
-        // Admin: still sourced from metadata (set server-side only, not user-editable via normal flows)
-        if (user.user_metadata?.role === "admin") { setRole("admin"); return; }
+        // Admin: sourced from app_metadata which can ONLY be set via the service
+        // role key (server-side). user_metadata is user-writable and must never
+        // be trusted for privilege escalation.
+        if (user.app_metadata?.role === "admin") { setRole("admin"); return; }
 
         // Operator: verify via DB truck ownership — user_metadata.role is user-editable
         // and must never be trusted for access control decisions.
