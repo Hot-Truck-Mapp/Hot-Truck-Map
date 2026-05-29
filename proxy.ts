@@ -44,9 +44,14 @@ export async function proxy(request: NextRequest) {
   );
 
   // Refresh the session — validates the token against Supabase Auth.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // If Auth is unreachable (outage, timeout), fall back to unauthenticated
+  // so public pages still load instead of crashing the whole site.
+  let user = null;
+  try {
+    ({ data: { user } } = await supabase.auth.getUser());
+  } catch {
+    // Auth blip — proceed as unauthenticated; protected routes redirect to login
+  }
 
   const { pathname } = request.nextUrl;
 
