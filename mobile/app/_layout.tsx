@@ -33,8 +33,8 @@ function AuthGuard() {
     if (loading || !segments[0] || !onboardingChecked) return;
 
     // Redirect to onboarding if not yet completed
-    if (!onboardingComplete && segments[0] !== 'onboarding') {
-      router.replace('/onboarding');
+    if (!onboardingComplete && (segments[0] as string) !== 'onboarding') {
+      router.replace('/onboarding' as any);
       if (!splashHidden.current) {
         splashHidden.current = true;
         SplashScreen.hideAsync().catch(() => { /* already hidden */ });

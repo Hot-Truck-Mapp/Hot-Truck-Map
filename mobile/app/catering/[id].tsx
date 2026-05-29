@@ -39,7 +39,7 @@ export default function CateringRequestScreen() {
   // Load truck name for the header
   useEffect(() => {
     if (!id) return;
-    supabase
+    void supabase
       .from('trucks')
       .select('name')
       .eq('id', id)
@@ -49,8 +49,7 @@ export default function CateringRequestScreen() {
           setTruckName(data.name);
           navigation.setOptions({ title: `Catering — ${data.name}` });
         }
-      })
-      .catch(() => {});
+      });
   }, [id]);
 
   async function submit() {

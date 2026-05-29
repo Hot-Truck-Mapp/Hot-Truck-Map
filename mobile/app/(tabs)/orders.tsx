@@ -89,7 +89,7 @@ export default function OrdersTab() {
               if (!mountedRef.current) return;
               const { id, status, updated_at } = payload.new as { id: string; status: string; updated_at?: string };
               setOrders((prev) =>
-                prev.map((o) => o.id === id ? { ...o, status, ...(updated_at ? { updated_at } : {}) } : o)
+                prev.map((o) => o.id === id ? { ...o, status: status as import('@shared/types').OrderStatus, ...(updated_at ? { updated_at } : {}) } : o)
               );
             }
           )

@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
@@ -64,9 +65,11 @@ export async function setupNotifications(): Promise<string | null> {
 
   if (status !== 'granted') return null;
 
-  const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
+  const projectId =
+    process.env.EXPO_PUBLIC_EAS_PROJECT_ID ??
+    (Constants.expoConfig?.extra?.eas?.projectId as string | undefined);
   if (!projectId) {
-    console.warn('EXPO_PUBLIC_EAS_PROJECT_ID not set — skipping push token registration');
+    console.warn('EAS project ID not found — skipping push token registration');
     return null;
   }
 
