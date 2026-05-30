@@ -413,7 +413,7 @@ export default function TruckScreen() {
         setCart({});
         setPickupName('');
         setOrderNotes('');
-        const shortId = (json.orderId as string).slice(0, 8).toUpperCase();
+        const shortId = typeof json.orderId === 'string' ? json.orderId.slice(0, 8).toUpperCase() : '—';
         Alert.alert('Order placed!', `Your order ID is #${shortId}`);
       }
     } catch (err: any) {

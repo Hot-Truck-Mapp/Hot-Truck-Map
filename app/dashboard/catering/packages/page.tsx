@@ -135,7 +135,8 @@ export default function CateringPackagesPage() {
           catering_starting_price: parsedPrice,
           catering_min_guests: parsedMinGuests,
         })
-        .eq("id", truckId);
+        .eq("id", truckId)
+        .eq("owner_id", userId!);
       if (error) showToast("Save failed: " + error.message);
       else showToast("Catering info saved!");
     } catch {

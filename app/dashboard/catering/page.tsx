@@ -19,6 +19,7 @@ export default function CateringDashboardPage() {
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [truckId, setTruckId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [filter, setFilter] = useState("all");
   const [selected, setSelected] = useState<any | null>(null);
   const [message, setMessage] = useState("");
@@ -61,6 +62,7 @@ export default function CateringDashboardPage() {
 
       if (!truck) return;
       if (!mountedRef.current) return;
+      setUserId(user.id);
       setTruckId(truck.id);
       setCateringEnabled(truck.offers_catering ?? false);
 
@@ -171,7 +173,8 @@ export default function CateringDashboardPage() {
       const { error } = await supabase
         .from("trucks")
         .update({ offers_catering: next })
-        .eq("id", truckId);
+        .eq("id", truckId)
+        .eq("owner_id", userId!);
       if (error) {
         if (mountedRef.current) { setCateringEnabled(!next); showToast("Could not update catering — please try again."); }
       }
