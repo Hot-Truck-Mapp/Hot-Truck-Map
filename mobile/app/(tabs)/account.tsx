@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
+import { clearPushToken } from '@/lib/notifications';
 import { Colors } from '@/constants/colors';
 
 const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'https://hottruckmap.com';
@@ -35,6 +36,7 @@ export default function AccountTab() {
         style: 'destructive',
         onPress: async () => {
           try {
+            await clearPushToken();
             await supabase.auth.signOut();
           } catch {
             Alert.alert('Error', 'Could not sign out. Please try again.');
@@ -71,6 +73,8 @@ export default function AccountTab() {
               }
 
               Alert.alert('Account Deleted', 'Your account has been permanently deleted.');
+              await clearPushToken();
+              await supabase.auth.signOut();
             } catch (err: any) {
               if (mountedRef.current) {
                 Alert.alert('Error', err?.message ?? 'Could not delete account. Please try again.');

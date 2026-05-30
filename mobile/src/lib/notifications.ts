@@ -107,3 +107,9 @@ export async function registerStoredTokenAfterLogin(): Promise<void> {
     await registerTokenWithServer(token);
   } catch { /* ignore */ }
 }
+
+// Call this on sign-out so the token is not re-registered under a different
+// user account on the same device.
+export async function clearPushToken(): Promise<void> {
+  await SecureStore.deleteItemAsync(PUSH_TOKEN_KEY).catch(() => {});
+}

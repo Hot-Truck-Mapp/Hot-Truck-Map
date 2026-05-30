@@ -27,6 +27,7 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
   const [pickupName, setPickupName] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [error, setError] = useState("");
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
@@ -79,8 +80,10 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
   }
 
   async function placeOrder() {
-    if (submitting) return; // in-flight guard
+    if (submittingRef.current) return; // synchronous guard — prevents double-submit within a single frame
+    submittingRef.current = true;
     if (!cart || !pickupName.trim()) {
+      submittingRef.current = false;
       setError("Please enter your name for pickup.");
       return;
     }
@@ -110,10 +113,12 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
         const errData = await res.json().catch(() => ({})) as { error?: string; no_show_block?: boolean };
         if (errData.no_show_block) {
           setIsBlocked(true);
+          setSubmitting(false);
           return;
         }
         if (res.status === 401) {
           setAccessToken(null); // session expired — show sign-in gate
+          setSubmitting(false);
           return;
         }
         if (res.status === 409) {
@@ -133,6 +138,8 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
         : msg
       );
       setSubmitting(false);
+    } finally {
+      submittingRef.current = false;
     }
   }
 

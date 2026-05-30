@@ -82,11 +82,13 @@ export async function GET(req: NextRequest) {
 
   const orderIds = staleOrders.map((o) => o.id);
 
-  // Mark as no_show (not cancelled — the food was prepared, customer didn't show)
+  // Mark as no_show — guard ensures we never overwrite a concurrently-updated
+  // terminal status (e.g. picked_up set by the operator between SELECT and UPDATE).
   const { error: updateErr } = await db
     .from("orders")
     .update({ status: "no_show" })
-    .in("id", orderIds);
+    .in("id", orderIds)
+    .eq("status", "ready");
 
   if (updateErr) {
     console.error("Auto-cancel update error:", updateErr);

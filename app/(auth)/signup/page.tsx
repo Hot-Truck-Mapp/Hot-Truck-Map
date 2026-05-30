@@ -79,7 +79,7 @@ export default function SignupPage() {
       // Detect "email already registered" — Supabase returns a user with empty identities
       if (data.user && (!data.user.identities || data.user.identities.length === 0)) {
         if (mountedRef.current) {
-          setOpError("An account with this email already exists. Please sign in instead.");
+          setOpError("Sign-up unavailable. Please check your details or sign in if you already have an account.");
           setOpLoading(false);
         }
         return;
@@ -136,7 +136,7 @@ export default function SignupPage() {
 
       // Detect "email already registered" — Supabase returns a user with empty identities
       if (data.user && (!data.user.identities || data.user.identities.length === 0)) {
-        if (mountedRef.current) setCuError("An account with this email already exists. Please sign in instead.");
+        if (mountedRef.current) setCuError("Sign-up unavailable. Please check your details or sign in if you already have an account.");
         return;
       }
 

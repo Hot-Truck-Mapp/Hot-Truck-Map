@@ -3,7 +3,8 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '@/hooks/useAuth';
-import { setupNotifications } from '@/lib/notifications';
+import { supabase } from '@/lib/supabase';
+import { setupNotifications, registerStoredTokenAfterLogin } from '@/lib/notifications';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -65,9 +66,21 @@ function AuthGuard() {
 export default function RootLayout() {
   useEffect(() => {
     setupNotifications().catch(() => { /* ignore — push notifications are non-critical */ });
+
+    // Register any cached push token that wasn't sent on first launch because
+    // the user wasn't signed in yet.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN') {
+        registerStoredTokenAfterLogin().catch(() => {});
+      }
+    });
+
     // Safety valve — always hide splash within 5 s even if auth hangs
     const t = setTimeout(() => SplashScreen.hideAsync(), 5000);
-    return () => clearTimeout(t);
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(t);
+    };
   }, []);
 
   return (

@@ -26,7 +26,7 @@ export default function ForgotPasswordScreen() {
     setLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: (process.env.EXPO_PUBLIC_APP_URL ?? 'https://hottruckmap.com') + '/reset-password',
+        redirectTo: 'hottruckmap://reset-password',
       });
       if (error) {
         Alert.alert('Error', error.message);

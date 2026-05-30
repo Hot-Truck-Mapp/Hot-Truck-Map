@@ -90,10 +90,12 @@ export async function POST(req: NextRequest) {
 
     const db = getServiceClient();
 
-    // Verify the operator owns the truck associated with this order
+    // Verify the operator owns the truck associated with this order,
+    // and fetch the real customer_id from the order record so the
+    // caller cannot redirect notifications to an arbitrary user.
     const { data: order } = await db
       .from("orders")
-      .select("truck_id")
+      .select("truck_id, customer_id")
       .eq("id", order_id)
       .maybeSingle();
 
@@ -112,11 +114,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    // Use the customer_id from the order record, not the caller-supplied value.
+    const verified_customer_id = order.customer_id;
+    if (!verified_customer_id) {
+      return NextResponse.json({ sent: 0 });
+    }
+
     // Get customer's push subscriptions
     const { data: subscriptions } = await db
       .from("push_subscriptions")
       .select("endpoint, p256dh, auth_key, platform")
-      .eq("user_id", customer_id)
+      .eq("user_id", verified_customer_id)
       .limit(10);
 
     if (!subscriptions || subscriptions.length === 0) {

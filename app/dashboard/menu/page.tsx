@@ -121,7 +121,7 @@ export default function MenuPage() {
         .replace(/\.[^.]+$/, "")
         .replace(/[^a-zA-Z0-9._-]/g, "-")
         .slice(0, 64);
-      const path = `menu/${safeName}-${Date.now()}.${ext}`;
+      const path = `menu/${truckId ?? "shared"}/${safeName}-${Date.now()}.${ext}`;
       const { error: uploadErr } = await supabase.storage.from("menu-photos").upload(path, file, { upsert: true });
       if (uploadErr) throw new Error(uploadErr.message);
       const { data } = supabase.storage.from("menu-photos").getPublicUrl(path);
