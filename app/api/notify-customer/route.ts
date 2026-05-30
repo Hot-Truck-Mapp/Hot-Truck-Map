@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import webpush from "web-push";
+import { isRateLimited } from "@/lib/rateLimit";
 
 // ---------------------------------------------------------------------------
 // Notify a customer when their order status changes.
@@ -13,20 +14,6 @@ function getServiceClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
-}
-
-// Rate limit: 30 notifications per operator per 60 seconds
-const rateLimitMap = new Map<string, number[]>();
-function isRateLimited(key: string, max = 30, windowMs = 60_000): boolean {
-  const now = Date.now();
-  const timestamps = (rateLimitMap.get(key) ?? []).filter((t) => t > now - windowMs);
-  if (timestamps.length >= max) {
-    rateLimitMap.set(key, timestamps);
-    return true;
-  }
-  timestamps.push(now);
-  rateLimitMap.set(key, timestamps);
-  return false;
 }
 
 const STATUS_MESSAGES: Record<string, { title: string; body: string }> = {
@@ -67,7 +54,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (isRateLimited(user.id)) {
+    if (await isRateLimited(`notify-customer:${user.id}`, 30, 60_000)) {
       return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }
 

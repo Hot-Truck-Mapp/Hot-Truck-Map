@@ -60,6 +60,7 @@ export default function ResetPasswordPage() {
   }, []);
 
   async function handleUpdate() {
+    if (!ready) return; // recovery session must be established first
     if (loading) return; // in-flight guard
     if (!password || password !== confirm) {
       setError("Passwords don't match.");

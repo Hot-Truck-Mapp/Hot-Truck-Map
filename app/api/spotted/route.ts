@@ -1,30 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-// ---------------------------------------------------------------------------
-// Per-user rate limiting: max 1 spotted post per truck per 10 minutes
-// In-memory map keyed by "userId:truckId" → last post timestamp
-// ---------------------------------------------------------------------------
-const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
-const lastPostMap = new Map<string, number>();
-
-function isRateLimited(userId: string, truckId: string): boolean {
-  const key = `${userId}:${truckId}`;
-  const lastPost = lastPostMap.get(key);
-  const now = Date.now();
-  if (lastPost && now - lastPost < RATE_LIMIT_WINDOW_MS) {
-    return true;
-  }
-  lastPostMap.set(key, now);
-  // Evict old entries to prevent unbounded growth
-  setTimeout(() => {
-    const stored = lastPostMap.get(key);
-    if (stored && Date.now() - stored >= RATE_LIMIT_WINDOW_MS) {
-      lastPostMap.delete(key);
-    }
-  }, RATE_LIMIT_WINDOW_MS);
-  return false;
-}
+// Rate limit window: 1 spotted post per truck per user per 10 minutes.
+// Enforced via a DB count on spotted_posts — shared across serverless instances.
+const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 
 function getAdminClient() {
   return createClient(
@@ -103,16 +82,24 @@ export async function POST(req: NextRequest) {
     trimmedNote = noteVal || null;
   }
 
-  // ── Rate limiting ──────────────────────────────────────────────────────────
-  if (isRateLimited(user.id, truck_id)) {
+  // ── Verify truck exists + rate limit ──────────────────────────────────────
+  const adminClient = getAdminClient();
+
+  // Rate limit: query spotted_posts directly — shared across serverless instances.
+  const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString();
+  const { count: recentCount } = await adminClient
+    .from("spotted_posts")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("truck_id", truck_id)
+    .gte("created_at", windowStart);
+
+  if ((recentCount ?? 0) > 0) {
     return NextResponse.json(
       { error: "You can only post one sighting per truck every 10 minutes. Please wait before posting again." },
       { status: 429 }
     );
   }
-
-  // ── Verify truck exists ────────────────────────────────────────────────────
-  const adminClient = getAdminClient();
   const { data: truckExists } = await adminClient
     .from("trucks")
     .select("id")

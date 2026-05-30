@@ -131,5 +131,5 @@ export async function GET(req: NextRequest) {
   }
 
   console.log(`Auto-cancelled ${orderIds.length} stale orders`);
-  return NextResponse.json({ cancelled: orderIds.length, orderIds });
+  return NextResponse.json({ cancelled: orderIds.length });
 }

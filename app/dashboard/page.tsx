@@ -746,12 +746,13 @@ export default function Dashboard() {
     try {
       const supabase = createClient();
       // Scope update to this operator's truck — prevents cross-operator order tampering
+      // Capture before any state update so we don't read a stale closure later
+      const order = orders.find((o) => o.id === orderId);
       const { error } = await supabase.from("orders").update({ status }).eq("id", orderId).eq("truck_id", truckId!);
       if (!error) {
         setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status } : o));
 
         // Notify customer of status change (fire-and-forget)
-        const order = orders.find((o) => o.id === orderId);
         if (order?.customer_id) {
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.access_token) {

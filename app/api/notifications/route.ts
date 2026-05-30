@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import webpush from "web-push";
+import { isRateLimited } from "@/lib/rateLimit";
 
 // Configure VAPID credentials lazily inside the handler so env vars are
 // always read at runtime, not at module-evaluation / build time.
@@ -34,25 +35,6 @@ function timingSafeEqualStr(a: string, b: string): boolean {
   }
 }
 
-// Per-operator in-memory rate limit: max 5 notifications per 60 seconds
-const notifyRateLimitMap = new Map<string, { count: number; resetAt: number }>();
-const notifyTimerMap = new Map<string, ReturnType<typeof setTimeout>>();
-function isNotifyRateLimited(key: string, maxCalls = 5, windowMs = 60_000): boolean {
-  const now = Date.now();
-  const entry = notifyRateLimitMap.get(key);
-  if (!entry || now > entry.resetAt) {
-    // Clear any stale timer before creating a fresh entry to avoid premature deletion
-    const prev = notifyTimerMap.get(key);
-    if (prev) clearTimeout(prev);
-    notifyRateLimitMap.set(key, { count: 1, resetAt: now + windowMs });
-    const t = setTimeout(() => { notifyRateLimitMap.delete(key); notifyTimerMap.delete(key); }, windowMs);
-    notifyTimerMap.set(key, t);
-    return false;
-  }
-  if (entry.count >= maxCalls) return true;
-  entry.count++;
-  return false;
-}
 
 export async function POST(req: NextRequest) {
   // Auth: internal shared secret (constant-time comparison to prevent timing attacks)
@@ -93,6 +75,11 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
   if (!truckExists) {
     return NextResponse.json({ error: "Truck not found" }, { status: 404 });
+  }
+
+  // Rate limit: 5 fan-outs per truck per 60 seconds, shared across instances
+  if (await isRateLimited(`notifications:${truck_id}`, 5, 60_000)) {
+    return NextResponse.json({ error: "Too many notifications" }, { status: 429 });
   }
 
   // 1. Get all followers of this truck

@@ -53,7 +53,7 @@ export default function TrucksTab() {
         setRefreshing(false);
       }
     }
-  }, [trucks.length]);
+  }, []);
 
   const loadTopTrucks = useCallback(async () => {
     try {
@@ -84,7 +84,8 @@ export default function TrucksTab() {
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     loadTrucks();
-  }, [loadTrucks]);
+    loadTopTrucks();
+  }, [loadTrucks, loadTopTrucks]);
 
   const filtered = query
     ? trucks.filter(t => {

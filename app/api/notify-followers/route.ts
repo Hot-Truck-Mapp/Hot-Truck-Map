@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import webpush from "web-push";
+import { isRateLimited } from "@/lib/rateLimit";
 
 // Configure VAPID credentials lazily inside the handler so env vars are
 // always read at runtime, not at module-evaluation / build time.
@@ -22,26 +23,6 @@ function getServiceClient() {
   return createSupabaseClient(url, serviceKey);
 }
 
-// Server-side rate limit: max 3 broadcasts per operator per 5 minutes
-const broadcastRateMap = new Map<string, { count: number; resetAt: number }>();
-const broadcastTimerMap = new Map<string, ReturnType<typeof setTimeout>>();
-function isBroadcastRateLimited(userId: string): boolean {
-  const now = Date.now();
-  const windowMs = 5 * 60_000;
-  const entry = broadcastRateMap.get(userId);
-  if (!entry || now > entry.resetAt) {
-    // Clear any stale timer before creating a fresh entry to avoid premature deletion
-    const prev = broadcastTimerMap.get(userId);
-    if (prev) clearTimeout(prev);
-    broadcastRateMap.set(userId, { count: 1, resetAt: now + windowMs });
-    const t = setTimeout(() => { broadcastRateMap.delete(userId); broadcastTimerMap.delete(userId); }, windowMs);
-    broadcastTimerMap.set(userId, t);
-    return false;
-  }
-  if (entry.count >= 3) return true;
-  entry.count++;
-  return false;
-}
 
 export async function POST(req: NextRequest) {
   // Auth: operator's Bearer JWT
@@ -64,7 +45,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     truck_id = body.truck_id;
-    truck_name = body.truck_name;
+    truck_name = typeof body.truck_name === "string" ? body.truck_name.slice(0, 100) : undefined;
     custom_message = typeof body.message === "string" && body.message.trim() ? body.message.trim() : undefined;
     if (!truck_id) throw new Error("Missing truck_id");
     if (custom_message && custom_message.length > 200) throw new Error("Message must be 200 characters or fewer");
@@ -85,8 +66,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden — you do not own this truck" }, { status: 403 });
   }
 
-  // Server-side rate limit (defence-in-depth on top of client-side 60s cooldown)
-  if (isBroadcastRateLimited(user.id)) {
+  // Server-side rate limit: 3 broadcasts per operator per 5 minutes, enforced
+  // in the DB so the limit holds across all serverless instances.
+  if (await isRateLimited(`notify-followers:${user.id}`, 3, 5 * 60_000)) {
     return NextResponse.json({ error: "Too many broadcasts. Please wait before sending another." }, { status: 429 });
   }
 

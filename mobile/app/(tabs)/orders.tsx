@@ -98,8 +98,12 @@ export default function OrdersTab() {
     }
     init();
     return () => {
+      mounted = false;
       mountedRef.current = false;
-      if (channelRef.current) supabase.removeChannel(channelRef.current);
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
     };
   }, []);
 
@@ -179,7 +183,7 @@ export default function OrdersTab() {
             </View>
             <Text style={styles.orderId}>Order #{item.id.slice(0, 8).toUpperCase()}</Text>
             <Text style={styles.items} numberOfLines={2}>
-              {(item.items ?? []).map((i: { quantity: number; name: string }) => `${i.quantity}× ${i.name}`).join(', ')}
+              {(Array.isArray(item.items) ? item.items : []).map((i: { quantity: number; name: string }) => `${i.quantity}× ${i.name}`).join(', ')}
             </Text>
             <View style={styles.cardRow}>
               <Text style={styles.total}>${(item.total ?? 0).toFixed(2)}</Text>

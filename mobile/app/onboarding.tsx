@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Dimensions,
   ScrollView,
   NativeSyntheticEvent,
   NativeScrollEvent,
@@ -13,8 +12,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const SLIDES = [
   {
@@ -39,17 +36,18 @@ const SLIDES = [
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
 
   function handleScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
-    const index = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+    const index = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
     setCurrentIndex(index);
   }
 
   function goToNext() {
     if (currentIndex < SLIDES.length - 1) {
-      scrollRef.current?.scrollTo({ x: SCREEN_WIDTH * (currentIndex + 1), animated: true });
+      scrollRef.current?.scrollTo({ x: screenWidth * (currentIndex + 1), animated: true });
     } else {
       handleGetStarted();
     }
@@ -79,7 +77,7 @@ export default function OnboardingScreen() {
         style={styles.scrollView}
       >
         {SLIDES.map((slide, index) => (
-          <View key={index} style={[styles.slide, { width: SCREEN_WIDTH }]}>
+          <View key={index} style={[styles.slide, { width: screenWidth }]}>
             {/* Illustration area */}
             <View style={styles.illustrationContainer}>
               <Text style={styles.emoji}>{slide.emoji}</Text>

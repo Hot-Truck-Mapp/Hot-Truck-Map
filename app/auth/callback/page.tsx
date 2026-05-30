@@ -35,13 +35,12 @@ function AuthCallbackInner() {
           // If this code exchange was for a password recovery flow, redirect to
           // the reset-password page instead of the homepage so the user can
           // set a new password.
+          // recovery_sent_at is only set on password-recovery sessions — use its
+          // presence as the signal rather than a client-side 15-min window that
+          // fails for slow email delivery.
           if (data?.session?.user?.recovery_sent_at) {
-            const recoverySent = new Date(data.session.user.recovery_sent_at).getTime();
-            const fifteenMinutesAgo = Date.now() - 15 * 60 * 1000;
-            if (recoverySent > fifteenMinutesAgo) {
-              router.replace("/reset-password");
-              return;
-            }
+            router.replace("/reset-password");
+            return;
           }
         }
 
