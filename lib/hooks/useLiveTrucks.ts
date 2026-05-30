@@ -108,19 +108,21 @@ export function useLiveTrucks(filters: MapFilters) {
           if (!mounted) return;
           const updated = payload.new as any;
           if (!updated?.id) { fetchTrucks(); return; }
+          // Truck going live needs a full fetch to include the location join.
+          // Do this outside the state updater to avoid async side effects in a pure updater.
+          if (updated.is_live === true) {
+            fetchTrucks();
+            return;
+          }
           setTrucks((prev) => {
             const idx = prev.findIndex((t) => t.id === updated.id);
-            if (idx === -1) {
-              // Truck just went live — trigger a full fetch to include its location join
-              fetchTrucks();
-              return prev;
+            if (idx === -1) return prev;
+            // Truck went offline — remove from live list
+            if (updated.is_live === false) {
+              return prev.filter((t) => t.id !== updated.id);
             }
             const next = [...prev];
             next[idx] = { ...next[idx], ...updated };
-            // If truck went offline, drop it from the live list
-            if (updated.is_live === false) {
-              return next.filter((t) => t.id !== updated.id);
-            }
             return next;
           });
         }
