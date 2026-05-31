@@ -1,37 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { isRateLimited } from "@/lib/rateLimit";
 
-// ---------------------------------------------------------------------------
-// IP-based rate limiting — max 10 orders per IP per 60 seconds
-// In-memory sliding window (resets on cold start, fine for serverless)
-// ---------------------------------------------------------------------------
-const RATE_LIMIT_MAX = 10;
-const RATE_LIMIT_WINDOW_MS = 60_000;
-const rateLimitMap = new Map<string, number[]>();
-
-function isRateLimited(ip: string): boolean {
-  const now = Date.now();
-  const windowStart = now - RATE_LIMIT_WINDOW_MS;
-  const timestamps = (rateLimitMap.get(ip) ?? []).filter((t) => t > windowStart);
-  if (timestamps.length >= RATE_LIMIT_MAX) {
-    // Update the filtered (pruned) list even on rejection to avoid unbounded growth
-    rateLimitMap.set(ip, timestamps);
-    return true;
-  }
-  timestamps.push(now);
-  rateLimitMap.set(ip, timestamps);
-  // Evict entries that are now empty to prevent the map from growing unbounded
-  // (long-running non-serverless deployments; no-op in serverless cold-start model)
-  if (timestamps.length === 1) {
-    // First hit from this IP — schedule cleanup after the window expires
-    setTimeout(() => {
-      const remaining = (rateLimitMap.get(ip) ?? []).filter((t) => t > Date.now() - RATE_LIMIT_WINDOW_MS);
-      if (remaining.length === 0) rateLimitMap.delete(ip);
-      else rateLimitMap.set(ip, remaining);
-    }, RATE_LIMIT_WINDOW_MS);
-  }
-  return false;
-}
+// Order caps — keeps orders realistic for a pay-at-truck food truck.
+// Prevents customers from placing large orders they don't show up to pay for.
+const MAX_ORDER_TOTAL    = 150;   // dollars
+const MAX_TOTAL_QUANTITY = 20;    // sum of all item quantities
+const MAX_ITEM_QUANTITY  = 10;    // per individual line item
 
 // Use service role key so anonymous customers can place orders
 function getAdminClient() {
@@ -76,17 +51,7 @@ async function notifyOperatorBySMS(phone: string, truckName: string, pickupName:
 
 export async function POST(req: NextRequest) {
   try {
-    // Rate limit by IP
-    const ip =
-      req.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
-      req.headers.get("x-real-ip") ??
-      "unknown";
-    if (isRateLimited(ip)) {
-      return NextResponse.json(
-        { error: "Too many orders. Please wait a moment and try again." },
-        { status: 429 }
-      );
-    }
+    // Auth check happens below — rate limit is applied after auth to key by user
 
     // ── Authentication required ─────────────────────────────────────────────
     // Orders require a signed-in account for no-show accountability.
@@ -114,6 +79,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: "Sign in required to place an order." },
         { status: 401 }
+      );
+    }
+
+    // Rate limit: max 5 orders per customer per hour (DB-backed, shared across instances)
+    if (await isRateLimited(`order:${verifiedCustomerId}`, 5, 60 * 60_000)) {
+      return NextResponse.json(
+        { error: "Too many orders. Please wait before placing another." },
+        { status: 429 }
       );
     }
 
@@ -203,9 +176,21 @@ export async function POST(req: NextRequest) {
       if (typeof item.menu_item_id !== "string" || !UUID_RE.test(item.menu_item_id)) {
         return NextResponse.json({ error: "Invalid menu_item_id" }, { status: 400 });
       }
-      if (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 99) {
-        return NextResponse.json({ error: "Invalid item quantity" }, { status: 400 });
+      if (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > MAX_ITEM_QUANTITY) {
+        return NextResponse.json(
+          { error: `Maximum ${MAX_ITEM_QUANTITY} of any single item per order` },
+          { status: 400 }
+        );
       }
+    }
+
+    // Cap total items ordered across all line items
+    const totalQuantity = items.reduce((sum: number, i: any) => sum + i.quantity, 0);
+    if (totalQuantity > MAX_TOTAL_QUANTITY) {
+      return NextResponse.json(
+        { error: `Orders are limited to ${MAX_TOTAL_QUANTITY} items total` },
+        { status: 400 }
+      );
     }
 
     // Recalculate total server-side to prevent price tampering.
@@ -218,6 +203,14 @@ export async function POST(req: NextRequest) {
 
     if (serverTotal <= 0) {
       return NextResponse.json({ error: "Order total must be greater than zero" }, { status: 400 });
+    }
+
+    // Cap order total — prevents large orders that customers may not show up to pay for
+    if (serverTotal > MAX_ORDER_TOTAL) {
+      return NextResponse.json(
+        { error: `Orders are limited to $${MAX_ORDER_TOTAL} total. Please reduce your order.` },
+        { status: 400 }
+      );
     }
 
     // Insert the order (customer_id always set — auth is required)

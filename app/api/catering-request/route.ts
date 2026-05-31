@@ -1,27 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
-
-// Per-IP rate limit: max 3 catering requests per 10 minutes
-const cateringRateMap = new Map<string, { count: number; resetAt: number }>();
-const cateringTimerMap = new Map<string, ReturnType<typeof setTimeout>>();
-function isCateringRateLimited(key: string): boolean {
-  const now = Date.now();
-  const windowMs = 10 * 60_000;
-  const maxCalls = 3;
-  const entry = cateringRateMap.get(key);
-  if (!entry || now > entry.resetAt) {
-    const prev = cateringTimerMap.get(key);
-    if (prev) clearTimeout(prev);
-    cateringRateMap.set(key, { count: 1, resetAt: now + windowMs });
-    const t = setTimeout(() => { cateringRateMap.delete(key); cateringTimerMap.delete(key); }, windowMs);
-    cateringTimerMap.set(key, t);
-    return false;
-  }
-  if (entry.count >= maxCalls) return true;
-  entry.count++;
-  return false;
-}
+import { isRateLimited } from "@/lib/rateLimit";
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -50,7 +30,7 @@ export async function POST(req: NextRequest) {
     rateLimitKey = `ip:${ip}`;
   }
 
-  if (isCateringRateLimited(rateLimitKey)) {
+  if (await isRateLimited(`catering:${rateLimitKey}`, 3, 10 * 60_000)) {
     return NextResponse.json(
       { error: "Too many requests — please wait before submitting again." },
       { status: 429 }
@@ -151,7 +131,7 @@ export async function POST(req: NextRequest) {
     customer_name: safeName,
     customer_email: safeEmail,
     customer_phone: safePhone,
-    event_date,
+    event_date: dateStr,
     event_time: safeTime,
     event_location: safeAddress,
     guest_count: parsedGuests,

@@ -38,6 +38,7 @@ export default function MapboxMap({ trucks }: Props) {
 
   useEffect(() => {
     if (map.current || !mapboxgl.accessToken || !mapContainer.current) return;
+    let mounted = true; // guard geolocation callbacks against post-unmount execution
     let geolocateTimerId: ReturnType<typeof setTimeout> | null = null;
 
     function buildMap(center: [number, number], zoom: number) {
@@ -77,10 +78,12 @@ export default function MapboxMap({ trucks }: Props) {
     if (typeof navigator !== "undefined" && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
+          if (!mounted) return; // component unmounted before geolocation resolved
           setGeoState("granted");
           buildMap([pos.coords.longitude, pos.coords.latitude], USER_ZOOM);
         },
         () => {
+          if (!mounted) return;
           // Denied or timed out — build the wide US view, let the user
           // re-enable via the "denied" banner or the GeolocateControl button.
           setGeoState("denied");
@@ -95,6 +98,7 @@ export default function MapboxMap({ trucks }: Props) {
     }
 
     return () => {
+      mounted = false;
       if (geolocateTimerRef.current) clearTimeout(geolocateTimerRef.current);
       markers.current.forEach((m) => m.remove());
       markers.current = [];
@@ -113,6 +117,10 @@ export default function MapboxMap({ trucks }: Props) {
     trucks.forEach((truck) => {
       const loc = truck.locations?.[0] ?? truck.location ?? null;
       if (loc?.lat == null || loc?.lng == null) return;
+      // Validate coordinates are finite and in range before passing to Mapbox
+      const lat = Number(loc.lat);
+      const lng = Number(loc.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
 
       const el = document.createElement("div");
       el.style.cssText = `
@@ -143,7 +151,7 @@ export default function MapboxMap({ trucks }: Props) {
       const ratingHtml = (truck.avg_rating ?? 0) > 0
         ? `<p style="margin:0 0 6px;font-size:11px;color:#555;display:flex;align-items:center;gap:3px">
             <span style="color:#F5A623">★</span>
-            <span style="font-weight:700">${Number(truck.avg_rating).toFixed(1)}</span>
+            <span style="font-weight:700">${esc(Number(truck.avg_rating).toFixed(1))}</span>
             <span style="color:#aaa">(${esc(String(truck.review_count ?? 0))})</span>
            </p>`
         : "";
@@ -158,7 +166,7 @@ export default function MapboxMap({ trucks }: Props) {
       );
 
       const marker = new mapboxgl.Marker(el)
-        .setLngLat([loc.lng, loc.lat])
+        .setLngLat([lng, lat])
         .setPopup(popup)
         .addTo(map.current!);
 

@@ -96,7 +96,10 @@ export default function SocialPage() {
         if (!mountedRef.current) return;
         if (!truck) { router.replace("/"); return; }
         setTruckId(truck.id);
-      } catch { /* ignore */ }
+      } catch (err) {
+        console.error("[social] Failed to load truck:", err);
+        if (mountedRef.current) setBroadcastToast?.({ msg: "Could not load truck data. Please refresh.", isError: true });
+      }
     })();
     return () => {
       mountedRef.current = false;
@@ -131,6 +134,10 @@ export default function SocialPage() {
     setBroadcastSending(true);
     try {
       const supabase = createClient();
+      // Use getUser() (server round-trip) not getSession() (cached) so revoked
+      // sessions are caught before the broadcast is sent.
+      const { data: { user: broadcastUser } } = await supabase.auth.getUser();
+      if (!broadcastUser) { router.replace("/login"); return; }
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch("/api/notify-followers", {
         method: "POST",
@@ -379,9 +386,10 @@ export default function SocialPage() {
           ) : (
             <textarea
               value={customMessage}
-              onChange={(e) => setCustomMessage(e.target.value)}
+              onChange={(e) => setCustomMessage(e.target.value.slice(0, 500))}
               placeholder="Write your custom post... Use {location}, {truck_name}, {close_time} as variables"
               rows={4}
+              maxLength={500}
               className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:border-brand-red resize-none"
             />
           )}

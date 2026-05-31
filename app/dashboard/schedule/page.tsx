@@ -121,10 +121,12 @@ export default function SchedulePage() {
       showToast("Save your truck profile first.", true);
       return;
     }
-    // Validate that close time is after open time for each active day
+    // Validate close time is after open time — convert to minutes to avoid
+    // lexicographic comparison bugs with single-digit hours (e.g. "9:00" vs "10:00")
+    const timeToMinutes = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + (m || 0); };
     for (const { key, label } of DAYS) {
       const day = schedule[key];
-      if (day.open && day.start && day.end && day.end <= day.start) {
+      if (day.open && day.start && day.end && timeToMinutes(day.end) <= timeToMinutes(day.start)) {
         showToast(`${label}: closing time must be after opening time.`, true);
         return;
       }
@@ -132,6 +134,9 @@ export default function SchedulePage() {
     setSaving(true);
     try {
       const supabase = createClient();
+      // Re-fetch the user to avoid relying on potentially stale userId state
+      const { data: { user: freshUser } } = await supabase.auth.getUser();
+      if (!freshUser) { router.replace("/login"); return; }
       // Sanitize schedule before writing — trim and cap location strings
       const sanitized: WeekSchedule = { ...DEFAULT_SCHEDULE };
       for (const { key } of DAYS) {
@@ -144,7 +149,7 @@ export default function SchedulePage() {
         .from("trucks")
         .update({ schedule: sanitized })
         .eq("id", truckId)
-        .eq("owner_id", userId ?? "");
+        .eq("owner_id", freshUser.id);
       if (saveErr) throw new Error(saveErr.message);
       if (!mountedRef.current) return;
       setSaved(true);

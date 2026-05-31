@@ -7,6 +7,8 @@ export function cn(...inputs: ClassValue[]) {
 
 export function isLive(broadcasted_at: string | null): boolean {
   if (!broadcasted_at) return false
-  const diff = Date.now() - new Date(broadcasted_at).getTime()
+  const ts = new Date(broadcasted_at).getTime()
+  if (!Number.isFinite(ts)) return false // guard against corrupted timestamps
+  const diff = Date.now() - ts
   return diff < 1000 * 60 * 30 // live if updated within 30 minutes
 }

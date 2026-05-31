@@ -41,21 +41,17 @@ export async function DELETE(req: NextRequest) {
   // Use the service role client to clean up data and delete the account
   const admin = createClient(supabaseUrl, serviceRoleKey);
 
-  const errors: string[] = [];
-
   // 1. Delete push subscriptions
   const { error: pushErr } = await admin
     .from("push_subscriptions")
     .delete()
     .eq("user_id", userId);
-  if (pushErr) errors.push(`push_subscriptions: ${pushErr.message}`);
 
   // 2. Remove follows
   const { error: followErr } = await admin
     .from("follows")
     .delete()
     .eq("user_id", userId);
-  if (followErr) errors.push(`follows: ${followErr.message}`);
 
   // 3. Disassociate orders (keep order records for operator bookkeeping,
   //    but strip customer identity)
@@ -63,22 +59,32 @@ export async function DELETE(req: NextRequest) {
     .from("orders")
     .update({ customer_id: null })
     .eq("customer_id", userId);
-  if (orderErr) errors.push(`orders: ${orderErr.message}`);
 
-  // 4. Delete avatar from storage (best-effort)
+  // If any critical cleanup step failed, abort before deleting the auth account —
+  // deleting the account first would permanently orphan the rows.
+  if (pushErr || followErr || orderErr) {
+    console.error("Account deletion cleanup failed:", { pushErr, followErr, orderErr });
+    return NextResponse.json(
+      { error: "Could not fully clean up account data. Please try again." },
+      { status: 500 }
+    );
+  }
+
+  // 4. Delete avatar from storage (best-effort — non-critical)
   try {
     const extensions = ["jpg", "png", "webp"];
     const paths = extensions.map((ext) => `customers/${userId}.${ext}`);
     await admin.storage.from("avatars").remove(paths);
   } catch {
-    // Avatar cleanup is non-critical
+    // Avatar cleanup failure does not block account deletion
   }
 
   // 5. Delete the auth account (irreversible)
   const { error: deleteErr } = await admin.auth.admin.deleteUser(userId);
   if (deleteErr) {
+    console.error("Account auth deletion failed:", deleteErr);
     return NextResponse.json(
-      { error: "Failed to delete account: " + deleteErr.message, partialErrors: errors },
+      { error: "Failed to delete account. Please try again." },
       { status: 500 }
     );
   }

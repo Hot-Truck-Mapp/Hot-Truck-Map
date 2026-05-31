@@ -11,14 +11,17 @@ export function TruckCard({ truck }: Props) {
   const router = useRouter();
   const hasRating = (truck.avg_rating ?? 0) > 0;
 
+  const validPhoto = typeof truck.profile_photo === 'string' && truck.profile_photo.trim().length > 0
+    ? truck.profile_photo.trim() : null;
+
   return (
     <TouchableOpacity
       style={styles.card}
-      onPress={() => router.push(`/truck/${truck.id}`)}
+      onPress={() => { if (truck.id) router.push(`/truck/${truck.id}` as any); }}
       activeOpacity={0.7}
     >
-      {truck.profile_photo ? (
-        <Image source={{ uri: truck.profile_photo }} style={styles.image} resizeMode="cover" />
+      {validPhoto ? (
+        <Image source={{ uri: validPhoto }} style={styles.image} resizeMode="cover" />
       ) : (
         <View style={[styles.image, styles.imagePlaceholder]} />
       )}

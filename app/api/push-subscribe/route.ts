@@ -2,27 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient as createClientFromToken } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
-
-// Per-user rate limit: max 10 subscription registrations per hour
-const subscribeRateLimitMap = new Map<string, { count: number; resetAt: number }>();
-const subscribeTimerMap = new Map<string, ReturnType<typeof setTimeout>>();
-function isSubscribeRateLimited(userId: string): boolean {
-  const now = Date.now();
-  const windowMs = 60 * 60 * 1000; // 1 hour
-  const maxCalls = 10;
-  const entry = subscribeRateLimitMap.get(userId);
-  if (!entry || now > entry.resetAt) {
-    const prev = subscribeTimerMap.get(userId);
-    if (prev) clearTimeout(prev);
-    subscribeRateLimitMap.set(userId, { count: 1, resetAt: now + windowMs });
-    const t = setTimeout(() => { subscribeRateLimitMap.delete(userId); subscribeTimerMap.delete(userId); }, windowMs);
-    subscribeTimerMap.set(userId, t);
-    return false;
-  }
-  if (entry.count >= maxCalls) return true;
-  entry.count++;
-  return false;
-}
+import { isRateLimited } from "@/lib/rateLimit";
 
 /**
  * Resolve the authenticated user from either:
@@ -73,7 +53,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (isSubscribeRateLimited(user.id)) {
+    if (await isRateLimited(`push-subscribe:${user.id}`, 10, 60 * 60_000)) {
       return NextResponse.json(
         { error: "Too many subscription requests — please try again later." },
         { status: 429 }
@@ -97,9 +77,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Length caps on subscription fields to prevent oversized writes
+    // Validate endpoint format to prevent SSRF via stored URLs
     if (typeof endpoint !== "string" || endpoint.length > 2048) {
       return NextResponse.json({ error: "Invalid endpoint" }, { status: 400 });
+    }
+    if (platform === "web") {
+      try {
+        const url = new URL(endpoint);
+        if (url.protocol !== "https:") throw new Error("must be https");
+      } catch {
+        return NextResponse.json({ error: "Web endpoint must be a valid HTTPS URL" }, { status: 400 });
+      }
+    } else if (platform === "expo") {
+      // Expo push tokens have the form ExponentPushToken[...] or ea2... (bare)
+      if (!endpoint.startsWith("ExponentPushToken[") && !/^[A-Za-z0-9_-]{20,}$/.test(endpoint)) {
+        return NextResponse.json({ error: "Invalid Expo push token format" }, { status: 400 });
+      }
     }
     if (p256dh != null && (typeof p256dh !== "string" || p256dh.length > 512)) {
       return NextResponse.json({ error: "Invalid p256dh" }, { status: 400 });
@@ -128,15 +121,12 @@ export async function POST(req: NextRequest) {
     );
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: "Failed to save subscription" }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true });
-  } catch (err: any) {
-    return NextResponse.json(
-      { error: err?.message ?? "Internal error" },
-      { status: 500 }
-    );
+  } catch {
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }
 

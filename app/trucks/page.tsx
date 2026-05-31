@@ -100,7 +100,7 @@ export default function TrucksListPage() {
       const supabase = createClient();
       const { data } = await supabase
         .from("trucks")
-        .select("id, name, cuisine, description, profile_photo, is_live, dietary_tags, avg_rating, review_count, locations(*), follows_agg:follows(count)")
+        .select("id, name, cuisine, description, profile_photo, is_live, dietary_tags, avg_rating, review_count, locations(id, address), follows_agg:follows(count)")
         .order("is_live", { ascending: false })
         .limit(200);
       if (!mountedRef.current) return;

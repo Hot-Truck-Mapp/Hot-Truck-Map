@@ -62,12 +62,18 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
       .catch(() => { if (mountedRef.current) setAuthChecking(false); });
   }, [id, router]);
 
+  const MAX_PER_ITEM = 10;
+  const MAX_ITEMS_TOTAL = 20;
+  const MAX_ORDER_TOTAL = 150;
+
   function updateQty(itemId: string, delta: number) {
     if (!cart) return;
     const updated = cart.items
-      .map((item) =>
-        item.id === itemId ? { ...item, quantity: item.quantity + delta } : item
-      )
+      .map((item) => {
+        if (item.id !== itemId) return item;
+        const newQty = Math.min(Math.max(item.quantity + delta, 0), MAX_PER_ITEM);
+        return { ...item, quantity: newQty };
+      })
       .filter((item) => item.quantity > 0);
     if (updated.length === 0) {
       localStorage.removeItem("hot-truck-cart");
