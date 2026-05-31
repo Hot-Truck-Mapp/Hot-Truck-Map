@@ -35,6 +35,19 @@ export async function POST(req: NextRequest) {
     }
 
     const db = getServiceClient();
+
+    // Validate featured_truck_id points to a real truck before storing
+    if (featured_truck_id) {
+      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!UUID_RE.test(featured_truck_id)) {
+        return NextResponse.json({ error: "Invalid featured_truck_id format" }, { status: 400 });
+      }
+      const { data: truck } = await db.from("trucks").select("id").eq("id", featured_truck_id).maybeSingle();
+      if (!truck) {
+        return NextResponse.json({ error: "Featured truck not found" }, { status: 404 });
+      }
+    }
+
     const upserts = [
       { key: "featured_truck_id", value: featured_truck_id ?? "", updated_at: new Date().toISOString() },
       { key: "featured_message", value: featured_message ?? "", updated_at: new Date().toISOString() },

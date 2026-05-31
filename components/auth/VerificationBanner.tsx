@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 export default function VerificationBanner() {
-  const [verified, setVerified] = useState(true);
+  const [verified, setVerified] = useState<boolean | null>(null); // null = still checking
   const [resent, setResent] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(false);
@@ -20,8 +20,10 @@ export default function VerificationBanner() {
         if (!user) return;
         setVerified(!!user.email_confirmed_at);
       } catch {
-        // Network error — assume verified so the banner doesn't incorrectly
-        // appear. It will correct itself on the next successful check.
+        // Network error — keep null so banner stays hidden; it will show
+        // correctly on the next successful auth check.
+        // Do NOT default to verified=true here — that would permanently hide
+        // the banner for unverified operators on flaky connections.
       }
     };
     checkVerification();
@@ -49,7 +51,7 @@ export default function VerificationBanner() {
     }
   };
 
-  if (verified) return null;
+  if (verified === null || verified === true) return null;
 
   return (
     <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 m-4 flex items-center justify-between gap-3">

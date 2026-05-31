@@ -12,12 +12,15 @@ function getServiceClient() {
 
 export async function POST(req: NextRequest) {
   // Resolve authenticated user first (if JWT present) to use user.id for rate limiting
+  // and to enforce that the submitted email matches their account.
   let rateLimitKey: string;
   let resolvedUserId: string | null = null;
+  let resolvedUserEmail: string | null = null;
   try {
     const supabaseCheck = await createServerClient();
     const { data: { user } } = await supabaseCheck.auth.getUser();
     resolvedUserId = user?.id ?? null;
+    resolvedUserEmail = user?.email ?? null;
   } catch { /* anonymous request — fall through */ }
 
   if (resolvedUserId) {
@@ -125,11 +128,15 @@ export async function POST(req: NextRequest) {
   // Use the user ID already resolved during rate-limit check
   const customerId: string | null = resolvedUserId;
 
+  // If authenticated, enforce that customer_email matches their account email
+  // to prevent using the catering form to send messages to arbitrary addresses.
+  const finalEmail = resolvedUserEmail ?? safeEmail;
+
   const { error } = await db.from("catering_requests").insert({
     truck_id,
     customer_id: customerId,
     customer_name: safeName,
-    customer_email: safeEmail,
+    customer_email: finalEmail,
     customer_phone: safePhone,
     event_date: dateStr,
     event_time: safeTime,

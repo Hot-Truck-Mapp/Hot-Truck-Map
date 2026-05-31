@@ -243,7 +243,7 @@ export default function MapTab() {
               <TouchableOpacity
                 key={review.id}
                 style={styles.reviewCard}
-                onPress={() => router.push(`/truck/${review.truck_id}` as any)}
+                onPress={() => { if (review.truck_id) router.push(`/truck/${review.truck_id}` as any); }}
                 activeOpacity={0.8}
                 accessibilityLabel={`Review for ${review.truck_name ?? 'food truck'}, ${review.rating} stars${review.comment ? ': ' + review.comment : ''}`}
                 accessibilityRole="button"

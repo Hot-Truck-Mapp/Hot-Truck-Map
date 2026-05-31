@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 
 type Status = "idle" | "locating" | "live" | "going-offline" | "error";
+type ErrorSource = "go-live" | "go-offline";
 
 export default function GoLivePage() {
   const router = useRouter();
@@ -14,6 +15,7 @@ export default function GoLivePage() {
   const [status, setStatus] = useState<Status>("idle");
   const [address, setAddress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorSource, setErrorSource] = useState<ErrorSource>("go-live");
   const [manualAddress, setManualAddress] = useState("");
   const [showManual, setShowManual] = useState(false);
 
@@ -46,6 +48,13 @@ export default function GoLivePage() {
   }, [router]);
 
   async function broadcastLocation(lat: number, lng: number, place: string) {
+    // Validate coordinates — guard against 0,0 (GPS glitch) and out-of-range values
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) ||
+        lat < -90 || lat > 90 || lng < -180 || lng > 180 ||
+        (lat === 0 && lng === 0)) {
+      throw new Error("Invalid GPS location received. Please try again or enter your address manually.");
+    }
+
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Not logged in");
@@ -190,17 +199,25 @@ export default function GoLivePage() {
         .eq("owner_id", user.id)
         .maybeSingle();
 
-      if (truck) {
-        const { error } = await supabase
-          .from("trucks")
-          .update({ is_live: false })
-          .eq("id", truck.id);
-        if (error) {
-          if (!mountedRef.current) return;
-          setError(error.message);
-          setStatus("error");
-          return;
-        }
+      if (!truck) {
+        // Truck lookup failed — warn operator they may still be live
+        if (!mountedRef.current) return;
+        setError("Could not find your truck. You may still be live — tap Try Again.");
+        setErrorSource("go-offline");
+        setStatus("error");
+        return;
+      }
+
+      const { error: updateErr } = await supabase
+        .from("trucks")
+        .update({ is_live: false })
+        .eq("id", truck.id);
+      if (updateErr) {
+        if (!mountedRef.current) return;
+        setError("Failed to go offline. You may still be live — tap Try Again.");
+        setErrorSource("go-offline");
+        setStatus("error");
+        return;
       }
 
       if (!mountedRef.current) return;
@@ -208,9 +225,10 @@ export default function GoLivePage() {
       setAddress(null);
       setManualAddress("");
       setShowManual(false);
-    } catch (err: any) {
+    } catch {
       if (!mountedRef.current) return;
-      setError(err.message ?? "Something went wrong");
+      setError("Connection error. You may still be live — tap Try Again.");
+      setErrorSource("go-offline");
       setStatus("error");
     }
   }
@@ -345,10 +363,10 @@ export default function GoLivePage() {
             <span className="text-sm font-semibold text-neutral-700 leading-relaxed">{error}</span>
           </div>
           <button
-            onClick={() => setStatus("idle")}
+            onClick={() => errorSource === "go-offline" ? goOffline() : setStatus("idle")}
             className="px-8 py-3 rounded-full bg-brand-red text-white font-black text-sm uppercase tracking-wide hover:bg-brand-red-dark active:scale-95 transition-all"
           >
-            Try Again
+            {errorSource === "go-offline" ? "Try Going Offline Again" : "Try Again"}
           </button>
         </div>
       )}

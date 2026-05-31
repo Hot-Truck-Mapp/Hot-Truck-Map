@@ -45,7 +45,11 @@ function ConfirmationContent({ id }: { id: string }) {
           Order #{orderId.slice(0, 8).toUpperCase()}
         </p>
       )}
-      {!orderId && <div className="mb-8" />}
+      {!orderId && (
+        <p className="text-xs text-amber-600 mb-8 text-center">
+          If you just placed an order, check the Orders page to track its status.
+        </p>
+      )}
 
       {/* What happens next */}
       <div className="w-full max-w-sm bg-white rounded-2xl shadow-sm p-5 mb-6">

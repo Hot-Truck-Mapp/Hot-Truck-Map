@@ -320,9 +320,12 @@ export default function TruckScreen() {
 
   // ── Cart helpers ──────────────────────────────────────────────────────────
 
-  const MAX_ITEM_QTY = 99;
+  const MAX_ITEM_QTY = 10;
 
   function addToCart(itemId: string) {
+    // Don't add sold-out items even if the UI somehow allows it
+    const item = truck?.menu_items?.find(i => i.id === itemId);
+    if ((item as any)?.is_sold_out) return;
     setCart(prev => {
       const current = prev[itemId] ?? 0;
       if (current >= MAX_ITEM_QTY) return prev;
@@ -348,7 +351,9 @@ export default function TruckScreen() {
 
   function cartTotal(): number {
     return (truck?.menu_items ?? []).reduce((sum, item) => {
-      return sum + (cart[item.id] ?? 0) * item.price;
+      const price = Number(item.price);
+      if (!Number.isFinite(price) || price < 0) return sum;
+      return sum + (cart[item.id] ?? 0) * price;
     }, 0);
   }
 
@@ -643,6 +648,11 @@ export default function TruckScreen() {
           )}
 
           {/* ── Menu ── */}
+          {(truck.menu_items?.length ?? 0) === 0 && isLive && (
+            <Text style={{ fontSize: 14, color: '#999', textAlign: 'center', marginVertical: 16, paddingHorizontal: 16 }}>
+              This truck hasn't added their menu yet. Stop by and ask what's available!
+            </Text>
+          )}
           {(truck.menu_items?.length ?? 0) > 0 && (
             <>
               <Text style={styles.menuHeading}>Menu</Text>

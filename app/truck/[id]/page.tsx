@@ -284,7 +284,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
         }
         throw new Error(error.message);
       }
-      const { data } = await supabase.from("reviews").select("id, rating, comment, created_at, user_id, truck_id").eq("truck_id", id).order("created_at", { ascending: false }).limit(50);
+      const { data } = await supabase.from("reviews").select("id, rating, comment, created_at, truck_id").eq("truck_id", id).order("created_at", { ascending: false }).limit(50);
       if (!mountedRef.current) return;
       setReviewSuccess(true);
       setReviewRating(0);

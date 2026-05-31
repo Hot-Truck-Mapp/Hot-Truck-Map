@@ -33,7 +33,7 @@ export default function MenuPage({ params }: { params: Promise<{ id: string }> }
       const supabase = createClient();
       const [{ data: truckData }, { data: menuData }] = await Promise.all([
         supabase.from("trucks").select("id, name, cuisine, profile_photo, dietary_tags").eq("id", id).maybeSingle(),
-        supabase.from("menu_items").select("id, truck_id, name, description, price, category, allergens, is_popular, is_sold_out, photo, sort_order").eq("truck_id", id).order("created_at", { ascending: true }),
+        supabase.from("menu_items").select("id, truck_id, name, description, price, category, allergens, is_popular, is_sold_out, photo, sort_order").eq("truck_id", id).order("created_at", { ascending: true }).limit(200),
       ]);
       if (!mountedRef.current) return;
       setTruck(truckData ?? null);

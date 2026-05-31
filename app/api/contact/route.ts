@@ -1,36 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-
-// ---------------------------------------------------------------------------
-// In-memory rate limit — max 3 submissions per IP per hour
-// Resets on cold start; acceptable for serverless deployments.
-// ---------------------------------------------------------------------------
-const RATE_LIMIT_MAX = 3;
-const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
-const rateLimitMap = new Map<string, number[]>();
-
-function isRateLimited(ip: string): boolean {
-  const now = Date.now();
-  const windowStart = now - RATE_LIMIT_WINDOW_MS;
-  const timestamps = (rateLimitMap.get(ip) ?? []).filter((t) => t > windowStart);
-  if (timestamps.length >= RATE_LIMIT_MAX) {
-    rateLimitMap.set(ip, timestamps);
-    return true;
-  }
-  timestamps.push(now);
-  rateLimitMap.set(ip, timestamps);
-  // Schedule cleanup to avoid unbounded map growth on long-running instances
-  if (timestamps.length === 1) {
-    setTimeout(() => {
-      const remaining = (rateLimitMap.get(ip) ?? []).filter(
-        (t) => t > Date.now() - RATE_LIMIT_WINDOW_MS
-      );
-      if (remaining.length === 0) rateLimitMap.delete(ip);
-      else rateLimitMap.set(ip, remaining);
-    }, RATE_LIMIT_WINDOW_MS);
-  }
-  return false;
-}
+import { isRateLimited } from "@/lib/rateLimit";
 
 function getAdminClient() {
   return createClient(
@@ -55,7 +25,24 @@ export async function POST(req: NextRequest) {
       req.headers.get("x-real-ip") ??
       "unknown";
 
-    if (isRateLimited(ip)) {
+    // Rate limit keyed by user ID (if authenticated) or IP as fallback.
+    // Using the DB-backed helper so the limit holds across all serverless instances.
+    let rateLimitKey = `contact:ip:${ip}`;
+    try {
+      const authHeader = req.headers.get("authorization") ?? "";
+      const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+      if (token) {
+        const userClient = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          { global: { headers: { Authorization: `Bearer ${token}` } } }
+        );
+        const { data: { user } } = await userClient.auth.getUser();
+        if (user) rateLimitKey = `contact:user:${user.id}`;
+      }
+    } catch { /* fall back to IP key */ }
+
+    if (await isRateLimited(rateLimitKey, 3, 60 * 60_000)) {
       return NextResponse.json(
         { error: "Too many submissions. Please wait an hour and try again." },
         { status: 429 }

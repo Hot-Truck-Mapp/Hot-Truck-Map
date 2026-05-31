@@ -181,7 +181,7 @@ export default function HomePage() {
 
   const activeFilterCount = dietary.length + (cuisine !== "All" ? 1 : 0);
 
-  if (!mounted && loadError) return (
+  if (mounted && loadError) return (
     <div className="relative h-screen w-screen bg-neutral-900 flex flex-col items-center justify-center gap-4">
       <p className="text-neutral-300 font-bold text-lg">Couldn&apos;t load trucks</p>
       <p className="text-neutral-500 text-sm">Check your connection and try again.</p>

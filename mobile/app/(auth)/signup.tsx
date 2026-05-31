@@ -50,7 +50,8 @@ export default function SignupScreen() {
         options: { data: { role: 'customer', display_name: displayName.trim() } },
       });
       if (error) {
-        Alert.alert('Sign up failed', error.message);
+        // Use a generic message to prevent email enumeration
+        Alert.alert('Sign up failed', 'Could not create account. If you already have an account, try signing in instead.');
       } else {
         Alert.alert(
           'Check your email',
