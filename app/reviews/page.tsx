@@ -32,6 +32,7 @@ export default function ReviewsFeedPage() {
   const mountedRef = useRef(true);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [ratingFilter, setRatingFilter] = useState<RatingFilter>("all");
 
   useEffect(() => {
@@ -75,8 +76,9 @@ export default function ReviewsFeedPage() {
       }));
 
       setReviews(enriched);
+      setLoadError(false);
     } catch {
-      // network error — show empty state
+      if (mountedRef.current) setLoadError(true);
     } finally {
       if (mountedRef.current) setLoading(false);
     }
@@ -164,6 +166,15 @@ export default function ReviewsFeedPage() {
           <div className="flex flex-col items-center justify-center py-16 gap-3">
             <div className="w-8 h-8 border-2 border-brand-red border-t-transparent rounded-full animate-spin" />
             <p className="text-neutral-400 text-sm">Loading reviews...</p>
+          </div>
+        ) : loadError ? (
+          <div className="text-center py-16">
+            <p className="text-neutral-500 font-semibold">Could not load reviews</p>
+            <p className="text-neutral-400 text-sm mt-1">Check your connection and refresh the page.</p>
+            <button
+              onClick={() => { setLoadError(false); setLoading(true); loadReviews(); }}
+              className="mt-4 px-5 py-2 bg-brand-red text-white rounded-xl text-sm font-semibold"
+            >Retry</button>
           </div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-16">

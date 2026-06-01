@@ -103,10 +103,15 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
     setSubmitting(true);
 
     try {
-      const res = await fetch("/api/catering-request", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      let res: Response;
+      try {
+        res = await fetch("/api/catering-request", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
           truck_id: id,
           customer_name: form.customer_name.trim(),
           customer_email: form.customer_email.trim(),
@@ -121,6 +126,9 @@ export default function BookCateringPage({ params }: { params: Promise<{ id: str
           selected_package_id: selectedPackage ?? null,
         }),
       });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       if (!mountedRef.current) return;
       if (res.ok) {

@@ -155,13 +155,18 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
         }
       }
     } catch { /* ignore */ }
-    loadTruck();
+
+    // Guard against stale responses when id changes (SPA navigation between trucks)
+    let cancelled = false;
+    loadTruck(cancelled, () => cancelled);
+    return () => { cancelled = true; };
   }, [id]);
 
-  async function loadTruck() {
+  async function loadTruck(_cancelled?: boolean, isCancelled?: () => boolean) {
     try {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
+      if (isCancelled?.()) return;
       setUserId(user?.id ?? null);
 
       const { data: truckData } = await supabase
@@ -170,6 +175,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
         .eq("id", id)
         .maybeSingle();
 
+      if (isCancelled?.()) return;
       if (!truckData) { setLoading(false); return; }
 
       const [
@@ -188,6 +194,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
         supabase.from("spotted_posts").select("id, location, note, created_at").eq("truck_id", id).order("created_at", { ascending: false }).limit(5),
       ]);
 
+      if (isCancelled?.()) return;
       let isFollowing = false;
       if (user) {
         const { data: follow } = await supabase

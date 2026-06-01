@@ -65,8 +65,8 @@ export default function AnalyticsPage() {
         .select("id")
         .eq("owner_id", user.id)
         .maybeSingle();
-      if (truckErr) throw new Error(truckErr.message);
-      if (!truck) throw new Error("No truck found");
+      if (truckErr) throw new Error("Could not load your truck. Please refresh.");
+      if (!truck) { router.replace("/dashboard"); return; } // no truck yet — send to setup
 
       const truckId = truck.id;
       const now = new Date();
@@ -93,7 +93,7 @@ export default function AnalyticsPage() {
         .eq("truck_id", truckId)
         .order("created_at", { ascending: false })
         .limit(ORDERS_LIMIT);
-      if (allErr) throw new Error(allErr.message);
+      if (allErr) throw new Error("Could not load order data. Please refresh.");
       if (mountedRef.current) setDataCapped((allOrders?.length ?? 0) >= ORDERS_LIMIT);
 
       if (!mountedRef.current) return;

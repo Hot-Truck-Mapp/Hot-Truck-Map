@@ -14,6 +14,11 @@ export function useFollow(truckId: string, initialFollowing = false) {
     return () => { mountedRef.current = false; };
   }, []);
 
+  // Sync when the parent receives server data after initial render
+  useEffect(() => {
+    if (!inFlightRef.current) setFollowing(initialFollowing);
+  }, [initialFollowing]);
+
   async function toggle() {
     // Prevent double-tap race conditions (ref-based, not state-based, to avoid stale closures)
     if (inFlightRef.current) return;

@@ -12,16 +12,18 @@ export default async function CateringPage() {
   const supabase = await createClient();
 
   let trucks: any[] = [];
+  let loadError = false;
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("trucks")
       .select("id, name, cuisine, profile_photo, catering_description, catering_starting_price, catering_min_guests")
       .eq("offers_catering", true)
       .order("name", { ascending: true })
       .limit(50);
+    if (error) throw error;
     trucks = data ?? [];
   } catch {
-    // network error — render empty state
+    loadError = true;
   }
 
   return (
@@ -59,7 +61,12 @@ export default async function CateringPage() {
 
       {/* Truck grid */}
       <div className="max-w-4xl mx-auto p-4 py-8">
-        {trucks.length === 0 ? (
+        {loadError ? (
+          <div className="text-center py-16">
+            <p className="text-neutral-500 font-semibold">Could not load catering trucks</p>
+            <p className="text-neutral-400 text-sm mt-1">Check your connection and refresh the page.</p>
+          </div>
+        ) : trucks.length === 0 ? (
           <div className="text-center py-16">
             <div className="w-14 h-14 bg-neutral-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">

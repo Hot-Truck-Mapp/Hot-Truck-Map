@@ -232,6 +232,9 @@ export default function Dashboard() {
         { event: "INSERT", schema: "public", table: "orders", filter: `truck_id=eq.${truckId}` },
         (payload) => {
           const order = payload.new as any;
+          // Verify the order belongs to this truck before adding it — guards against
+          // Realtime channel filter bypass (library bug or network issue)
+          if (order?.truck_id !== truckId) return;
           setOrders((prev) => [order, ...prev].slice(0, 100));
           setNewOrderCount((n) => n + 1);
           playNotificationSound();
@@ -741,7 +744,8 @@ export default function Dashboard() {
   async function updateOrderStatus(orderId: string, status: string) {
     const VALID_STATUSES = ["preparing", "ready", "picked_up", "no_show"] as const;
     if (!VALID_STATUSES.includes(status as typeof VALID_STATUSES[number])) return;
-    if (updatingOrderId) return; // prevent double-tap
+    if (updatingOrderId === orderId) return; // prevent double-tap on same order
+    if (updatingOrderId) return; // prevent concurrent updates on different orders (optional safety)
     setUpdatingOrderId(orderId);
     try {
       const supabase = createClient();
