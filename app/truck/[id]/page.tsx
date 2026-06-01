@@ -364,6 +364,9 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
     setSpottedError(null);
     const supabase = createClient();
     try {
+      // getUser() verifies session is still live server-side before posting
+      const { data: { user: spottedUser } } = await supabase.auth.getUser();
+      if (!spottedUser) throw new Error("Please sign in to post a sighting.");
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error("Not authenticated.");
 

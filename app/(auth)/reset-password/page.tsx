@@ -66,7 +66,7 @@ export default function ResetPasswordPage() {
       setError("Passwords don't match.");
       return;
     }
-    if (password.length < 6) {
+    if (password.length < 8) {
       setError("Password must be at least 6 characters.");
       return;
     }

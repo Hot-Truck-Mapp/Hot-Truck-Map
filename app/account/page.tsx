@@ -168,6 +168,9 @@ export default function AccountPage() {
     setDeleting(true);
     try {
       const supabase = createClient();
+      // getUser() round-trips to the server so a revoked session is caught here
+      const { data: { user }, error: userErr } = await supabase.auth.getUser();
+      if (userErr || !user) throw new Error("Not signed in");
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error("Not signed in");
 

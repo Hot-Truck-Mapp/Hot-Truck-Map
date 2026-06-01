@@ -56,7 +56,7 @@ export default function CateringPackagesPage() {
     }, 4000);
   }
 
-  useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
+  // Note: toastTimerRef cleanup is already handled in the effect above (line ~44)
 
   useEffect(() => {
     loadPackages();
