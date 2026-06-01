@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 export function useFollow(truckId: string, initialFollowing = false) {
@@ -19,7 +19,7 @@ export function useFollow(truckId: string, initialFollowing = false) {
     if (!inFlightRef.current) setFollowing(initialFollowing);
   }, [initialFollowing]);
 
-  async function toggle() {
+  const toggle = useCallback(async () => {
     // Prevent double-tap race conditions (ref-based, not state-based, to avoid stale closures)
     if (inFlightRef.current) return;
     inFlightRef.current = true;
@@ -42,7 +42,7 @@ export function useFollow(truckId: string, initialFollowing = false) {
       if (mountedRef.current) setLoading(false);
       inFlightRef.current = false;
     }
-  }
+  }, [truckId]); // stable reference — only recreated if truckId changes
 
   return { following, loading, toggle };
 }

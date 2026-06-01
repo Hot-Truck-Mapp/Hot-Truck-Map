@@ -14,7 +14,10 @@ export function useRole() {
     mountedRef.current = true;
     const supabase = createClient();
 
+    let fetchInFlight = false;
     const fetchRole = async () => {
+      if (fetchInFlight) return; // guard concurrent auth events
+      fetchInFlight = true;
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!mountedRef.current) return;
@@ -37,6 +40,7 @@ export function useRole() {
       } catch {
         if (mountedRef.current) setRole(null);
       } finally {
+        fetchInFlight = false;
         if (mountedRef.current) setLoading(false);
       }
     };
