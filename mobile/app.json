@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.hottruckmap.app",
-      "buildNumber": "7",
+      "buildNumber": "8",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "Hot Truck Map uses your location to show nearby food trucks on the map.",
@@ -48,6 +48,9 @@
           "android": {
             "compileSdkVersion": 35,
             "targetSdkVersion": 35
+          },
+          "ios": {
+            "deploymentTarget": "15.1"
           }
         }
       ],
