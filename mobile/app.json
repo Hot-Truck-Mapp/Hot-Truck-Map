@@ -30,15 +30,11 @@
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#FF6B35"
       },
-      "package": "com.hottruckmap.app",
-      "versionCode": 14,
+      "package": "hottruckmap.com",
+      "versionCode": 15,
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.ACCESS_COARSE_LOCATION"
       ]
     },
     "web": {
