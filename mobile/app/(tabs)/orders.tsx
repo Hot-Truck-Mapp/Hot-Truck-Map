@@ -41,7 +41,11 @@ export default function OrdersTab() {
 
   const loadOrders = useCallback(async (uid?: string, mounted = true) => {
     const id = uid ?? userId;
-    if (!id) { if (mounted) setLoading(false); return; }
+    if (!id) {
+      if (mounted) setLoading(false);
+      if (mountedRef.current) setRefreshing(false); // also clear pull-to-refresh spinner
+      return;
+    }
     try {
       const { data, error } = await supabase
         .from('orders')

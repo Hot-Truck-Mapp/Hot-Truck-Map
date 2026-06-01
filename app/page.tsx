@@ -513,12 +513,13 @@ export default function HomePage() {
                       </Link>
                     ))}
                     {searchResults.length > 8 && (
-                      <button
-                        onClick={() => { setSearch(""); }}
+                      <Link
+                        href={`/trucks?q=${encodeURIComponent(search)}`}
+                        onClick={() => setSearch("")}
                         className="flex items-center justify-center gap-1.5 px-4 py-3 border-t border-neutral-50 text-xs font-bold text-brand-red hover:bg-red-50 transition-colors w-full"
                       >
-                        Showing top 8 of {searchResults.length} results
-                      </button>
+                        See all {searchResults.length} results →
+                      </Link>
                     )}
                   </>
                 )}

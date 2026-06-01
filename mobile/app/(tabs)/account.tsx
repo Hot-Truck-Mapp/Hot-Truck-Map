@@ -19,6 +19,7 @@ export default function AccountTab() {
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
+    mountedRef.current = true; // reset on every mount (e.g. tab re-navigation)
     return () => { mountedRef.current = false; };
   }, []);
 

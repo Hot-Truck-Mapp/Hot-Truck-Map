@@ -12,7 +12,10 @@ import { Colors } from '@/constants/colors';
 const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'https://hottruckmap.com';
 
 export default function CateringRequestScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string }>();
+  // useLocalSearchParams can return a string[] if the param appears multiple times;
+  // always take the scalar value to avoid passing an array to Supabase or the API.
+  const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const navigation = useNavigation();
   const mountedRef = useRef(true);
   const inFlightRef = useRef(false);
@@ -94,10 +97,15 @@ export default function CateringRequestScreen() {
     inFlightRef.current = true;
     setSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE}/api/catering-request`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
+      let res: Response;
+      try {
+        res = await fetch(`${API_BASE}/api/catering-request`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
           truck_id: id,
           customer_name: customerName.trim(),
           customer_email: customerEmail.trim().toLowerCase(),
@@ -110,6 +118,9 @@ export default function CateringRequestScreen() {
           notes: notes.trim() || null,
         }),
       });
+      } finally {
+        clearTimeout(timeout);
+      }
 
       if (res.status === 429) {
         inFlightRef.current = false;

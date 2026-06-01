@@ -401,10 +401,10 @@ export default function SocialPage() {
             </p>
             <p className="text-xs text-neutral-600 leading-relaxed">
               {activeMessage
-                .replace("{location}", "Main St & 5th Ave, Newark NJ")
-                .replace("{truck_name}", "Your Truck Name")
-                .replace("{close_time}", "3:00 PM")
-                .replace("{cuisine}", "Tacos")}
+                .replaceAll("{location}", "Main St & 5th Ave, Newark NJ")
+                .replaceAll("{truck_name}", "Your Truck Name")
+                .replaceAll("{close_time}", "3:00 PM")
+                .replaceAll("{cuisine}", "Tacos")}
             </p>
           </div>
         </div>

@@ -282,7 +282,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
           setReviewSubmitting(false);
           return;
         }
-        throw new Error(error.message);
+        throw new Error("Failed to submit review. Please try again.");
       }
       const { data } = await supabase.from("reviews").select("id, rating, comment, created_at, truck_id").eq("truck_id", id).order("created_at", { ascending: false }).limit(50);
       if (!mountedRef.current) return;
@@ -327,7 +327,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
         .slice(0, 64);
       const path = `truck-photos/${id}/${safeName}-${userId}-${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage.from("truck-photos").upload(path, file, { upsert: false });
-      if (uploadError) throw new Error(uploadError.message);
+      if (uploadError) throw new Error("Photo upload failed. Please try again.");
       const { data: urlData } = supabase.storage.from("truck-photos").getPublicUrl(path);
       const photoUrl = urlData.publicUrl;
       const { error: dbError } = await supabase.from("truck_photos").insert({
@@ -338,7 +338,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
       if (dbError) {
         // Clean up the orphaned storage object before surfacing the error
         void supabase.storage.from("truck-photos").remove([path]).catch(() => {});
-        throw new Error(dbError.message);
+        throw new Error("Photo saved but could not update your profile. Please try again.");
       }
       const { data: refreshed } = await supabase.from("truck_photos").select("id, photo_url, created_at").eq("truck_id", id).order("created_at", { ascending: false }).limit(100);
       photoUploadCountRef.current += 1;

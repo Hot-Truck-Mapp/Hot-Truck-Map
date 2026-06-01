@@ -296,14 +296,20 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    // Validate truck_id format before hitting the DB
+    const UUID_RE_GET = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_RE_GET.test(truck_id)) {
+      return NextResponse.json({ error: "Invalid truck_id" }, { status: 400 });
+    }
+
     const { data, error } = await admin
       .from("orders")
-      .select("id, truck_id, pickup_name, notes, items, total, status, created_at, customer_id")
+      .select("id, truck_id, pickup_name, notes, items, total, status, created_at")
       .eq("truck_id", truck_id)
       .order("created_at", { ascending: false })
       .limit(100);
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) return NextResponse.json({ error: "Failed to load orders" }, { status: 500 });
     return NextResponse.json({ orders: data });
   } catch (err) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

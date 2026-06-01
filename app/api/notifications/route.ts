@@ -90,7 +90,8 @@ export async function POST(req: NextRequest) {
     .limit(5000);
 
   if (followsError) {
-    return NextResponse.json({ error: followsError.message }, { status: 500 });
+    console.error("[notifications] follows query error:", followsError.message);
+    return NextResponse.json({ error: "Failed to load followers" }, { status: 500 });
   }
 
   if (!follows || follows.length === 0) {
@@ -107,7 +108,8 @@ export async function POST(req: NextRequest) {
     .limit(5000);
 
   if (subsError) {
-    return NextResponse.json({ error: subsError.message }, { status: 500 });
+    console.error("[notifications] subscriptions query error:", subsError.message);
+    return NextResponse.json({ error: "Failed to load subscriptions" }, { status: 500 });
   }
 
   if (!subscriptions || subscriptions.length === 0) {

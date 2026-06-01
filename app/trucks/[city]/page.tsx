@@ -8,6 +8,10 @@ type Props = {
 
 export async function generateMetadata({ params }: Props) {
   const { city: citySlug } = await params;
+  // Sanitize before embedding in metadata — same guard as the page component
+  if (citySlug.length > 100 || !/^[a-zA-Z0-9-]+$/.test(citySlug)) {
+    return { title: "Food Trucks | HotTruckMap" };
+  }
   const city = citySlug
     .split("-")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
