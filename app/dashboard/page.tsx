@@ -314,7 +314,7 @@ export default function Dashboard() {
       }
       setProfileSaved(true);
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-      toastTimerRef.current = setTimeout(() => setProfileSaved(false), 3000);
+      toastTimerRef.current = setTimeout(() => { if (mountedRef.current) setProfileSaved(false); }, 3000);
     } catch (err: any) { showToast("Save failed: " + (err?.message ?? "Please try again.")); }
     setProfileSaving(false);
   }
@@ -344,7 +344,7 @@ export default function Dashboard() {
       if (!data?.publicUrl) throw new Error("Could not get photo URL — try again.");
       setItemForm(f => ({ ...f, photo: data.publicUrl }));
       if (editingItem) {
-        const { error: saveErr } = await supabase.from("menu_items").update({ photo: data.publicUrl }).eq("id", editingItem.id);
+        const { error: saveErr } = await supabase.from("menu_items").update({ photo: data.publicUrl }).eq("id", editingItem.id).eq("truck_id", truckId!);
         if (saveErr) {
           // Clean up orphaned storage file before surfacing the error
           void supabase.storage.from("menu-photos").remove([path]).catch(() => {});

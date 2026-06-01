@@ -266,6 +266,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "truck_id required" }, { status: 400 });
     }
 
+    // Validate truck_id format before any DB call
+    const UUID_RE_EARLY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_RE_EARLY.test(truck_id)) {
+      return NextResponse.json({ error: "Invalid truck_id" }, { status: 400 });
+    }
+
     // Verify the requester is authenticated and owns this truck
     const authHeader = req.headers.get("authorization") ?? "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;

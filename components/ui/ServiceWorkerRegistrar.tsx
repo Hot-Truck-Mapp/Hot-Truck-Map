@@ -24,10 +24,15 @@ export default function ServiceWorkerRegistrar() {
       });
 
       // Reload once when the new SW takes control, so cached assets refresh.
+      // Store handler reference so it can be removed on cleanup.
       let refreshing = false;
-      navigator.serviceWorker.addEventListener("controllerchange", () => {
+      const onControllerChange = () => {
         if (!refreshing) { refreshing = true; window.location.reload(); }
-      });
+      };
+      navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
+      return () => {
+        navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
+      };
     }).catch(() => {
       // SW registration failed — non-critical
     });

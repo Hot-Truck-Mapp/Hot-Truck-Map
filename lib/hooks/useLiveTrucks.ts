@@ -72,20 +72,22 @@ export function useLiveTrucks(filters: MapFilters) {
           if (!mounted) return;
           const loc = payload.new as any;
           if (!loc?.truck_id) { fetchTrucks(); return; }
+          let trucksNeedFetch = false;
           setTrucks((prev) => {
             const idx = prev.findIndex((t) => t.id === loc.truck_id);
             if (idx === -1) {
-              // Truck not in list yet — do a full fetch to pick it up with joins
-              fetchTrucks();
+              trucksNeedFetch = true;
               return prev;
             }
             const truck = prev[idx];
-            // Don't remove the truck here: a location INSERT often arrives before
-            // the trucks UPDATE that sets is_live=true, causing a brief disappearance.
+            // Don't remove here: location INSERT often arrives before trucks UPDATE
             const next = [...prev];
             next[idx] = { ...truck, location: loc };
             return next;
           });
+          // Fetch outside the updater — calling async functions inside a pure
+          // state updater is a React anti-pattern.
+          if (trucksNeedFetch) fetchTrucks();
         }
       )
       .on(

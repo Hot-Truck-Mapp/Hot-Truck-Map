@@ -155,14 +155,11 @@ export async function DELETE(req: NextRequest) {
       .eq("endpoint", endpoint);
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: "Failed to remove subscription" }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true });
-  } catch (err: any) {
-    return NextResponse.json(
-      { error: err?.message ?? "Internal error" },
-      { status: 500 }
-    );
+  } catch {
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

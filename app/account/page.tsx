@@ -495,7 +495,7 @@ export default function AccountPage() {
                       </span>
                     </div>
                   </div>
-                  {order.items?.length > 0
+                  {Array.isArray(order.items) && order.items.length > 0
                     ? order.items.map((item: any, i: number) => (
                         <p key={i} className="text-xs text-neutral-400">
                           x{item.quantity} {item.name}

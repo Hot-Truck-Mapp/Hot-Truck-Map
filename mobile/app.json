@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.hottruckmap.app",
-      "buildNumber": "1",
+      "buildNumber": "3",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "Hot Truck Map uses your location to show nearby food trucks on the map.",
@@ -31,10 +31,14 @@
         "backgroundColor": "#FF6B35"
       },
       "package": "com.hottruckmap.app",
-      "versionCode": 9,
+      "versionCode": 14,
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION"
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -42,6 +46,15 @@
       "output": "static"
     },
     "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35
+          }
+        }
+      ],
       "expo-router",
       "expo-font",
       [
@@ -78,6 +91,12 @@
         "projectId": "85d76d4f-319b-425e-b7d5-9cae22928aa9"
       }
     },
-    "owner": "hottruckmaps-organization"
+    "owner": "hottruckmaps-organization",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/85d76d4f-319b-425e-b7d5-9cae22928aa9"
+    }
   }
 }

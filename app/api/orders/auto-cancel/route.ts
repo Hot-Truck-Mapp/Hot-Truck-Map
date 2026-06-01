@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
 
   if (fetchErr) {
     console.error("Auto-cancel fetch error:", fetchErr);
-    return NextResponse.json({ error: fetchErr.message }, { status: 500 });
+    return NextResponse.json({ error: "Failed to fetch stale orders" }, { status: 500 });
   }
 
   if (!staleOrders || staleOrders.length === 0) {
@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
 
   if (updateErr) {
     console.error("Auto-cancel update error:", updateErr);
-    return NextResponse.json({ error: updateErr.message }, { status: 500 });
+    return NextResponse.json({ error: "Failed to update order statuses" }, { status: 500 });
   }
 
   // Send push notifications to affected customers (fire-and-forget)

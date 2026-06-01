@@ -311,7 +311,7 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
                 {/* Name + price */}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-neutral-900 truncate">{item.name}</p>
-                  <p className="text-xs text-neutral-400">${item.price.toFixed(2)} each</p>
+                  <p className="text-xs text-neutral-400">${(item.price ?? 0).toFixed(2)} each</p>
                 </div>
 
                 {/* Qty stepper */}
@@ -337,7 +337,7 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
 
                 {/* Line total */}
                 <p className="text-sm font-black text-brand-red flex-shrink-0 w-14 text-right">
-                  ${(item.price * item.quantity).toFixed(2)}
+                  ${((item.price ?? 0) * item.quantity).toFixed(2)}
                 </p>
               </div>
             ))}

@@ -108,8 +108,26 @@ export async function registerStoredTokenAfterLogin(): Promise<void> {
   } catch { /* ignore */ }
 }
 
-// Call this on sign-out so the token is not re-registered under a different
-// user account on the same device.
+// Call this on sign-out so the token is not delivered to the wrong user on
+// the same device. Deregisters from the server AND clears the local cache.
 export async function clearPushToken(): Promise<void> {
+  try {
+    const token = await SecureStore.getItemAsync(PUSH_TOKEN_KEY).catch(() => null);
+    if (token) {
+      // Best-effort server deregistration — don't block sign-out if it fails
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (apiUrl && session?.access_token) {
+        await fetch(`${apiUrl}/api/push-subscribe`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ endpoint: token }),
+        }).catch(() => {});
+      }
+    }
+  } catch { /* ignore — local clear must still happen */ }
   await SecureStore.deleteItemAsync(PUSH_TOKEN_KEY).catch(() => {});
 }

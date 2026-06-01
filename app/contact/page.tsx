@@ -114,16 +114,24 @@ export default function ContactPage() {
     setApiError(null);
 
     try {
-      const res = await fetch("/api/contact", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          email: email.trim(),
-          subject,
-          message: message.trim(),
-        }),
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      let res: Response;
+      try {
+        res = await fetch("/api/contact", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            name: name.trim(),
+            email: email.trim(),
+            subject,
+            message: message.trim(),
+          }),
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       if (!mountedRef.current) return;
 

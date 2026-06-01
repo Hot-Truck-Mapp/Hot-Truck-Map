@@ -4,3 +4,20 @@
 
 expo-env.d.ts
 # @end expo-cli
+
+# Environment variables — never commit secrets
+.env.local
+.env
+
+# Android signing credentials — keep off git
+credentials.json
+upload-key.jks
+*.jks
+*.keystore
+
+# App store submission config (contains store credentials)
+store.config.json
+
+# Generated screenshots and build artifacts
+screenshots/
+dist/

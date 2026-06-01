@@ -42,7 +42,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description: fullDescription,
       type: "website",
       siteName: "Hot Truck Map",
-      ...(truck.profile_photo && {
+      // Only embed the OG image if it's from our own storage origin —
+      // prevents SSRF-adjacent crawls from operator-supplied arbitrary URLs.
+      ...(truck.profile_photo && truck.profile_photo.startsWith("https://") &&
+        (truck.profile_photo.includes("supabase.co") || truck.profile_photo.includes("hottruckmap.com")) && {
         images: [
           {
             url: truck.profile_photo,
@@ -57,7 +60,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       card: truck.profile_photo ? "summary_large_image" : "summary",
       title: truck.name,
       description: fullDescription,
-      ...(truck.profile_photo && { images: [truck.profile_photo] }),
+      ...(truck.profile_photo &&
+        truck.profile_photo.startsWith("https://") &&
+        (truck.profile_photo.includes("supabase.co") || truck.profile_photo.includes("hottruckmap.com")) && {
+          images: [truck.profile_photo],
+        }),
     },
   };
 }

@@ -4,7 +4,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
-import { setupNotifications, registerStoredTokenAfterLogin } from '@/lib/notifications';
+import { setupNotifications, registerStoredTokenAfterLogin, clearPushToken } from '@/lib/notifications';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -72,6 +72,10 @@ export default function RootLayout() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_IN') {
         registerStoredTokenAfterLogin().catch(() => {});
+      } else if (event === 'SIGNED_OUT') {
+        // Server-initiated sign-outs (token expiry, password change on another device)
+        // must also clear the push token so notifications don't reach the wrong user.
+        clearPushToken().catch(() => {});
       }
     });
 
@@ -93,6 +97,10 @@ export default function RootLayout() {
         <Stack.Screen
           name="truck/[id]"
           options={{ headerShown: true, title: '', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="catering/[id]"
+          options={{ headerShown: true, title: 'Catering Request', headerBackTitle: 'Back' }}
         />
         <Stack.Screen name="+not-found" />
       </Stack>

@@ -211,7 +211,8 @@ export default function GoLivePage() {
       const { error: updateErr } = await supabase
         .from("trucks")
         .update({ is_live: false })
-        .eq("id", truck.id);
+        .eq("id", truck.id)
+        .eq("owner_id", user.id);
       if (updateErr) {
         if (!mountedRef.current) return;
         setError("Failed to go offline. You may still be live — tap Try Again.");
