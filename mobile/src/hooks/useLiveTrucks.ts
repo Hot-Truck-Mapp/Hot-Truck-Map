@@ -42,7 +42,7 @@ export function useLiveTrucks() {
     fetchTrucks();
 
     const channel = supabase
-      .channel('live-trucks')
+      .channel(`live-trucks-${Math.random().toString(36).slice(2, 8)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'trucks' }, fetchTrucks)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'locations' }, fetchTrucks)
       .subscribe();

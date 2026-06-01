@@ -53,8 +53,8 @@ export default function SignupPage() {
       setOpError("Please enter a valid email address.");
       return;
     }
-    if (opPassword.length < 6) {
-      setOpError("Password must be at least 6 characters.");
+    if (opPassword.length < 8) {
+      setOpError("Password must be at least 8 characters.");
       return;
     }
     setOpLoading(true);
@@ -114,7 +114,7 @@ export default function SignupPage() {
       setCuError("Please enter a valid email address.");
       return;
     }
-    if (cuPassword.length < 6) { setCuError("Password must be at least 6 characters."); return; }
+    if (cuPassword.length < 8) { setCuError("Password must be at least 8 characters."); return; }
     setCuLoading(true);
     setCuError(null);
 
@@ -368,7 +368,7 @@ export default function SignupPage() {
                       type="password"
                       value={opPassword}
                       onChange={(e) => setOpPassword(e.target.value)}
-                      placeholder="Min 6 characters"
+                      placeholder="Min 8 characters"
                       autoComplete="new-password"
                       onKeyDown={(e) => e.key === "Enter" && handleOperatorSignup()}
                       className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"
@@ -474,7 +474,7 @@ export default function SignupPage() {
                   type="password"
                   value={cuPassword}
                   onChange={(e) => setCuPassword(e.target.value)}
-                  placeholder="Min 6 characters"
+                  placeholder="Min 8 characters"
                   autoComplete="new-password"
                   onKeyDown={(e) => e.key === "Enter" && handleCustomerSignup()}
                   className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"

@@ -29,6 +29,7 @@ export default function CateringDashboardPage() {
   const [updating, setUpdating] = useState(false);
   const [cateringToggling, setCateringToggling] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -76,7 +77,7 @@ export default function CateringDashboardPage() {
       if (!mountedRef.current) return;
       setRequests(data ?? []);
     } catch {
-      // network error — keep empty state
+      if (mountedRef.current) setLoadError(true);
     } finally {
       if (mountedRef.current) setLoading(false);
     }
@@ -196,6 +197,19 @@ export default function CateringDashboardPage() {
     declined: requests.filter((r) => r.status === "declined").length,
     completed: requests.filter((r) => r.status === "completed").length,
   };
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center gap-3">
+        <p className="text-neutral-300 font-semibold">Could not load catering requests</p>
+        <p className="text-neutral-500 text-sm">Check your connection and try again.</p>
+        <button onClick={() => { setLoadError(false); setLoading(true); loadRequests(); }}
+          className="mt-2 px-5 py-2 bg-brand-red text-white text-sm font-semibold rounded-xl">
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

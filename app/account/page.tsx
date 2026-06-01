@@ -62,9 +62,9 @@ export default function AccountPage() {
     setAvatarUploading(true);
     try {
       const supabase = createClient();
-      const rawExt = (file.name.split(".").pop() ?? "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
-      const ext = rawExt || "jpg";
-      const path = `customers/${user.id}.${ext}`;
+        // Always store as .jpg so every re-upload overwrites the same path.
+      // Using a per-extension path would orphan the old file on every format change.
+      const path = `customers/${user.id}.jpg`;
       const { error: uploadErr } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
       if (uploadErr) throw new Error(uploadErr.message);
       const { data } = supabase.storage.from("avatars").getPublicUrl(path);

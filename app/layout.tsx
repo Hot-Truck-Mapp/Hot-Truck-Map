@@ -5,7 +5,7 @@ import ConditionalFooter from "@/components/ui/ConditionalFooter";
 import ServiceWorkerRegistrar from "@/components/ui/ServiceWorkerRegistrar";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://hottruckmap.com"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://hottruckmap.com"),
   title: "Hot Truck Map - Find Food Trucks Near You",
   description: "Real-time food truck discovery. Find the food truck. Skip the guesswork.",
   icons: {

@@ -456,8 +456,8 @@ export default function TruckScreen() {
           note: spottedNote.trim() || null,
         }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Could not post sighting');
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((json as any).error ?? 'Could not post sighting. Please try again.');
 
       if (mountedRef.current) {
         const newPost: SpottedPost = {
