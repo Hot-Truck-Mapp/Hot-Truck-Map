@@ -2,9 +2,14 @@
 
 -- 1. reviews: add unique constraint so one user can't post multiple reviews
 --    for the same truck (client-side duplicate check was non-atomic).
-ALTER TABLE reviews
-  ADD CONSTRAINT IF NOT EXISTS reviews_truck_user_unique
-  UNIQUE (truck_id, user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'reviews_truck_user_unique'
+  ) THEN
+    ALTER TABLE reviews ADD CONSTRAINT reviews_truck_user_unique UNIQUE (truck_id, user_id);
+  END IF;
+END $$;
 
 -- 2. orders: add index on customer_id for order history queries and the
 --    no-show count lookup that runs on every order placement.
