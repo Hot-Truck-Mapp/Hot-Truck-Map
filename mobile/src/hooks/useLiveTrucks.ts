@@ -26,7 +26,8 @@ export function useLiveTrucks() {
         setTrucks(
           data.map(t => ({
             ...t,
-            location: Array.isArray(t.locations) ? t.locations[0] : undefined,
+            // Supabase returns locations as object (one-to-one) or array — handle both
+            location: Array.isArray(t.locations) ? t.locations[0] : (t.locations ?? undefined),
           }))
         );
       }
