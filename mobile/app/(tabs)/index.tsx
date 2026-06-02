@@ -22,12 +22,12 @@ type RecentReview = {
   truck_name?: string;
 };
 
-// Fallback: center of the continental US (never a single city)
+// Fallback region — centered on NJ/NYC metro where the app launched
 const US_REGION: Region = {
-  latitude: 39.5,
-  longitude: -98.35,
-  latitudeDelta: 55,
-  longitudeDelta: 55,
+  latitude: 40.8859,
+  longitude: -74.0435,
+  latitudeDelta: 0.15,
+  longitudeDelta: 0.15,
 };
 
 const USER_DELTA = 0.05; // ~3-mile radius around the user
