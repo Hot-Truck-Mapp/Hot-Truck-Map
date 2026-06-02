@@ -16,18 +16,19 @@ function AuthGuard() {
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
 
-  // Check onboarding status once on mount
+  // Check onboarding status — re-check whenever segments change so that
+  // completing onboarding (writing to SecureStore then navigating) doesn't
+  // get overridden by stale state in AuthGuard.
   useEffect(() => {
     SecureStore.getItemAsync('onboarding_complete')
       .then((val) => {
         setOnboardingComplete(val === 'true');
       })
       .catch(() => {
-        // SecureStore unavailable — treat as complete to avoid blocking
         setOnboardingComplete(true);
       })
       .finally(() => setOnboardingChecked(true));
-  }, []);
+  }, [segments]);
 
   useEffect(() => {
     // Wait for auth, router segments, and onboarding check to all be ready
