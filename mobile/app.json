@@ -7,8 +7,6 @@
     "scheme": "hottruckmap",
     "userInterfaceStyle": "light",
     "icon": "./assets/icon.png",
-    "jsEngine": "jsc",
-    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -51,7 +49,10 @@
             "targetSdkVersion": 35
           },
           "ios": {
-            "deploymentTarget": "15.1"
+            "deploymentTarget": "15.1",
+            "buildSettings": {
+              "OTHER_LDFLAGS": "$(inherited) -Wl,-align_to_target_page_size"
+            }
           }
         }
       ],
