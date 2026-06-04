@@ -84,6 +84,16 @@ export default function TabLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="operator"
+        options={{
+          title: 'Go Live',
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name="radio-outline" activeName="radio" color={color} focused={focused} />
+          ),
+          tabBarActiveTintColor: Colors.primary,
+        }}
+      />
     </Tabs>
   );
 }
