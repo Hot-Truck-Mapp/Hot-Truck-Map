@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.hottruckmap.app",
-      "buildNumber": "20",
+      "buildNumber": "21",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "Hot Truck Map uses your location to show nearby food trucks on the map.",
@@ -36,7 +36,7 @@
         "backgroundColor": "#FF6B35"
       },
       "package": "hottruckmap.com",
-      "versionCode": 16,
+      "versionCode": 17,
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION"
@@ -47,6 +47,7 @@
       "output": "static"
     },
     "plugins": [
+      "./plugins/withAndroid16kbPageSize",
       [
         "expo-build-properties",
         {
