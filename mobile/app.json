@@ -16,13 +16,18 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.hottruckmap.app",
-      "buildNumber": "18",
+      "buildNumber": "20",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "Hot Truck Map uses your location to show nearby food trucks on the map.",
         "NSPhotoLibraryUsageDescription": "Hot Truck Map uses your photo library so you can upload photos of food trucks.",
         "NSPhotoLibraryAddUsageDescription": "Hot Truck Map saves truck photos to your photo library.",
-        "NSCameraUsageDescription": "Hot Truck Map uses your camera to take photos of food trucks."
+        "NSCameraUsageDescription": "Hot Truck Map uses your camera to take photos of food trucks.",
+        "UIRequiresFullScreen": true,
+        "UISupportedInterfaceOrientations~ipad": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationPortraitUpsideDown"
+        ]
       }
     },
     "android": {
