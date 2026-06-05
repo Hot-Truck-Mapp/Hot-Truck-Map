@@ -7,6 +7,7 @@
     "scheme": "hottruckmap",
     "userInterfaceStyle": "light",
     "icon": "./assets/icon.png",
+    "jsEngine": "jsc",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -15,7 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.hottruckmap.app",
-      "buildNumber": "16",
+      "buildNumber": "18",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "Hot Truck Map uses your location to show nearby food trucks on the map.",
