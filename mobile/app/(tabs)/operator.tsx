@@ -122,12 +122,13 @@ export default function OperatorTab() {
   }
 
   async function goOffline() {
+    if (!truck || !session?.user) return;
     setStatus('going-offline');
     try {
       const { error } = await supabase.from('trucks')
         .update({ is_live: false })
-        .eq('id', truck!.id)
-        .eq('owner_id', session!.user.id);
+        .eq('id', truck.id)
+        .eq('owner_id', session.user.id);
       if (error) throw new Error('Failed to go offline — please try again.');
       if (!mountedRef.current) return;
       setStatus('idle');

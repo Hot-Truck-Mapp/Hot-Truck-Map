@@ -1,5 +1,13 @@
+import { enableScreens } from 'react-native-screens';
+// Workaround: RNSTabBarController.updateTabBarAppearance throws an uncaught
+// NSException on A18 Pro devices (iPhone 16 Pro/Max) running iOS 26, crashing
+// production builds. Disabling native screens bypasses the faulty UIKit path.
+// Track: https://github.com/software-mansion/react-native-screens/issues/3940
+enableScreens(false);
+
 import { useEffect, useRef, useState } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '@/hooks/useAuth';
@@ -90,6 +98,10 @@ export default function RootLayout() {
 
   return (
     <>
+      {/* "auto" matches each screen's background — light bg gets dark icons,
+          dark bg (onboarding) gets light icons. Individual screens can still
+          override with <StatusBar style="light" /> when needed. */}
+      <StatusBar style="auto" />
       <AuthGuard />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="onboarding" />

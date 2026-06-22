@@ -130,7 +130,7 @@ export default function TruckScreen() {
     async function load() {
       try {
         const [truckRes, menuRes, locationRes, spottedRes, reviewsRes] = await Promise.all([
-          supabase.from('trucks').select('id, name, cuisine, description, profile_photo, is_live, dietary_tags, instagram, phone, avg_rating, review_count, catering_description, catering_starting_price, catering_min_guests, schedule').eq('id', id).maybeSingle(),
+          supabase.from('trucks').select('id, name, cuisine, description, profile_photo, is_live, dietary_tags, instagram, phone, avg_rating, review_count, catering_description, catering_starting_price, catering_min_guests, schedule, offers_catering').eq('id', id).maybeSingle(),
           supabase.from('menu_items').select('id, truck_id, name, description, price, allergens, is_sold_out, photo, is_popular, sort_order, category').eq('truck_id', id).limit(200),
           supabase
             .from('locations')

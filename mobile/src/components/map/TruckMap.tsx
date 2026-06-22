@@ -22,10 +22,9 @@ export function TruckMap({ trucks, initialRegion, mapRef, showsUserLocation = fa
     <MapView
       ref={mapRef as React.RefObject<MapView>}
       style={styles.map}
-      // provider omitted — uses Apple Maps on iOS, Google Maps on Android via
-      // the device's built-in tile service. If you want to pin a specific
-      // Google Maps API key, add android.config.googleMaps.apiKey to app.json
-      // and restore: provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+      // iOS uses Apple Maps. Android always uses the Google Maps SDK regardless
+      // of the `provider` prop and requires android.config.googleMaps.apiKey in
+      // app.json — without it the map renders blank with an auth error.
       initialRegion={initialRegion}
       showsUserLocation={showsUserLocation}
       showsMyLocationButton={showsUserLocation}
