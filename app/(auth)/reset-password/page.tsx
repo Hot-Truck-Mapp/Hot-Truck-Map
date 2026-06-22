@@ -67,7 +67,7 @@ export default function ResetPasswordPage() {
       return;
     }
     if (password.length < 8) {
-      setError("Password must be at least 6 characters.");
+      setError("Password must be at least 8 characters.");
       return;
     }
     if (password.length > 72) {
@@ -137,7 +137,7 @@ export default function ResetPasswordPage() {
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Min. 6 characters"
+                    placeholder="Min. 8 characters"
                     maxLength={72}
                     autoComplete="new-password"
                     className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base mt-1.5 focus:outline-none focus:border-brand-red transition-colors bg-white"

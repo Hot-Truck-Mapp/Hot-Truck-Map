@@ -95,6 +95,17 @@ export default function SignupPage() {
           is_live: false,
         });
         // insert error ignored — dashboard handles the missing-truck state
+
+        // Best-effort: notify admin inbox. Don't block the success state.
+        void fetch("/api/notify-signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: data.user.id,
+            truckName: truckName.trim(),
+            cuisine: cuisine || null,
+          }),
+        }).catch(() => { /* admin notification is non-critical */ });
       }
 
       if (mountedRef.current) setStep("done-operator");
