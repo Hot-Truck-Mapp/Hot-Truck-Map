@@ -55,3 +55,8 @@ mobile/dist/
 mobile/android/
 mobile/ios/
 mobile/expo-env.d.ts
+
+# Build artifacts (too large for git, rebuilt by EAS)
+mobile/*.aab
+mobile/*.apk
+mobile/*.ipa
