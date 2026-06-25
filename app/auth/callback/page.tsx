@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 // Spinner shown while the Suspense boundary is resolving (or during redirect)
@@ -18,7 +18,6 @@ function Spinner() {
 
 // useSearchParams() must be inside a Suspense boundary — Next.js requirement for static export
 function AuthCallbackInner() {
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -39,23 +38,24 @@ function AuthCallbackInner() {
           // presence as the signal rather than a client-side 15-min window that
           // fails for slow email delivery.
           if (data?.session?.user?.recovery_sent_at) {
-            router.replace("/reset-password");
+            window.location.assign("/reset-password");
             return;
           }
         }
 
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { router.replace("/"); return; }
+        if (!user) { window.location.assign("/"); return; }
 
-        // Redirect to "/" — the dashboard's own auth guard handles
-        // operator routing based on DB truck ownership (not user-editable metadata).
-        router.replace("/");
+        // Hard navigation so auth cookies are committed by the browser before
+        // the next request. Client-side router.replace can race the cookie
+        // write on iOS Safari and cause middleware to see the user as logged out.
+        window.location.assign("/");
       } catch {
-        router.replace("/");
+        window.location.assign("/");
       }
     }
     handleRedirect();
-  }, [router, searchParams]);
+  }, [searchParams]);
 
   return <Spinner />;
 }

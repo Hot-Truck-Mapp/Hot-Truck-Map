@@ -2,11 +2,9 @@
 
 import { useState, useRef, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -35,9 +33,11 @@ export default function LoginPage() {
         return;
       }
 
-      // Always route to home — the dashboard link in the nav handles operator navigation.
-      // Never route based on user_metadata.role (user-editable).
-      router.replace("/");
+      // Hard navigation (not router.replace) so the browser commits the auth
+      // cookies before the next request. On iOS Safari, client-side navigation
+      // can race the document.cookie write, causing middleware to see the user
+      // as signed out on the very next request.
+      window.location.assign("/");
       // Keep loading=true; page will navigate away — no need to reset spinner
     } catch {
       if (mountedRef.current) {
