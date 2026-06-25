@@ -168,6 +168,13 @@ export default function AccountTab() {
         >
           <Text style={styles.primaryButtonText}>Sign In</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => router.push('/about' as any)}
+          accessibilityLabel="About Hot Truck Map"
+          accessibilityRole="button"
+        >
+          <Text style={styles.aboutLink}>About Hot Truck Map</Text>
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }
@@ -218,12 +225,22 @@ export default function AccountTab() {
         </TouchableOpacity>
         <TouchableOpacity
           activeOpacity={0.7}
-          style={[styles.row, styles.rowLast]}
+          style={styles.row}
           onPress={() => router.push('/(tabs)/orders')}
           accessibilityLabel="My orders"
           accessibilityRole="button"
         >
           <Text style={styles.rowText}>My Orders</Text>
+          <Text style={styles.chevron}>›</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          style={[styles.row, styles.rowLast]}
+          onPress={() => router.push('/about' as any)}
+          accessibilityLabel="About Hot Truck Map"
+          accessibilityRole="button"
+        >
+          <Text style={styles.rowText}>About Hot Truck Map</Text>
           <Text style={styles.chevron}>›</Text>
         </TouchableOpacity>
       </View>
@@ -307,4 +324,5 @@ const styles = StyleSheet.create({
     marginTop: 12, borderRadius: 10, paddingVertical: 14, alignItems: 'center',
   },
   deleteText: { color: Colors.textSecondary, fontSize: 14, fontWeight: '500' },
+  aboutLink: { color: Colors.primary, fontSize: 14, fontWeight: '600', marginTop: 8 },
 });

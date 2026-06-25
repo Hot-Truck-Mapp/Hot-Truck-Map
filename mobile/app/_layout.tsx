@@ -115,6 +115,10 @@ export default function RootLayout() {
           name="catering/[id]"
           options={{ headerShown: true, title: 'Catering Request', headerBackTitle: 'Back' }}
         />
+        <Stack.Screen
+          name="about"
+          options={{ headerShown: true, title: 'About', headerBackTitle: 'Back' }}
+        />
         <Stack.Screen name="+not-found" />
       </Stack>
     </>
