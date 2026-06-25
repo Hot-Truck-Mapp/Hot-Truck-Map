@@ -16,11 +16,11 @@ type Subject = (typeof SUBJECTS)[number];
 const FAQ_ITEMS: { q: string; a: string }[] = [
   {
     q: "How do I list my food truck?",
-    a: "Sign up as an operator at /signup — it's completely free. Once your account is approved you'll be able to create your truck profile, add your menu, and go live.",
+    a: "Sign up as an operator at /signup. Once your account is approved you'll be able to create your truck profile, add your menu, and go live.",
   },
   {
-    q: "Is Hot Truck Map free to use?",
-    a: "Yes — Hot Truck Map is free for both customers and operators. There are no subscription fees or commissions.",
+    q: "How much does Hot Truck Map cost?",
+    a: "Hot Truck Map is currently free for both customers and operators while we grow the community. We may introduce optional paid features for operators in the future — if so, we'll communicate any changes well in advance.",
   },
   {
     q: "How does Go Live work?",

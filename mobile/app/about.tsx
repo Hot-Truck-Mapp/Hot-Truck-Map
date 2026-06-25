@@ -12,8 +12,8 @@ const VALUES: { title: string; body: string }[] = [
     body: 'Trucks move. Schedules change. Our live GPS map means you find the food truck — not yesterday’s parking spot.',
   },
   {
-    title: 'Free For Everyone',
-    body: 'No subscription fees. No commissions on orders. No paywalls hiding the trucks customers want to find.',
+    title: 'Built To Grow',
+    body: 'Your followers, your reviews, your menu — your brand. From one truck to a national fleet, our tools scale with you.',
   },
   {
     title: 'Built For The Road',
@@ -23,9 +23,9 @@ const VALUES: { title: string; body: string }[] = [
 
 const STATS: { label: string; value: string; sub: string }[] = [
   { label: 'States', value: '50', sub: 'Coast to coast goal' },
-  { label: 'Cost', value: '$0', sub: 'Free for everyone' },
+  { label: 'Setup', value: 'Minutes', sub: 'Signup to live on the map' },
   { label: 'Updates', value: 'Live', sub: 'Real-time GPS' },
-  { label: 'Commission', value: 'None', sub: 'Operators keep 100%' },
+  { label: 'Reach', value: 'National', sub: 'One map, every city' },
 ];
 
 export default function AboutScreen() {

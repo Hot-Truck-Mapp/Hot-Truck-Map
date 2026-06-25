@@ -184,7 +184,7 @@ export default function SignupPage() {
             <p className="text-white font-bold text-lg leading-tight mb-1">List my truck</p>
             <p className="text-neutral-400 text-sm">Get on the map, go live in 1 tap, get discovered</p>
             <div className="flex gap-2 mt-3 flex-wrap">
-              {["Free", "No commission", "Go live instantly"].map((tag) => (
+              {["Quick setup", "Live GPS", "Go live instantly"].map((tag) => (
                 <span key={tag} className="text-[10px] font-bold px-2 py-0.5 bg-neutral-800 text-neutral-300 rounded-full border border-neutral-700">
                   {tag}
                 </span>
@@ -238,12 +238,12 @@ export default function SignupPage() {
               on the map.
             </h2>
             <p className="text-neutral-400 text-base mb-8 leading-relaxed">
-              Real-time location sharing. Customers find you instantly. No monthly fees.
+              Real-time location sharing. Customers find you instantly. Set up in minutes.
             </p>
 
             <div className="flex flex-col gap-4">
               {[
-                { title: "100% free", desc: "No subscription, no commission on orders" },
+                { title: "Set up in minutes", desc: "From signup to live on the map — fast" },
                 { title: "Go live in one tap", desc: "Share your GPS location instantly from the app" },
                 { title: "Real-time map visibility", desc: "Appear on the map the moment you press Go Live" },
               ].map(({ title, desc }) => (
@@ -303,7 +303,7 @@ export default function SignupPage() {
             {/* Mobile only: value props */}
             <div className="flex gap-2 mb-6 flex-wrap md:hidden">
               {[
-                { label: "100% free" },
+                { label: "Quick setup" },
                 { label: "Go live in 1 tap" },
                 { label: "Real-time map" },
               ].map(({ label }) => (

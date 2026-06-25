@@ -37,12 +37,12 @@ const VALUES = [
     ),
   },
   {
-    title: "Free For Everyone",
-    body: "No subscription fees. No commissions on orders. No paywalls hiding the trucks customers want to find.",
+    title: "Built To Grow",
+    body: "Your followers, your reviews, your menu — your brand. From one truck to a national fleet, our tools scale with you.",
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 1v22"/>
-        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+        <path d="M23 6l-9.5 9.5-5-5L1 18"/>
+        <path d="M17 6h6v6"/>
       </svg>
     ),
   },
@@ -159,9 +159,9 @@ export default function AboutPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Stat label="States" value="50" sub="Our goal — coast to coast" />
-              <Stat label="Cost" value="$0" sub="Free for operators & customers" />
+              <Stat label="Setup" value="Minutes" sub="From signup to live on the map" />
               <Stat label="Updates" value="Live" sub="Real-time GPS, always" />
-              <Stat label="Commission" value="None" sub="Operators keep 100%" />
+              <Stat label="Reach" value="National" sub="One map, every city" />
             </div>
           </div>
         </div>
@@ -214,7 +214,7 @@ export default function AboutPage() {
               <h3 className="text-2xl font-black mb-3 leading-tight">Join the largest food truck community in America.</h3>
               <p className="text-red-100 text-sm leading-relaxed mb-6">
                 List your truck, broadcast your live location, take catering bookings, and
-                grow your following. It&rsquo;s free, forever — no commissions, no fees.
+                grow your following. Get on the map in minutes.
               </p>
               <Link
                 href="/signup?role=operator"
