@@ -5,7 +5,7 @@ import { Colors } from '@/constants/colors';
 const VALUES: { title: string; body: string }[] = [
   {
     title: 'Community First',
-    body: 'Food trucks are small businesses run by real people. We exist to lift them up — never to take a cut of their hard-earned sales.',
+    body: 'Food trucks are small businesses run by real people. Every feature we build starts with one question: does this help operators succeed?',
   },
   {
     title: 'Real-Time, Always',

@@ -47,7 +47,7 @@ export default function SupportPage() {
         <div className="bg-white rounded-2xl shadow-sm p-6">
           <h2 className="font-bold text-neutral-800 mb-1">FAQs</h2>
           <ul className="space-y-2 text-sm text-neutral-600">
-            <li>• The app is free for both customers and food truck operators.</li>
+            <li>• The app is currently free to use while we grow the community.</li>
             <li>• Customers pay at the truck — no online payments.</li>
             <li>• Trucks must sign up and tap &quot;Go Live&quot; to appear on the map.</li>
             <li>• To delete your account, go to Account → Delete Account in the app.</li>
