@@ -251,6 +251,12 @@ export default function HomePage() {
 
           <div className="flex items-center gap-2">
             <Link
+              href="/about"
+              className="px-2 sm:px-3 py-1.5 rounded-lg text-neutral-300 font-bold text-xs hover:text-white transition-colors"
+            >
+              About
+            </Link>
+            <Link
               href="/catering"
               className="hidden sm:block px-3 py-1.5 rounded-lg border border-neutral-600 text-neutral-300 font-bold text-xs hover:border-neutral-400 hover:text-white transition-colors"
             >
