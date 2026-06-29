@@ -9,7 +9,7 @@ import { TruckCardSkeleton } from "@/components/ui/Skeleton";
 
 const CUISINES = [
   "All", "Tacos", "BBQ", "Burgers", "Asian Fusion",
-  "Desserts", "Pizza", "Sandwiches", "Healthy", "Breakfast", "Seafood",
+  "Desserts", "Pizza", "Sandwiches", "Healthy", "Breakfast", "Seafood", "Caribbean",
 ];
 
 const DIETARY = ["Vegan", "Gluten-Free", "Halal", "Vegetarian"];

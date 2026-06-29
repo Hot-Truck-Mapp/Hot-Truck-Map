@@ -15,7 +15,7 @@ import {
 const CUISINE_TYPES = [
   "Tacos","BBQ","Burgers","Asian Fusion","Desserts",
   "Pizza","Sandwiches","Healthy","Breakfast","Seafood",
-  "Mediterranean","Vegan","Halal","Other",
+  "Mediterranean","Caribbean","Vegan","Halal","Other",
 ];
 const ALLERGENS = ["Gluten","Dairy","Nuts","Eggs","Soy","Shellfish","Fish"];
 const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];

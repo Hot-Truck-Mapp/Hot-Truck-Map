@@ -18,7 +18,7 @@ type FilterBarProps = {
 
 const CUISINES = [
   "All", "Tacos", "BBQ", "Burgers", "Asian", "Desserts",
-  "Pizza", "Sandwiches", "Healthy", "Breakfast",
+  "Pizza", "Sandwiches", "Healthy", "Breakfast", "Caribbean",
 ];
 
 const DIETARY = ["Vegan", "Gluten-Free", "Halal", "Vegetarian"];

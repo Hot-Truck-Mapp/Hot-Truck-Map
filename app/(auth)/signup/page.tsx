@@ -7,7 +7,7 @@ import Link from "next/link";
 const CUISINE_TYPES = [
   "Tacos", "BBQ", "Burgers", "Asian Fusion", "Desserts",
   "Pizza", "Sandwiches", "Healthy", "Breakfast", "Seafood",
-  "Mediterranean", "Vegan", "Halal", "Other",
+  "Mediterranean", "Caribbean", "Vegan", "Halal", "Other",
 ];
 
 type Step = "choose" | "operator" | "customer" | "done-operator" | "done-customer";
