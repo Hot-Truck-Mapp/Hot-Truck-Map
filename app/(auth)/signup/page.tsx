@@ -61,51 +61,30 @@ export default function SignupPage() {
     setOpError(null);
 
     try {
-      const supabase = createClient();
-      const { data, error } = await supabase.auth.signUp({
-        email: opEmail,
-        password: opPassword,
-        options: {
-          data: { role: "operator" },
+      // Server-side: the route creates the auth user AND inserts the truck
+      // row with the service role, so the truck always exists by the time
+      // the operator clicks the confirmation link. Doing this client-side
+      // hit an RLS race (no session pre-confirmation) and left operators
+      // looking like customers.
+      const res = await fetch("/api/signup/operator", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: opEmail,
+          password: opPassword,
+          truckName: truckName.trim(),
+          cuisine: cuisine || null,
           emailRedirectTo: window.location.origin + "/dashboard",
-        },
+        }),
       });
 
-      if (error) {
-        if (mountedRef.current) { setOpError(error.message); setOpLoading(false); }
-        return;
-      }
-
-      // Detect "email already registered" — Supabase returns a user with empty identities
-      if (data.user && (!data.user.identities || data.user.identities.length === 0)) {
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
         if (mountedRef.current) {
-          setOpError("Sign-up unavailable. Please check your details or sign in if you already have an account.");
+          setOpError((err as { error?: string }).error ?? "Sign-up failed. Please try again.");
           setOpLoading(false);
         }
         return;
-      }
-
-      if (data.user) {
-        // Best-effort: create the truck record now. Fails silently if email
-        // confirmation is required first — dashboard handles the missing-truck state.
-        await supabase.from("trucks").insert({
-          owner_id: data.user.id,
-          name: truckName.trim(),
-          cuisine: cuisine || null,
-          is_live: false,
-        });
-        // insert error ignored — dashboard handles the missing-truck state
-
-        // Best-effort: notify admin inbox. Don't block the success state.
-        void fetch("/api/notify-signup", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId: data.user.id,
-            truckName: truckName.trim(),
-            cuisine: cuisine || null,
-          }),
-        }).catch(() => { /* admin notification is non-critical */ });
       }
 
       if (mountedRef.current) setStep("done-operator");

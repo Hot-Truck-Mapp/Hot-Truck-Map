@@ -158,8 +158,38 @@ export default function Dashboard() {
         return;
       }
 
-      const { data: truck } = await supabase
-        .from("trucks").select("id, name, description, cuisine, phone, instagram, profile_photo, is_live, dietary_tags").eq("owner_id", user.id).maybeSingle();
+      const truckCols =
+        "id, name, description, cuisine, phone, instagram, profile_photo, is_live, dietary_tags";
+      let { data: truck } = await supabase
+        .from("trucks").select(truckCols).eq("owner_id", user.id).maybeSingle();
+
+      // Self-heal: if the server-side signup truck insert ever fails (or this
+      // is a returning user from before that fix), recreate the row using the
+      // truck name we stashed in user_metadata at signup. With a confirmed
+      // session, auth.uid() now matches owner_id, so the trucks_owner_insert
+      // RLS policy lets the operator create their own row here.
+      if (!truck) {
+        const meta = user.user_metadata ?? {};
+        const fallbackName =
+          typeof meta.truck_name === "string" ? meta.truck_name.trim() : "";
+        const fallbackCuisine =
+          typeof meta.cuisine === "string" && meta.cuisine.trim().length > 0
+            ? meta.cuisine.trim()
+            : null;
+        if (meta.role === "operator" && fallbackName.length > 0) {
+          const { data: created } = await supabase
+            .from("trucks")
+            .insert({
+              owner_id: user.id,
+              name: fallbackName,
+              cuisine: fallbackCuisine,
+              is_live: false,
+            })
+            .select(truckCols)
+            .maybeSingle();
+          if (created) truck = created;
+        }
+      }
 
       // Redirect users who are not operators — DB truck ownership is the only authority.
       // Never trust user-editable user_metadata.role for access control.
