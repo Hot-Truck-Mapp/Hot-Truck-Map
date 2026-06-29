@@ -60,17 +60,36 @@ export async function DELETE(req: NextRequest) {
     .update({ customer_id: null })
     .eq("customer_id", userId);
 
+  // 4. Delete profile row. The profiles table was created out-of-band by the
+  //    Supabase quickstart with a non-cascading FK on auth.users(id), which
+  //    blocks deleteUser. supabase_patch_005.sql adds ON DELETE CASCADE; this
+  //    explicit delete is the belt-and-suspenders fallback in case the patch
+  //    hasn't been applied yet. Missing-table errors (42P01) are ignored.
+  const { error: profileErr } = await admin
+    .from("profiles")
+    .delete()
+    .eq("id", userId);
+  const profileBlockingErr =
+    profileErr && (profileErr as { code?: string }).code !== "42P01"
+      ? profileErr
+      : null;
+
   // If any critical cleanup step failed, abort before deleting the auth account —
   // deleting the account first would permanently orphan the rows.
-  if (pushErr || followErr || orderErr) {
-    console.error("Account deletion cleanup failed:", { pushErr, followErr, orderErr });
+  if (pushErr || followErr || orderErr || profileBlockingErr) {
+    console.error("Account deletion cleanup failed:", {
+      pushErr,
+      followErr,
+      orderErr,
+      profileErr: profileBlockingErr,
+    });
     return NextResponse.json(
       { error: "Could not fully clean up account data. Please try again." },
       { status: 500 }
     );
   }
 
-  // 4. Delete avatar from storage (best-effort — non-critical)
+  // 5. Delete avatar from storage (best-effort — non-critical)
   try {
     const extensions = ["jpg", "png", "webp"];
     const paths = extensions.map((ext) => `customers/${userId}.${ext}`);
@@ -79,7 +98,7 @@ export async function DELETE(req: NextRequest) {
     // Avatar cleanup failure does not block account deletion
   }
 
-  // 5. Delete the auth account (irreversible)
+  // 6. Delete the auth account (irreversible)
   const { error: deleteErr } = await admin.auth.admin.deleteUser(userId);
   if (deleteErr) {
     console.error("Account auth deletion failed:", deleteErr);
