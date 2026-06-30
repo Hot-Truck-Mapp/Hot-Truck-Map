@@ -17,7 +17,7 @@ const MapboxMap = dynamic(() => import("@/components/map/MapboxMap"), {
 
 const CUISINES = [
   "All", "Tacos", "BBQ", "Burgers", "Asian Fusion",
-  "Desserts", "Pizza", "Sandwiches", "Healthy", "Breakfast", "Seafood", "Caribbean",
+  "Desserts", "Pizza", "Sandwiches", "Healthy", "Breakfast", "Seafood", "Caribbean", "African",
 ];
 
 const DIETARY = ["Vegan", "Gluten-Free", "Halal", "Vegetarian"];
