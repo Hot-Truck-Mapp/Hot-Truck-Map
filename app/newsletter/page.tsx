@@ -1,13 +1,13 @@
 import Link from "next/link";
-import UpdatesNav from "@/components/updates/UpdatesNav";
-import { UPDATES, NEWSLETTER_NAME, NEWSLETTER_TAGLINE, nextIssueLabel, readMinutes } from "@/lib/updates";
+import NewsletterNav from "@/components/newsletter/NewsletterNav";
+import { ISSUES, NEWSLETTER_NAME, NEWSLETTER_TAGLINE, nextIssueLabel, readMinutes } from "@/lib/newsletter";
 
-export default function UpdatesIndexPage() {
-  const [latest, ...older] = UPDATES;
+export default function NewsletterIndexPage() {
+  const [latest, ...older] = ISSUES;
 
   return (
     <div className="min-h-screen bg-neutral-100">
-      <UpdatesNav />
+      <NewsletterNav />
 
       {/* Masthead */}
       <div className="bg-neutral-900 px-4 pt-12 pb-10 text-center border-b-2 border-brand-red">
@@ -30,7 +30,7 @@ export default function UpdatesIndexPage() {
               Latest Issue
             </p>
             <Link
-              href={`/updates/${latest.slug}`}
+              href={`/newsletter/${latest.slug}`}
               className="block bg-white rounded-2xl shadow-sm p-6 sm:p-8 hover:shadow-lg hover:-translate-y-0.5 transition-all"
             >
               <div className="flex items-center gap-2 text-xs font-bold text-neutral-400 mb-3">
@@ -74,7 +74,7 @@ export default function UpdatesIndexPage() {
               {older.map((u) => (
                 <Link
                   key={u.slug}
-                  href={`/updates/${u.slug}`}
+                  href={`/newsletter/${u.slug}`}
                   className="flex items-center justify-between gap-4 bg-white rounded-xl shadow-sm px-5 py-4 hover:shadow-md transition-all"
                 >
                   <div>

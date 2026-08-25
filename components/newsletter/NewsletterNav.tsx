@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-export default function UpdatesNav() {
+export default function NewsletterNav() {
   return (
     <nav className="bg-neutral-900 border-b border-neutral-800 px-4 md:px-6 py-3 flex items-center justify-between sticky top-0 z-20">
       <Link href="/" className="flex items-center gap-2">

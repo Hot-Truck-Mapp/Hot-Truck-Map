@@ -17,7 +17,7 @@ export default function ConditionalFooter() {
       <Link href="/trucks" className="hover:text-neutral-300 transition-colors">Trucks</Link>
       <Link href="/trucks/leaderboard" className="hover:text-neutral-300 transition-colors">Leaderboard</Link>
       <Link href="/events" className="hover:text-neutral-300 transition-colors">Events</Link>
-      <Link href="/updates" className="hover:text-neutral-300 transition-colors">Updates</Link>
+      <Link href="/newsletter" className="hover:text-neutral-300 transition-colors">Newsletter</Link>
       <Link href="/reviews" className="hover:text-neutral-300 transition-colors">Reviews</Link>
       <Link href="/catering" className="hover:text-neutral-300 transition-colors">Catering</Link>
       <Link href="/contact" className="hover:text-neutral-300 transition-colors">Contact</Link>

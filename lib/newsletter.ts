@@ -1,22 +1,22 @@
-// Content for "On the Menu" — the biweekly Hot Truck Map updates newsletter,
-// published at /updates.
+// Content for "On the Menu" — the biweekly Hot Truck Map newsletter,
+// published at /newsletter.
 //
-// Add a new issue by appending an object to UPDATES (newest first). Each
-// issue gets its own static page at /updates/[slug] via generateStaticParams
-// in app/updates/[slug]/page.tsx — no other wiring needed beyond that.
-// Keep `summary` short: it's used for the index card, the OG description,
-// and (later) the email subject line if this feed is ever piped into an
-// actual email send. `tldr` should be 3 short skimmable bullets — the
-// newsletter equivalent of a subject-line preview.
+// Add a new issue by appending an object to ISSUES (newest first). Each
+// issue gets its own static page at /newsletter/[slug] via
+// generateStaticParams in app/newsletter/[slug]/page.tsx — no other wiring
+// needed beyond that. Keep `summary` short: it's used for the index card,
+// the OG description, and (later) the email subject line if this feed is
+// ever piped into an actual email send. `tldr` should be 3 short skimmable
+// bullets — the newsletter equivalent of a subject-line preview.
 
-export interface UpdateItem {
+export interface NewsletterItem {
   emoji: string;
   tag: "NEW" | "IMPROVED" | "FIX";
   title: string;
   body: string;
 }
 
-export interface UpdateIssue {
+export interface NewsletterIssue {
   slug: string;
   issue: number;
   title: string;
@@ -31,14 +31,14 @@ export interface UpdateIssue {
     body: string[];
     cta?: { label: string; href: string };
   };
-  items: UpdateItem[];
+  items: NewsletterItem[];
 }
 
 export const NEWSLETTER_NAME = "On the Menu";
 export const NEWSLETTER_TAGLINE = "What's new at Hot Truck Map, every two weeks.";
 export const CADENCE_DAYS = 14;
 
-export const UPDATES: UpdateIssue[] = [
+export const ISSUES: NewsletterIssue[] = [
   {
     slug: "festivals-and-events",
     issue: 1,
@@ -85,21 +85,21 @@ export const UPDATES: UpdateIssue[] = [
   },
 ];
 
-export function getUpdateBySlug(slug: string): UpdateIssue | undefined {
-  return UPDATES.find((u) => u.slug === slug);
+export function getIssueBySlug(slug: string): NewsletterIssue | undefined {
+  return ISSUES.find((u) => u.slug === slug);
 }
 
-export function getAdjacentUpdates(slug: string): {
-  older: UpdateIssue | undefined;
-  newer: UpdateIssue | undefined;
+export function getAdjacentIssues(slug: string): {
+  older: NewsletterIssue | undefined;
+  newer: NewsletterIssue | undefined;
 } {
-  const idx = UPDATES.findIndex((u) => u.slug === slug);
+  const idx = ISSUES.findIndex((u) => u.slug === slug);
   if (idx === -1) return { older: undefined, newer: undefined };
-  return { older: UPDATES[idx + 1], newer: UPDATES[idx - 1] };
+  return { older: ISSUES[idx + 1], newer: ISSUES[idx - 1] };
 }
 
 /** Rough reading time from headline + item body word counts. Always ≥1 min. */
-export function readMinutes(issue: UpdateIssue): number {
+export function readMinutes(issue: NewsletterIssue): number {
   const words =
     issue.headline.body.join(" ").split(/\s+/).length +
     issue.items.reduce((sum, i) => sum + i.body.split(/\s+/).length, 0);
@@ -108,7 +108,7 @@ export function readMinutes(issue: UpdateIssue): number {
 
 /** Label for when the next issue is expected, based on the latest issue's date. */
 export function nextIssueLabel(): string {
-  const latest = UPDATES[0];
+  const latest = ISSUES[0];
   const next = new Date(latest.dateISO + "T00:00:00");
   next.setDate(next.getDate() + CADENCE_DAYS);
   return next.toLocaleDateString("en-US", { month: "long", day: "numeric" });

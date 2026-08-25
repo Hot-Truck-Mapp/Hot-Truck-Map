@@ -1,29 +1,29 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import UpdatesNav from "@/components/updates/UpdatesNav";
+import NewsletterNav from "@/components/newsletter/NewsletterNav";
 import {
-  UPDATES,
-  getUpdateBySlug,
-  getAdjacentUpdates,
+  ISSUES,
+  getIssueBySlug,
+  getAdjacentIssues,
   readMinutes,
   nextIssueLabel,
   NEWSLETTER_NAME,
-  type UpdateItem,
-} from "@/lib/updates";
+  type NewsletterItem,
+} from "@/lib/newsletter";
 
 type Props = {
   params: Promise<{ slug: string }>;
 };
 
 export function generateStaticParams() {
-  return UPDATES.map((u) => ({ slug: u.slug }));
+  return ISSUES.map((u) => ({ slug: u.slug }));
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const issue = getUpdateBySlug(slug);
-  if (!issue) return { title: "Update | HotTruckMap" };
+  const issue = getIssueBySlug(slug);
+  if (!issue) return { title: "Newsletter | HotTruckMap" };
 
   return {
     title: `${issue.title} | ${NEWSLETTER_NAME} · Hot Truck Map`,
@@ -35,29 +35,29 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-const TAG_STYLES: Record<UpdateItem["tag"], string> = {
+const TAG_STYLES: Record<NewsletterItem["tag"], string> = {
   NEW: "bg-brand-red/10 text-brand-red",
   IMPROVED: "bg-brand-orange/10 text-orange-700",
   FIX: "bg-neutral-200 text-neutral-600",
 };
 
-const TAG_BORDER: Record<UpdateItem["tag"], string> = {
+const TAG_BORDER: Record<NewsletterItem["tag"], string> = {
   NEW: "border-brand-red",
   IMPROVED: "border-brand-orange",
   FIX: "border-neutral-300",
 };
 
-export default async function UpdateIssuePage({ params }: Props) {
+export default async function NewsletterIssuePage({ params }: Props) {
   const { slug } = await params;
-  const issue = getUpdateBySlug(slug);
+  const issue = getIssueBySlug(slug);
   if (!issue) notFound();
 
-  const { older, newer } = getAdjacentUpdates(slug);
+  const { older, newer } = getAdjacentIssues(slug);
   const isLatest = !newer;
 
   return (
     <div className="min-h-screen bg-neutral-100">
-      <UpdatesNav />
+      <NewsletterNav />
 
       {/* Masthead */}
       <div className="bg-neutral-900 px-4 pt-10 pb-9 text-center border-b-2 border-brand-red">
@@ -149,14 +149,14 @@ export default async function UpdateIssuePage({ params }: Props) {
         {(older || newer) && (
           <div className="flex items-center justify-between pt-1 text-sm font-bold">
             {older ? (
-              <Link href={`/updates/${older.slug}`} className="text-neutral-500 hover:text-neutral-800 transition-colors">
+              <Link href={`/newsletter/${older.slug}`} className="text-neutral-500 hover:text-neutral-800 transition-colors">
                 ← Issue #{older.issue}
               </Link>
             ) : (
               <span />
             )}
             {newer ? (
-              <Link href={`/updates/${newer.slug}`} className="text-neutral-500 hover:text-neutral-800 transition-colors">
+              <Link href={`/newsletter/${newer.slug}`} className="text-neutral-500 hover:text-neutral-800 transition-colors">
                 Issue #{newer.issue} →
               </Link>
             ) : (
@@ -175,7 +175,7 @@ export default async function UpdateIssuePage({ params }: Props) {
       </div>
 
       <div className="px-4 py-8 text-center">
-        <Link href="/updates" className="text-xs text-neutral-400 hover:text-neutral-600 transition-colors">
+        <Link href="/newsletter" className="text-xs text-neutral-400 hover:text-neutral-600 transition-colors">
           ← All issues of {NEWSLETTER_NAME}
         </Link>
       </div>
