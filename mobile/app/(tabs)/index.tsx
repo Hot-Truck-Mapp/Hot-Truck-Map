@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   StyleSheet, View, ActivityIndicator, Text,
-  TouchableOpacity, Linking, Alert, ScrollView, Image,
+  TouchableOpacity, Linking, Alert, ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -12,6 +12,7 @@ import { TruckMap } from '@/components/map/TruckMap';
 import { useLiveTrucks } from '@/hooks/useLiveTrucks';
 import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/colors';
+import { stateForName, type USState } from '@shared/us-states';
 
 type RecentReview = {
   id: string;
@@ -39,18 +40,11 @@ export default function MapTab() {
   const { trucks, loading, refetch } = useLiveTrucks();
   const [region, setRegion] = useState<Region | undefined>();
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('requesting');
+  const [nearbyState, setNearbyState] = useState<USState | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [recentReviews, setRecentReviews] = useState<RecentReview[]>([]);
   const reviewsMountedRef = useRef(true);
   const mapRef = useRef<MapView>(null);
-
-  useEffect(() => {
-    return () => { reviewsMountedRef.current = false; };
-  }, []);
-
-  useEffect(() => {
-    loadRecentReviews();
-  }, []);
 
   async function loadRecentReviews() {
     try {
@@ -60,17 +54,75 @@ export default function MapTab() {
         .order('created_at', { ascending: false })
         .limit(5);
       if (!reviewsMountedRef.current || !reviewData) return;
-      setRecentReviews(reviewData.map((r: any) => ({
-        id: r.id,
-        rating: r.rating,
-        comment: r.comment,
-        created_at: r.created_at,
-        truck_id: r.truck_id,
-        truck_name: r.trucks?.name ?? undefined,
-      })));
+      setRecentReviews(reviewData.map((r) => {
+        const truckRel = r.trucks as { name?: string } | { name?: string }[] | null;
+        const truck_name = Array.isArray(truckRel) ? truckRel[0]?.name : truckRel?.name;
+        return {
+          id: r.id,
+          rating: r.rating,
+          comment: r.comment,
+          created_at: r.created_at,
+          truck_id: r.truck_id,
+          truck_name,
+        };
+      }));
     } catch {
       // non-critical — section just won't show
     }
+  }
+
+  useEffect(() => {
+    reviewsMountedRef.current = true;
+    return () => { reviewsMountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    loadRecentReviews();
+  }, []);
+
+  // Resolves coordinates to a US state via Expo Location's built-in reverse
+  // geocoder (no network call needed beyond the OS's own geocoding service).
+  // Fails silently — this only powers a nice-to-have "Events near you" banner.
+  async function resolveNearbyState(lat: number, lng: number, mounted: boolean) {
+    try {
+      const results = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+      const match = stateForName(results?.[0]?.region ?? null);
+      if (mounted && match) setNearbyState(match);
+    } catch { /* non-critical */ }
+  }
+
+  async function locateUser(mounted = true) {
+    // 1. Last-known position — instant if the OS has a cached fix.
+    try {
+      const last = await Location.getLastKnownPositionAsync({});
+      if (last && mounted) {
+        const r: Region = {
+          latitude: last.coords.latitude,
+          longitude: last.coords.longitude,
+          latitudeDelta: USER_DELTA,
+          longitudeDelta: USER_DELTA,
+        };
+        setRegion(r);
+        mapRef.current?.animateToRegion(r, 400);
+      }
+    } catch { /* no cached fix */ }
+
+    // 2. Accurate current position — animates to it when ready.
+    try {
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      if (!mounted) return;
+      const r: Region = {
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+        latitudeDelta: USER_DELTA,
+        longitudeDelta: USER_DELTA,
+      };
+      setRegion(r);
+      mapRef.current?.animateToRegion(r, 400);
+      resolveNearbyState(loc.coords.latitude, loc.coords.longitude, mounted);
+    } catch { /* keep last-known position */ }
   }
 
   useEffect(() => {
@@ -110,39 +162,6 @@ export default function MapTab() {
     })();
     return () => { mounted = false; };
   }, []);
-
-  async function locateUser(mounted = true) {
-    // 1. Last-known position — instant if the OS has a cached fix.
-    try {
-      const last = await Location.getLastKnownPositionAsync({});
-      if (last && mounted) {
-        const r: Region = {
-          latitude: last.coords.latitude,
-          longitude: last.coords.longitude,
-          latitudeDelta: USER_DELTA,
-          longitudeDelta: USER_DELTA,
-        };
-        setRegion(r);
-        mapRef.current?.animateToRegion(r, 400);
-      }
-    } catch { /* no cached fix */ }
-
-    // 2. Accurate current position — animates to it when ready.
-    try {
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      if (!mounted) return;
-      const r: Region = {
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-        latitudeDelta: USER_DELTA,
-        longitudeDelta: USER_DELTA,
-      };
-      setRegion(r);
-      mapRef.current?.animateToRegion(r, 400);
-    } catch { /* keep last-known position */ }
-  }
 
   function openSettings() {
     Linking.openSettings().catch(() => {
@@ -218,6 +237,21 @@ export default function MapTab() {
         )}
       </View>
 
+      {/* Events near you — shown once we've resolved the user's state */}
+      {locationStatus === 'granted' && nearbyState && (
+        <TouchableOpacity
+          style={styles.eventsBanner}
+          onPress={() => router.push(`/events/${nearbyState.code.toLowerCase()}`)}
+          activeOpacity={0.8}
+          accessibilityLabel={`Events near you in ${nearbyState.name}`}
+          accessibilityRole="button"
+        >
+          <Text style={styles.eventsBannerEmoji}>🎪</Text>
+          <Text style={styles.eventsBannerText}>Events near you in {nearbyState.name}</Text>
+          <Text style={styles.eventsBannerArrow}>→</Text>
+        </TouchableOpacity>
+      )}
+
       {/* Pull-to-refresh indicator sits above the map without intercepting touches */}
       {refreshing && (
         <View style={styles.refreshingBanner}>
@@ -243,7 +277,7 @@ export default function MapTab() {
               <TouchableOpacity
                 key={review.id}
                 style={styles.reviewCard}
-                onPress={() => { if (review.truck_id) router.push(`/truck/${review.truck_id}` as any); }}
+                onPress={() => { if (review.truck_id) router.push(`/truck/${review.truck_id}`); }}
                 activeOpacity={0.8}
                 accessibilityLabel={`Review for ${review.truck_name ?? 'food truck'}, ${review.rating} stars${review.comment ? ': ' + review.comment : ''}`}
                 accessibilityRole="button"
@@ -329,6 +363,22 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: '700', color: Colors.text },
   headerCount: { fontSize: 14, color: Colors.primary, fontWeight: '600' },
   headerCountEmpty: { fontSize: 13, color: Colors.textSecondary, fontStyle: 'italic' },
+  eventsBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: Colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  eventsBannerEmoji: { fontSize: 16 },
+  eventsBannerText: { flex: 1, fontSize: 13, fontWeight: '700', color: Colors.text },
+  eventsBannerArrow: { fontSize: 14, color: Colors.primary, fontWeight: '700' },
   mapWrapper: { flex: 1 },
   refreshingBanner: {
     position: 'absolute',

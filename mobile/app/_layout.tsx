@@ -44,7 +44,7 @@ function AuthGuard() {
 
     // Redirect to onboarding if not yet completed
     if (!onboardingComplete && (segments[0] as string) !== 'onboarding') {
-      router.replace('/onboarding' as any);
+      router.replace('/onboarding');
       if (!splashHidden.current) {
         splashHidden.current = true;
         SplashScreen.hideAsync().catch(() => { /* already hidden */ });
@@ -114,6 +114,18 @@ export default function RootLayout() {
         <Stack.Screen
           name="catering/[id]"
           options={{ headerShown: true, title: 'Catering Request', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="events/index"
+          options={{ headerShown: true, title: 'Events', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="events/[state]"
+          options={{ headerShown: true, title: '', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="event/[id]"
+          options={{ headerShown: true, title: '', headerBackTitle: 'Back' }}
         />
         <Stack.Screen
           name="about"

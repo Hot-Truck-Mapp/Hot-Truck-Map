@@ -26,6 +26,7 @@ export default function TrucksTab() {
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
 
@@ -64,7 +65,7 @@ export default function TrucksTab() {
         .limit(100);
       if (!mountedRef.current) return;
       const top: TopTruck[] = (data ?? [])
-        .map((t: any) => ({
+        .map((t: { id: string; name: string; cuisine: string | null; profile_photo: string | null; follows_agg?: { count: number }[] }) => ({
           id: t.id,
           name: t.name,
           cuisine: t.cuisine,
@@ -119,6 +120,20 @@ export default function TrucksTab() {
     );
   }
 
+  const eventsEntryPoint = (
+    <TouchableOpacity
+      style={styles.eventsEntry}
+      onPress={() => router.push('/events')}
+      activeOpacity={0.8}
+      accessibilityLabel="Browse festivals and events by state"
+      accessibilityRole="button"
+    >
+      <Text style={styles.eventsEntryEmoji}>🎪</Text>
+      <Text style={styles.eventsEntryText}>Browse Festivals & Events by State</Text>
+      <Text style={styles.eventsEntryArrow}>→</Text>
+    </TouchableOpacity>
+  );
+
   const topTrucksHeader = topTrucks.length > 0 ? (
     <View style={styles.leaderboardSection}>
       <Text style={styles.leaderboardTitle}>🏆 Top Trucks</Text>
@@ -127,7 +142,7 @@ export default function TrucksTab() {
           <TouchableOpacity
             key={truck.id}
             style={styles.leaderboardCard}
-            onPress={() => router.push(`/truck/${truck.id}` as any)}
+            onPress={() => router.push(`/truck/${truck.id}`)}
             activeOpacity={0.8}
             accessibilityLabel={`${truck.name}, ${truck.follower_count} followers`}
             accessibilityRole="button"
@@ -137,7 +152,7 @@ export default function TrucksTab() {
             </View>
             <View style={styles.leaderboardCardPhoto}>
               {truck.profile_photo ? (
-                <Image source={{ uri: truck.profile_photo }} style={styles.leaderboardCardPhotoImg} />
+                <Image source={{ uri: truck.profile_photo }} style={styles.leaderboardCardPhotoImg} alt={truck.name} />
               ) : (
                 <Text style={styles.leaderboardCardPhotoPlaceholder}>🚚</Text>
               )}
@@ -152,6 +167,13 @@ export default function TrucksTab() {
       </ScrollView>
     </View>
   ) : null;
+
+  const listHeader = (
+    <View>
+      {eventsEntryPoint}
+      {topTrucksHeader}
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -173,7 +195,7 @@ export default function TrucksTab() {
         keyExtractor={item => item.id}
         renderItem={({ item }) => <TruckCard truck={item} />}
         contentContainerStyle={styles.list}
-        ListHeaderComponent={topTrucksHeader}
+        ListHeaderComponent={listHeader}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -208,6 +230,24 @@ const styles = StyleSheet.create({
   },
   list: { paddingHorizontal: 16, paddingBottom: 32 },
   empty: { textAlign: 'center', color: Colors.textSecondary, marginTop: 48, fontSize: 16 },
+
+  // Events entry point
+  eventsEntry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: Colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  eventsEntryEmoji: { fontSize: 16 },
+  eventsEntryText: { flex: 1, fontSize: 14, fontWeight: '700', color: Colors.text },
+  eventsEntryArrow: { fontSize: 14, color: Colors.primary, fontWeight: '700' },
 
   // Leaderboard row
   leaderboardSection: { paddingHorizontal: 16, paddingVertical: 12 },
