@@ -2,7 +2,7 @@
   "expo": {
     "name": "Hot Truck Map",
     "slug": "hot-truck-map",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "scheme": "hottruckmap",
     "userInterfaceStyle": "light",
@@ -16,7 +16,7 @@
       "jsEngine": "jsc",
       "supportsTablet": true,
       "bundleIdentifier": "com.hottruckmap.app",
-      "buildNumber": "26",
+      "buildNumber": "28",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "Hot Truck Map uses your location to show nearby food trucks on the map.",
@@ -36,7 +36,7 @@
         "backgroundColor": "#FF6B35"
       },
       "package": "hottruckmap.com",
-      "versionCode": 20,
+      "versionCode": 22,
       "jsEngine": "hermes",
       "config": {
         "googleMaps": {
