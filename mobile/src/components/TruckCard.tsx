@@ -17,11 +17,11 @@ export function TruckCard({ truck }: Props) {
   return (
     <TouchableOpacity
       style={styles.card}
-      onPress={() => { if (truck.id) router.push(`/truck/${truck.id}` as any); }}
+      onPress={() => { if (truck.id) router.push(`/truck/${truck.id}`); }}
       activeOpacity={0.7}
     >
       {validPhoto ? (
-        <Image source={{ uri: validPhoto }} style={styles.image} resizeMode="cover" />
+        <Image source={{ uri: validPhoto }} style={styles.image} resizeMode="cover" alt={truck.name ?? 'Food truck'} />
       ) : (
         <View style={[styles.image, styles.imagePlaceholder]} />
       )}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  StyleSheet, View, Text, TextInput, TouchableOpacity,
+  StyleSheet, Text, TextInput, TouchableOpacity,
   Alert, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -78,7 +78,7 @@ export default function ResetPasswordScreen() {
       Alert.alert(
         'Password updated!',
         'Your password has been changed. Please sign in with your new password.',
-        [{ text: 'Sign In', onPress: () => router.replace('/(auth)/login' as any) }]
+        [{ text: 'Sign In', onPress: () => router.replace('/(auth)/login') }]
       );
     } catch {
       Alert.alert('Error', 'Network error — please check your connection and try again.');
@@ -92,7 +92,7 @@ export default function ResetPasswordScreen() {
       <SafeAreaView style={[styles.flex, styles.centered]}>
         <Text style={styles.title}>Link expired</Text>
         <Text style={styles.body}>This reset link has expired or is invalid. Please request a new one.</Text>
-        <TouchableOpacity style={styles.button} onPress={() => router.replace('/(auth)/forgot-password' as any)}>
+        <TouchableOpacity style={styles.button} onPress={() => router.replace('/(auth)/forgot-password')}>
           <Text style={styles.buttonText}>Request New Link</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -113,7 +113,7 @@ export default function ResetPasswordScreen() {
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           <Text style={styles.title}>Set New Password</Text>
-          <Text style={styles.body}>Choose a strong password you'll remember.</Text>
+          <Text style={styles.body}>Choose a strong password you&apos;ll remember.</Text>
 
           <TextInput
             style={styles.input}

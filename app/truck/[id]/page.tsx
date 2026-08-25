@@ -136,6 +136,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
   }
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       if (reviewSuccessTimerRef.current) clearTimeout(reviewSuccessTimerRef.current);
@@ -189,7 +190,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
         supabase.from("locations").select("id, lat, lng, address, broadcasted_at").eq("truck_id", id).order("broadcasted_at", { ascending: false }).limit(1).maybeSingle(),
         supabase.from("menu_items").select("id, truck_id, name, description, price, category, allergens, is_popular, is_sold_out, photo, sort_order").eq("truck_id", id).order("created_at", { ascending: true }).limit(200),
         supabase.from("reviews").select("id, rating, comment, created_at, truck_id").eq("truck_id", id).order("created_at", { ascending: false }).limit(50),
-        supabase.from("follows").select("id", { count: "exact", head: true }).eq("truck_id", id),
+        supabase.from("follows").select("*", { count: "exact", head: true }).eq("truck_id", id),
         supabase.from("truck_photos").select("id, photo_url, created_at").eq("truck_id", id).order("created_at", { ascending: false }).limit(100),
         supabase.from("spotted_posts").select("id, location, note, created_at").eq("truck_id", id).order("created_at", { ascending: false }).limit(5),
       ]);

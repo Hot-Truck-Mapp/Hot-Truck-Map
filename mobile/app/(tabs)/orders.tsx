@@ -175,10 +175,13 @@ export default function OrdersTab() {
             <Text style={styles.emptyBody}>Find a food truck and place your first order</Text>
           </View>
         }
-        renderItem={({ item }) => (
+        renderItem={({ item }) => {
+          const truckRel = (item as Order & { trucks?: { name?: string } | { name?: string }[] | null }).trucks;
+          const truckName = (Array.isArray(truckRel) ? truckRel[0]?.name : truckRel?.name) ?? 'Food Truck';
+          return (
           <View style={styles.card}>
             <View style={styles.cardRow}>
-              <Text style={styles.truckName}>{(item as any).trucks?.name ?? 'Food Truck'}</Text>
+              <Text style={styles.truckName}>{truckName}</Text>
               <View style={[styles.badge, { backgroundColor: (STATUS_COLOR[item.status] ?? Colors.textSecondary) + '22' }]}>
                 <Text style={[styles.badgeText, { color: STATUS_COLOR[item.status] ?? Colors.textSecondary }]}>
                   {STATUS_LABEL[item.status] ?? item.status.replace('_', ' ')}
@@ -194,7 +197,8 @@ export default function OrdersTab() {
               <Text style={styles.date}>{item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}</Text>
             </View>
           </View>
-        )}
+          );
+        }}
       />
     </SafeAreaView>
   );

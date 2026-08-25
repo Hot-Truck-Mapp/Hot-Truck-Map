@@ -76,9 +76,10 @@ export default function AccountTab() {
               Alert.alert('Account Deleted', 'Your account has been permanently deleted.');
               await clearPushToken();
               await supabase.auth.signOut();
-            } catch (err: any) {
+            } catch (err) {
               if (mountedRef.current) {
-                Alert.alert('Error', err?.message ?? 'Could not delete account. Please try again.');
+                const message = err instanceof Error ? err.message : 'Could not delete account. Please try again.';
+                Alert.alert('Error', message);
               }
             } finally {
               if (mountedRef.current) setDeleting(false);
@@ -149,8 +150,9 @@ export default function AccountTab() {
       if (!mountedRef.current) return;
       setAvatarUrl(data.publicUrl);
       Alert.alert('', 'Profile photo updated!');
-    } catch (err: any) {
-      if (mountedRef.current) Alert.alert('Upload failed', err?.message ?? 'Please try again.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Please try again.';
+      if (mountedRef.current) Alert.alert('Upload failed', message);
     } finally {
       if (mountedRef.current) setUploading(false);
     }
@@ -191,7 +193,7 @@ export default function AccountTab() {
           accessibilityRole="button"
         >
           {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.avatarImage} resizeMode="cover" />
+            <Image source={{ uri: avatarUrl }} style={styles.avatarImage} resizeMode="cover" alt="Your profile photo" />
           ) : (
             <View style={styles.avatarPlaceholder}>
               <Text style={styles.avatarText}>

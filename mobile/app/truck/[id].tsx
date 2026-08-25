@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import {
   StyleSheet, View, Text, Image, ScrollView,
   TouchableOpacity, ActivityIndicator, Alert,
-  Modal, FlatList, Dimensions, TextInput, KeyboardAvoidingView, Platform,
+  Modal, Dimensions, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -35,6 +35,9 @@ type ScheduleDay = {
   open: boolean;
   open_time?: string;
   close_time?: string;
+  // Web saves start/end; older data may use open_time/close_time.
+  start?: string;
+  end?: string;
   location?: string;
 };
 
@@ -121,6 +124,7 @@ export default function TruckScreen() {
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
 
@@ -311,8 +315,9 @@ export default function TruckScreen() {
         setPhotos(refreshed ?? []);
         Alert.alert('Photo uploaded!', 'Your photo has been added.');
       }
-    } catch (err: any) {
-      if (mountedRef.current) Alert.alert('Upload failed', err?.message ?? 'Please try again.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Please try again.';
+      if (mountedRef.current) Alert.alert('Upload failed', message);
     } finally {
       if (mountedRef.current) setPhotoUploading(false);
     }
@@ -325,7 +330,7 @@ export default function TruckScreen() {
   function addToCart(itemId: string) {
     // Don't add sold-out items even if the UI somehow allows it
     const item = truck?.menu_items?.find(i => i.id === itemId);
-    if ((item as any)?.is_sold_out) return;
+    if (item?.is_sold_out) return;
     setCart(prev => {
       const current = prev[itemId] ?? 0;
       if (current >= MAX_ITEM_QTY) return prev;
@@ -403,14 +408,14 @@ export default function TruckScreen() {
 
       const json = await res.json().catch(() => ({}) as Record<string, unknown>);
       if (!res.ok) {
-        if ((json as any).no_show_block) {
+        if ((json as { no_show_block?: boolean }).no_show_block) {
           Alert.alert(
             'Ordering Blocked',
             'Your account has been temporarily restricted due to multiple missed pickups. Please visit a food truck in person to order.',
           );
           return;
         }
-        throw new Error((json as any).error ?? 'Order failed');
+        throw new Error((json as { error?: string }).error ?? 'Order failed');
       }
 
       if (mountedRef.current) {
@@ -421,8 +426,9 @@ export default function TruckScreen() {
         const shortId = typeof json.orderId === 'string' ? json.orderId.slice(0, 8).toUpperCase() : '—';
         Alert.alert('Order placed!', `Your order ID is #${shortId}`);
       }
-    } catch (err: any) {
-      if (mountedRef.current) Alert.alert('Error', err?.message ?? 'Could not place order. Please try again.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not place order. Please try again.';
+      if (mountedRef.current) Alert.alert('Error', message);
     } finally {
       orderInFlightRef.current = false;
       if (mountedRef.current) setOrderSubmitting(false);
@@ -456,8 +462,8 @@ export default function TruckScreen() {
           note: spottedNote.trim() || null,
         }),
       });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((json as any).error ?? 'Could not post sighting. Please try again.');
+      const json: { id?: string; error?: string } = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? 'Could not post sighting. Please try again.');
 
       if (mountedRef.current) {
         const newPost: SpottedPost = {
@@ -471,8 +477,9 @@ export default function TruckScreen() {
         setSpottedLocation('');
         setSpottedNote('');
       }
-    } catch (err: any) {
-      if (mountedRef.current) Alert.alert('Error', err?.message ?? 'Could not post sighting. Please try again.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not post sighting. Please try again.';
+      if (mountedRef.current) Alert.alert('Error', message);
     } finally {
       spottedInFlightRef.current = false;
       if (mountedRef.current) setSpottedSubmitting(false);
@@ -513,8 +520,9 @@ export default function TruckScreen() {
         setReviewComment('');
         Alert.alert('Review submitted!', 'Thanks for your feedback.');
       }
-    } catch (err: any) {
-      if (mountedRef.current) Alert.alert('Error', err?.message ?? 'Could not submit review. Please try again.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not submit review. Please try again.';
+      if (mountedRef.current) Alert.alert('Error', message);
     } finally {
       reviewInFlightRef.current = false;
       if (mountedRef.current) setReviewSubmitting(false);
@@ -551,7 +559,7 @@ export default function TruckScreen() {
     <>
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
         {truck.profile_photo ? (
-          <Image source={{ uri: truck.profile_photo }} style={styles.hero} />
+          <Image source={{ uri: truck.profile_photo }} style={styles.hero} alt={truck.name ?? 'Food truck'} />
         ) : (
           <View style={[styles.hero, styles.heroPlaceholder]} />
         )}
@@ -607,8 +615,8 @@ export default function TruckScreen() {
                   );
                 }
                 // Support both key naming conventions (web saves start/end, older data may use open_time/close_time)
-                const openKey = (entry as any).start ?? (entry as any).open_time;
-                const closeKey = (entry as any).end ?? (entry as any).close_time;
+                const openKey = entry.start ?? entry.open_time;
+                const closeKey = entry.end ?? entry.close_time;
                 const timeStr = openKey && closeKey
                   ? `${fmt24to12(openKey)} – ${fmt24to12(closeKey)}`
                   : 'Hours vary';
@@ -639,7 +647,7 @@ export default function TruckScreen() {
           {truck.offers_catering && (
             <TouchableOpacity
               style={styles.cateringButton}
-              onPress={() => router.push(`/catering/${id}` as any)}
+              onPress={() => router.push(`/catering/${id}`)}
               accessibilityLabel="Request catering from this truck"
               accessibilityRole="button"
             >
@@ -650,7 +658,7 @@ export default function TruckScreen() {
           {/* ── Menu ── */}
           {(truck.menu_items?.length ?? 0) === 0 && isLive && (
             <Text style={{ fontSize: 14, color: '#999', textAlign: 'center', marginVertical: 16, paddingHorizontal: 16 }}>
-              This truck hasn't added their menu yet. Stop by and ask what's available!
+              This truck hasn&apos;t added their menu yet. Stop by and ask what&apos;s available!
             </Text>
           )}
           {(truck.menu_items?.length ?? 0) > 0 && (
@@ -660,7 +668,7 @@ export default function TruckScreen() {
                 <Text style={styles.notLiveNote}>Not currently accepting orders</Text>
               )}
               {truck.menu_items?.map(item => {
-                const soldOut = (item as any).is_sold_out === true;
+                const soldOut = item.is_sold_out === true;
                 return (
                   <View key={item.id} style={[styles.menuItem, soldOut && { opacity: 0.45 }]}>
                     <View style={styles.menuItemInfo}>
@@ -805,7 +813,7 @@ export default function TruckScreen() {
             </View>
           )}
           {userId && userReview !== null && userReview !== undefined && (
-            <Text style={styles.alreadyReviewed}>You've already reviewed this truck.</Text>
+            <Text style={styles.alreadyReviewed}>You&apos;ve already reviewed this truck.</Text>
           )}
 
           {/* ── Photos Section ── */}
@@ -837,7 +845,7 @@ export default function TruckScreen() {
                   onPress={() => setLightboxUrl(photo.photo_url)}
                   activeOpacity={0.85}
                 >
-                  <Image source={{ uri: photo.photo_url }} style={styles.photoThumb} />
+                  <Image source={{ uri: photo.photo_url }} style={styles.photoThumb} alt="Truck photo" />
                 </TouchableOpacity>
               ))}
             </View>
@@ -942,6 +950,7 @@ export default function TruckScreen() {
               source={{ uri: lightboxUrl }}
               style={styles.lightboxImage}
               resizeMode="contain"
+              alt="Truck photo, enlarged"
             />
           )}
           <TouchableOpacity

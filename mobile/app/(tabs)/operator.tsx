@@ -31,11 +31,6 @@ export default function OperatorTab() {
     return () => { mountedRef.current = false; };
   }, []);
 
-  useEffect(() => {
-    if (!session?.user) { setChecking(false); return; }
-    checkOperatorStatus();
-  }, [session]);
-
   async function checkOperatorStatus() {
     try {
       const { data } = await supabase
@@ -50,6 +45,11 @@ export default function OperatorTab() {
       if (mountedRef.current) setChecking(false);
     }
   }
+
+  useEffect(() => {
+    if (!session?.user) { setChecking(false); return; }
+    checkOperatorStatus();
+  }, [session]);
 
   async function broadcastLocation(lat: number, lng: number, addr: string) {
     if (!truck) return;
@@ -92,9 +92,10 @@ export default function OperatorTab() {
       const [geo] = await Location.reverseGeocodeAsync({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
       const addr = geo ? [geo.streetNumber, geo.street, geo.city, geo.region].filter(Boolean).join(' ') : `${loc.coords.latitude.toFixed(4)}, ${loc.coords.longitude.toFixed(4)}`;
       await broadcastLocation(loc.coords.latitude, loc.coords.longitude, addr);
-    } catch (e: any) {
+    } catch (e) {
       if (mountedRef.current) {
-        Alert.alert('Error', e?.message ?? 'Could not get location. Try entering it manually.');
+        const message = e instanceof Error ? e.message : 'Could not get location. Try entering it manually.';
+        Alert.alert('Error', message);
         setStatus('idle');
         setShowManual(true);
       }
@@ -113,9 +114,10 @@ export default function OperatorTab() {
       if (!feature) throw new Error('Address not found. Try being more specific.');
       const [lng, lat] = feature.center;
       await broadcastLocation(lat, lng, feature.place_name);
-    } catch (e: any) {
+    } catch (e) {
       if (mountedRef.current) {
-        Alert.alert('Error', e?.message ?? 'Could not find address.');
+        const message = e instanceof Error ? e.message : 'Could not find address.';
+        Alert.alert('Error', message);
         setStatus('idle');
       }
     }
@@ -135,9 +137,10 @@ export default function OperatorTab() {
       setAddress(null);
       setManualAddress('');
       setShowManual(false);
-    } catch (e: any) {
+    } catch (e) {
       if (mountedRef.current) {
-        Alert.alert('Error', e?.message ?? 'Could not go offline. You may still be live — try again.');
+        const message = e instanceof Error ? e.message : 'Could not go offline. You may still be live — try again.';
+        Alert.alert('Error', message);
         setStatus('live');
       }
     }
@@ -150,7 +153,7 @@ export default function OperatorTab() {
         <Text style={styles.emoji}>🚚</Text>
         <Text style={styles.title}>Operator Mode</Text>
         <Text style={styles.subtitle}>Sign in to manage your truck and go live on the map.</Text>
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => router.push('/(auth)/login' as any)}>
+        <TouchableOpacity style={styles.primaryBtn} onPress={() => router.push('/(auth)/login')}>
           <Text style={styles.primaryBtnText}>Sign In</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -190,7 +193,7 @@ export default function OperatorTab() {
           <View style={styles.liveSection}>
             <View style={styles.liveBadge}>
               <View style={styles.liveDot} />
-              <Text style={styles.liveText}>YOU'RE LIVE</Text>
+              <Text style={styles.liveText}>YOU&apos;RE LIVE</Text>
             </View>
             {address ? <Text style={styles.addressText}>{address}</Text> : null}
             <TouchableOpacity

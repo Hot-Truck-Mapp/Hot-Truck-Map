@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import {
-  StyleSheet, View, Text, TextInput, TouchableOpacity,
+  StyleSheet, Text, TextInput, TouchableOpacity,
   ActivityIndicator, Alert, ScrollView, KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -36,6 +36,7 @@ export default function CateringRequestScreen() {
   const [notes, setNotes] = useState('');
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
 
@@ -130,11 +131,12 @@ export default function CateringRequestScreen() {
       }
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
-        throw new Error((json as any)?.error ?? 'Could not submit request. Please try again.');
+        throw new Error((json as { error?: string })?.error ?? 'Could not submit request. Please try again.');
       }
       if (mountedRef.current) setSubmitted(true);
-    } catch (err: any) {
-      if (mountedRef.current) Alert.alert('Error', err?.message ?? 'Could not submit request. Please try again.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not submit request. Please try again.';
+      if (mountedRef.current) Alert.alert('Error', message);
     } finally {
       inFlightRef.current = false;
       if (mountedRef.current) setSubmitting(false);
@@ -165,7 +167,7 @@ export default function CateringRequestScreen() {
         ) : (
           <Text style={styles.heading}>Catering Request</Text>
         )}
-        <Text style={styles.subheading}>Fill out the form below and we'll get back to you within 24 hours.</Text>
+        <Text style={styles.subheading}>Fill out the form below and we&apos;ll get back to you within 24 hours.</Text>
 
         <Text style={styles.label}>Your Name *</Text>
         <TextInput

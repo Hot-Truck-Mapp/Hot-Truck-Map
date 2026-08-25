@@ -88,7 +88,7 @@ export default function LoginScreen() {
         />
 
         <TouchableOpacity
-          onPress={() => router.push('/(auth)/forgot-password' as any)}
+          onPress={() => router.push('/(auth)/forgot-password')}
           style={styles.forgotPassword}
           accessibilityLabel="Forgot password"
           accessibilityRole="button"
@@ -111,7 +111,7 @@ export default function LoginScreen() {
           accessibilityLabel="Don't have an account? Sign up"
           accessibilityRole="button"
         >
-          <Text style={styles.link}>Don't have an account? Sign up</Text>
+          <Text style={styles.link}>Don&apos;t have an account? Sign up</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>

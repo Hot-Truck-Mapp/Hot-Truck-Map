@@ -40,7 +40,7 @@ export function TruckMap({ trucks, initialRegion, mapRef, showsUserLocation = fa
             }}
             title={truck.name ?? undefined}
             description={truck.cuisine ?? undefined}
-            onCalloutPress={() => { if (truck.id) router.push(`/truck/${truck.id}` as any); }}
+            onCalloutPress={() => { if (truck.id) router.push(`/truck/${truck.id}`); }}
           >
             <View style={styles.marker}>
               <Text style={styles.markerEmoji}>🚚</Text>

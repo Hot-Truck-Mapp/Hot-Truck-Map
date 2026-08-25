@@ -222,7 +222,7 @@ export default function Dashboard() {
           supabase.from("menu_items").select("id, truck_id, name, description, price, category, allergens, is_popular, is_sold_out, photo, sort_order, created_at").eq("truck_id", truck.id).order("created_at").limit(200),
           supabase.from("schedules").select("id, truck_id, day_of_week, open_time, close_time, location, notes").eq("truck_id", truck.id).order("day_of_week").limit(7),
           supabase.from("orders").select("id, truck_id, pickup_name, notes, items, total, status, created_at, customer_id").eq("truck_id", truck.id).order("created_at", { ascending: false }).limit(100),
-          supabase.from("follows").select("id", { count: "exact", head: true }).eq("truck_id", truck.id),
+          supabase.from("follows").select("*", { count: "exact", head: true }).eq("truck_id", truck.id),
         ]);
         setMenuItems(menuRes.data ?? []);
         setSchedule(schedRes.data ?? []);
