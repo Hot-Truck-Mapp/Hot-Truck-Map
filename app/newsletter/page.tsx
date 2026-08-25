@@ -1,5 +1,6 @@
 import Link from "next/link";
 import NewsletterNav from "@/components/newsletter/NewsletterNav";
+import SubscribeForm from "@/components/newsletter/SubscribeForm";
 import { ISSUES, NEWSLETTER_NAME, NEWSLETTER_TAGLINE, nextIssueLabel, readMinutes } from "@/lib/newsletter";
 
 export default function NewsletterIndexPage() {
@@ -94,13 +95,12 @@ export default function NewsletterIndexPage() {
           </div>
         )}
 
-        {/* Next issue teaser */}
-        <div className="bg-white rounded-2xl border border-dashed border-neutral-300 px-6 py-8 text-center">
-          <p className="text-2xl mb-2">📬</p>
-          <p className="font-black text-neutral-900 text-sm mb-1">Next issue lands {nextIssueLabel()}</p>
-          <p className="text-xs text-neutral-500 max-w-xs mx-auto">
-            No inbox to manage yet — just bookmark this page and check back every two weeks.
+        {/* Next issue + email signup */}
+        <div>
+          <p className="text-center text-xs font-semibold text-neutral-400 mb-3">
+            Next issue lands {nextIssueLabel()}
           </p>
+          <SubscribeForm />
         </div>
       </div>
     </div>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import NewsletterNav from "@/components/newsletter/NewsletterNav";
+import SubscribeForm from "@/components/newsletter/SubscribeForm";
 import {
   ISSUES,
   getIssueBySlug,
@@ -53,7 +54,6 @@ export default async function NewsletterIssuePage({ params }: Props) {
   if (!issue) notFound();
 
   const { older, newer } = getAdjacentIssues(slug);
-  const isLatest = !newer;
 
   return (
     <div className="min-h-screen bg-neutral-100">
@@ -165,13 +165,13 @@ export default async function NewsletterIssuePage({ params }: Props) {
           </div>
         )}
 
-        {/* Next issue teaser — only on the latest issue */}
-        {isLatest && (
-          <div className="bg-white rounded-2xl border border-dashed border-neutral-300 px-6 py-7 text-center">
-            <p className="text-xl mb-1">📬</p>
-            <p className="font-black text-neutral-900 text-sm">Next issue lands {nextIssueLabel()}</p>
-          </div>
-        )}
+        {/* Next issue + email signup */}
+        <div>
+          <p className="text-center text-xs font-semibold text-neutral-400 mb-3">
+            Next issue lands {nextIssueLabel()}
+          </p>
+          <SubscribeForm />
+        </div>
       </div>
 
       <div className="px-4 py-8 text-center">

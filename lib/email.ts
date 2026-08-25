@@ -102,3 +102,45 @@ export function operatorSignupEmail(opts: {
 
   return { subject, html, text };
 }
+
+export function newsletterWelcomeEmail(opts: {
+  email: string;
+  unsubscribeUrl: string;
+}): { subject: string; html: string; text: string } {
+  const { email, unsubscribeUrl } = opts;
+  const subject = "You're subscribed — The Hot Truck Map Dispatch";
+
+  const text =
+    `You're in!\n\n` +
+    `Thanks for subscribing to The Hot Truck Map Dispatch, our biweekly roundup of new trucks, features, and food truck news.\n\n` +
+    `Read the latest issue any time: https://hottruckmap.com/newsletter\n\n` +
+    `Didn't sign up? Unsubscribe here: ${unsubscribeUrl}`;
+
+  const html = `<!doctype html>
+<html><body style="margin:0;padding:24px;background:#f5f5f5;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#171717;">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;">
+    <tr><td style="padding:24px 28px;background:#171717;color:#ffffff;">
+      <div style="font-weight:900;font-size:18px;letter-spacing:-0.02em;">
+        <span style="color:#E8481C;">HOT</span><span>TRUCK</span><span style="color:#F59E0B;">MAP</span>
+      </div>
+      <div style="margin-top:6px;font-size:12px;color:#a3a3a3;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;">The Hot Truck Map Dispatch</div>
+    </td></tr>
+    <tr><td style="padding:28px;">
+      <h1 style="margin:0 0 8px;font-size:22px;font-weight:800;">You're in! 📬</h1>
+      <p style="margin:0 0 20px;color:#525252;font-size:14px;line-height:1.6;">
+        Thanks for subscribing to <strong>The Hot Truck Map Dispatch</strong> — our biweekly roundup
+        of new trucks, features, and food truck news. We'll land in your inbox about every two weeks.
+      </p>
+      <a href="https://hottruckmap.com/newsletter" style="display:inline-block;background:#E8481C;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 24px;border-radius:12px;">
+        Read the latest issue
+      </a>
+      <p style="margin:28px 0 0;font-size:12px;color:#a3a3a3;">
+        Sent to ${esc(email)} because you subscribed at hottruckmap.com/newsletter.
+        <a href="${esc(unsubscribeUrl)}" style="color:#a3a3a3;">Unsubscribe</a>
+      </p>
+    </td></tr>
+  </table>
+</body></html>`;
+
+  return { subject, html, text };
+}
