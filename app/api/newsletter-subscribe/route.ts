@@ -10,6 +10,19 @@ function getAdminClient() {
   );
 }
 
+// `email` is already lowercased by the caller, and case-insensitive
+// uniqueness is enforced at the DB level via a unique index on
+// lower(email) — so this is a literal exact match, not a pattern lookup.
+// (Using .ilike() here previously let '%'/'_' in the (validly-formatted)
+// address act as SQL LIKE wildcards and match a different subscriber.)
+function findSubscriber(supabase: ReturnType<typeof getAdminClient>, email: string) {
+  return supabase
+    .from("newsletter_subscribers")
+    .select("id, unsubscribed_at, unsubscribe_token")
+    .eq("email", email)
+    .maybeSingle();
+}
+
 export async function POST(req: NextRequest) {
   try {
     const ip =
@@ -51,11 +64,7 @@ export async function POST(req: NextRequest) {
 
     const supabase = getAdminClient();
 
-    const { data: existing, error: lookupError } = await supabase
-      .from("newsletter_subscribers")
-      .select("id, unsubscribed_at, unsubscribe_token")
-      .ilike("email", email)
-      .maybeSingle();
+    const { data: existing, error: lookupError } = await findSubscriber(supabase, email);
 
     if (lookupError) {
       console.error("newsletter_subscribers lookup error:", lookupError);
@@ -91,14 +100,44 @@ export async function POST(req: NextRequest) {
         .insert({ email })
         .select("unsubscribe_token")
         .single();
-      if (insertError || !inserted) {
+
+      if (insertError?.code === "23505") {
+        // Lost a race with a concurrent signup for the same email (e.g. a
+        // double-click or two tabs) — the other request's insert already
+        // won. Look the row up and continue exactly as if we'd found it on
+        // the first lookup above, instead of surfacing a raw 500.
+        const { data: raced, error: racedError } = await findSubscriber(supabase, email);
+        if (racedError || !raced) {
+          console.error("newsletter_subscribers post-race lookup error:", racedError);
+          return NextResponse.json(
+            { error: "Something went wrong. Please try again." },
+            { status: 500 }
+          );
+        }
+        if (!raced.unsubscribed_at) {
+          return NextResponse.json({ success: true, alreadySubscribed: true });
+        }
+        const { error: updateError } = await supabase
+          .from("newsletter_subscribers")
+          .update({ unsubscribed_at: null, subscribed_at: new Date().toISOString() })
+          .eq("id", raced.id);
+        if (updateError) {
+          console.error("newsletter_subscribers post-race resubscribe error:", updateError);
+          return NextResponse.json(
+            { error: "Something went wrong. Please try again." },
+            { status: 500 }
+          );
+        }
+        unsubscribeToken = raced.unsubscribe_token as string;
+      } else if (insertError || !inserted) {
         console.error("newsletter_subscribers insert error:", insertError);
         return NextResponse.json(
           { error: "Something went wrong. Please try again." },
           { status: 500 }
         );
+      } else {
+        unsubscribeToken = inserted.unsubscribe_token as string;
       }
-      unsubscribeToken = inserted.unsubscribe_token as string;
     }
 
     // Best-effort welcome email — a delivery failure shouldn't fail the
