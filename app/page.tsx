@@ -257,6 +257,12 @@ export default function HomePage() {
               About
             </Link>
             <Link
+              href="/events"
+              className="px-2 sm:px-3 py-1.5 rounded-lg text-neutral-300 font-bold text-xs hover:text-white transition-colors"
+            >
+              Events
+            </Link>
+            <Link
               href="/catering"
               className="hidden sm:block px-3 py-1.5 rounded-lg border border-neutral-600 text-neutral-300 font-bold text-xs hover:border-neutral-400 hover:text-white transition-colors"
             >

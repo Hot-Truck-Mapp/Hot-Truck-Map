@@ -76,3 +76,19 @@ export type Review = {
   comment: string | null;
   created_at: string;
 };
+
+export type Festival = {
+  id: string;
+  name: string;
+  state_code: string;
+  state_name: string;
+  city: string;
+  venue: string | null;
+  description: string | null;
+  start_date: string;
+  end_date: string;
+  website_url: string | null;
+  image_url: string | null;
+  created_at?: string;
+  updated_at?: string;
+};

@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
+import { isValidStateCode, stateNameForCode } from "@/lib/us-states";
 
 /** Escape a value for safe insertion into an HTML string. */
 function esc(v: unknown): string {
@@ -28,6 +30,31 @@ const USER_ZOOM = 13;
 
 type GeoState = "locating" | "granted" | "denied";
 
+/** Reverse-geocodes coordinates to a US state via the Mapbox Geocoding API
+ * (same endpoint already used in app/dashboard/page.tsx's reverseGeocode).
+ * Fails silently on any error — this only powers a nice-to-have banner. */
+async function reverseGeocodeToState(
+  lat: number,
+  lng: number
+): Promise<{ code: string; name: string } | null> {
+  const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+  if (!token) return null;
+  try {
+    const res = await fetch(
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?types=region&access_token=${token}`
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const shortCode: string | undefined = data.features?.[0]?.properties?.short_code ?? data.features?.[0]?.short_code;
+    if (!shortCode || !shortCode.toUpperCase().startsWith("US-")) return null;
+    const code = shortCode.slice(3).toUpperCase();
+    if (!isValidStateCode(code)) return null;
+    return { code, name: stateNameForCode(code)! };
+  } catch {
+    return null;
+  }
+}
+
 export default function MapboxMap({ trucks }: Props) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -35,6 +62,8 @@ export default function MapboxMap({ trucks }: Props) {
   const geolocateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [geoState, setGeoState] = useState<GeoState>("locating");
+  const [nearbyState, setNearbyState] = useState<{ code: string; name: string } | null>(null);
+  const [nearbyBannerDismissed, setNearbyBannerDismissed] = useState(false);
 
   useEffect(() => {
     if (map.current || !mapboxgl.accessToken || !mapContainer.current) return;
@@ -81,6 +110,10 @@ export default function MapboxMap({ trucks }: Props) {
           if (!mounted) return; // component unmounted before geolocation resolved
           setGeoState("granted");
           buildMap([pos.coords.longitude, pos.coords.latitude], USER_ZOOM);
+          // Fire-and-forget — powers the "Events near you" banner, never blocks the map
+          reverseGeocodeToState(pos.coords.latitude, pos.coords.longitude).then((s) => {
+            if (mounted && s) setNearbyState(s);
+          });
         },
         () => {
           if (!mounted) return;
@@ -237,6 +270,32 @@ export default function MapboxMap({ trucks }: Props) {
               Click the lock icon in your browser&apos;s address bar to enable, then refresh.
             </p>
           </div>
+        </div>
+      )}
+
+      {/* ── "Events near you" banner — shown once we've resolved the user's state ── */}
+      {geoState === "granted" && nearbyState && !nearbyBannerDismissed && (
+        <div
+          style={{ position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 10 }}
+          className="flex items-center gap-3 bg-neutral-900/90 backdrop-blur-sm text-white px-4 py-3 rounded-2xl shadow-xl max-w-xs w-[calc(100%-32px)]"
+        >
+          <span className="text-lg flex-shrink-0">🎪</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold text-white">Events near you in {nearbyState.name}</p>
+            <Link
+              href={`/events/${nearbyState.code.toLowerCase()}`}
+              className="text-[11px] text-brand-orange font-semibold hover:underline"
+            >
+              View festivals →
+            </Link>
+          </div>
+          <button
+            onClick={() => setNearbyBannerDismissed(true)}
+            aria-label="Dismiss"
+            className="text-neutral-400 hover:text-white flex-shrink-0 text-sm leading-none px-1"
+          >
+            ×
+          </button>
         </div>
       )}
 

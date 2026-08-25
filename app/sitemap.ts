@@ -1,5 +1,7 @@
 import type { MetadataRoute } from "next";
 import { createClient } from "@supabase/supabase-js";
+import { US_STATES } from "@/lib/us-states";
+import { UPDATES } from "@/lib/updates";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = process.env.NEXT_PUBLIC_SITE_URL ?? "https://hottruckmap.com";
@@ -14,12 +16,28 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${base}/contact`,             lastModified: new Date(), changeFrequency: "monthly", priority: 0.4 },
     { url: `${base}/privacy`,             lastModified: new Date(), changeFrequency: "yearly",  priority: 0.3 },
     { url: `${base}/terms`,               lastModified: new Date(), changeFrequency: "yearly",  priority: 0.3 },
+    { url: `${base}/events`,              lastModified: new Date(), changeFrequency: "daily",   priority: 0.7 },
+    { url: `${base}/updates`,             lastModified: new Date(), changeFrequency: "weekly",  priority: 0.5 },
+    // Newsletter issues — biweekly, so lastModified tracks each issue's own date
+    ...UPDATES.map((u) => ({
+      url: `${base}/updates/${u.slug}`,
+      lastModified: new Date(u.dateISO),
+      changeFrequency: "monthly" as const,
+      priority: 0.4,
+    })),
     // City landing pages
     ...["newark", "new-york", "jersey-city", "hoboken", "trenton"].map((c) => ({
       url: `${base}/trucks/${c}`,
       lastModified: new Date(),
       changeFrequency: "daily" as const,
       priority: 0.7,
+    })),
+    // Per-state events pages — fully static, no DB fetch needed
+    ...US_STATES.map((s) => ({
+      url: `${base}/events/${s.code.toLowerCase()}`,
+      lastModified: new Date(),
+      changeFrequency: "weekly" as const,
+      priority: 0.6,
     })),
   ];
 

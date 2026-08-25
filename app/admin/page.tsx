@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import { US_STATES } from "@/lib/us-states";
+import type { Festival } from "@/lib/types";
 
 // ── Owner emails — stored lower-cased for case-insensitive comparison ────────
 const OWNER_EMAILS = ["hottruckmap@gmail.com"];
@@ -33,7 +35,7 @@ export default function AdminPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [trucks, setTrucks] = useState<Truck[]>([]);
   const [liveTrucks, setLiveTrucks] = useState<Truck[]>([]);
-  const [activeTab, setActiveTab] = useState<"overview" | "trucks" | "users" | "live" | "totw">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "trucks" | "users" | "live" | "totw" | "festivals">("overview");
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
@@ -45,10 +47,30 @@ export default function AdminPage() {
   const [totwError, setTotwError] = useState<string | null>(null);
   const totwSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Festivals (events) state
+  const [festivals, setFestivals] = useState<Festival[]>([]);
+  const [festivalsLoading, setFestivalsLoading] = useState(false);
+  const [showAllFestivals, setShowAllFestivals] = useState(false);
+  const [editingFestivalId, setEditingFestivalId] = useState<string | null>(null);
+  const [festName, setFestName] = useState("");
+  const [festStateCode, setFestStateCode] = useState("");
+  const [festCity, setFestCity] = useState("");
+  const [festVenue, setFestVenue] = useState("");
+  const [festDescription, setFestDescription] = useState("");
+  const [festStartDate, setFestStartDate] = useState("");
+  const [festEndDate, setFestEndDate] = useState("");
+  const [festWebsiteUrl, setFestWebsiteUrl] = useState("");
+  const [festImageUrl, setFestImageUrl] = useState("");
+  const [festSaving, setFestSaving] = useState(false);
+  const [festSaved, setFestSaved] = useState(false);
+  const [festError, setFestError] = useState<string | null>(null);
+  const festSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     return () => {
       mountedRef.current = false;
       if (totwSavedTimerRef.current) clearTimeout(totwSavedTimerRef.current);
+      if (festSavedTimerRef.current) clearTimeout(festSavedTimerRef.current);
     };
   }, []);
 
@@ -94,7 +116,7 @@ export default function AdminPage() {
       ] = await Promise.all([
         supabase.from("trucks").select("id", { count: "exact", head: true }),
         supabase.from("trucks").select("id", { count: "exact", head: true }).eq("is_live", true),
-        supabase.from("follows").select("id", { count: "exact", head: true }),
+        supabase.from("follows").select("*", { count: "exact", head: true }),
         supabase.from("truck_views").select("id", { count: "exact", head: true }),
         supabase.from("trucks").select("id", { count: "exact", head: true }).gte("created_at", weekAgoISO),
         supabase
@@ -140,6 +162,8 @@ export default function AdminPage() {
         setTotwTruckId(sm["featured_truck_id"] ?? "");
         setTotwMessage(sm["featured_message"] ?? "");
       }
+
+      await loadFestivals();
     } catch {
       // Network error — keep showing last loaded data (or empty state on first load)
     } finally {
@@ -150,6 +174,22 @@ export default function AdminPage() {
   async function refresh() {
     setLoading(true);
     await loadData();
+  }
+
+  async function loadFestivals() {
+    setFestivalsLoading(true);
+    try {
+      const res = await fetch("/api/admin/festivals");
+      if (!mountedRef.current) return;
+      if (res.ok) {
+        const json = await res.json();
+        setFestivals(json.festivals ?? []);
+      }
+    } catch {
+      // Network error — keep showing last loaded list
+    } finally {
+      if (mountedRef.current) setFestivalsLoading(false);
+    }
   }
 
   async function saveTotw() {
@@ -181,6 +221,101 @@ export default function AdminPage() {
       if (mountedRef.current) setTotwError(err?.message ?? "Failed to save. Please try again.");
     } finally {
       if (mountedRef.current) setTotwSaving(false);
+    }
+  }
+
+  function resetFestivalForm() {
+    setEditingFestivalId(null);
+    setFestName("");
+    setFestStateCode("");
+    setFestCity("");
+    setFestVenue("");
+    setFestDescription("");
+    setFestStartDate("");
+    setFestEndDate("");
+    setFestWebsiteUrl("");
+    setFestImageUrl("");
+    setFestError(null);
+  }
+
+  function startEditFestival(f: Festival) {
+    setEditingFestivalId(f.id);
+    setFestName(f.name);
+    setFestStateCode(f.state_code);
+    setFestCity(f.city);
+    setFestVenue(f.venue ?? "");
+    setFestDescription(f.description ?? "");
+    setFestStartDate(f.start_date);
+    setFestEndDate(f.end_date);
+    setFestWebsiteUrl(f.website_url ?? "");
+    setFestImageUrl(f.image_url ?? "");
+    setFestError(null);
+  }
+
+  async function saveFestival() {
+    if (festSaving) return; // in-flight guard
+
+    const name = festName.trim();
+    const city = festCity.trim();
+    if (!name) return setFestError("Festival name is required.");
+    if (!festStateCode) return setFestError("Select a state.");
+    if (!city) return setFestError("City is required.");
+    if (!festStartDate || !festEndDate) return setFestError("Start and end dates are required.");
+    if (festEndDate < festStartDate) return setFestError("End date must be on or after the start date.");
+
+    setFestSaving(true);
+    setFestError(null);
+    try {
+      const body = {
+        ...(editingFestivalId ? { id: editingFestivalId } : {}),
+        name,
+        state_code: festStateCode,
+        city,
+        venue: festVenue.trim() || null,
+        description: festDescription.trim() || null,
+        start_date: festStartDate,
+        end_date: festEndDate,
+        website_url: festWebsiteUrl.trim() || null,
+        image_url: festImageUrl.trim() || null,
+      };
+      const res = await fetch("/api/admin/festivals", {
+        method: editingFestivalId ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!mountedRef.current) return;
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json?.error ?? "Failed to save festival");
+      }
+      await loadFestivals();
+      if (!mountedRef.current) return;
+      resetFestivalForm();
+      setFestSaved(true);
+      festSavedTimerRef.current = setTimeout(() => {
+        if (mountedRef.current) setFestSaved(false);
+      }, 3000);
+    } catch (err: any) {
+      if (mountedRef.current) setFestError(err?.message ?? "Failed to save. Please try again.");
+    } finally {
+      if (mountedRef.current) setFestSaving(false);
+    }
+  }
+
+  async function deleteFestival(id: string) {
+    if (!window.confirm("Delete this festival? This can't be undone.")) return;
+    try {
+      const res = await fetch(`/api/admin/festivals?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json?.error ?? "Failed to delete festival");
+      }
+      if (mountedRef.current) {
+        setFestivals((prev) => prev.filter((f) => f.id !== id));
+        if (editingFestivalId === id) resetFestivalForm();
+      }
+    } catch (err: any) {
+      if (mountedRef.current) setFestError(err?.message ?? "Failed to delete. Please try again.");
     }
   }
 
@@ -337,6 +472,7 @@ export default function AdminPage() {
               { id: "trucks", label: "All Trucks", badge: stats?.totalTrucks },
               { id: "users", label: "Recent Signups" },
               { id: "totw", label: "🏆 Truck of the Week" },
+              { id: "festivals", label: "🎪 Festivals" },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -634,6 +770,232 @@ export default function AdminPage() {
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Festivals (Events) Tab */}
+          {activeTab === "festivals" && (
+            <div className="p-6">
+              <p className="text-sm font-black text-neutral-500 uppercase tracking-widest mb-5">
+                {editingFestivalId ? "Edit Festival" : "Add Festival"}
+              </p>
+
+              <div className="flex flex-col gap-4 max-w-lg mb-8">
+                <div>
+                  <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-1.5">
+                    Name
+                  </label>
+                  <input
+                    type="text"
+                    value={festName}
+                    onChange={(e) => setFestName(e.target.value)}
+                    maxLength={200}
+                    placeholder="e.g. Newark Food Truck Fest"
+                    className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-300 focus:outline-none focus:border-brand-red"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-1.5">
+                      State
+                    </label>
+                    <select
+                      value={festStateCode}
+                      onChange={(e) => setFestStateCode(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 focus:outline-none focus:border-brand-red bg-white"
+                    >
+                      <option value="">Select state…</option>
+                      {US_STATES.map((s) => (
+                        <option key={s.code} value={s.code}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-1.5">
+                      City
+                    </label>
+                    <input
+                      type="text"
+                      value={festCity}
+                      onChange={(e) => setFestCity(e.target.value)}
+                      maxLength={100}
+                      placeholder="e.g. Newark"
+                      className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-300 focus:outline-none focus:border-brand-red"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-1.5">
+                    Venue / Address <span className="normal-case text-neutral-300">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={festVenue}
+                    onChange={(e) => setFestVenue(e.target.value)}
+                    maxLength={200}
+                    placeholder="e.g. Military Park"
+                    className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-300 focus:outline-none focus:border-brand-red"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-1.5">
+                      Start Date
+                    </label>
+                    <input
+                      type="date"
+                      value={festStartDate}
+                      onChange={(e) => setFestStartDate(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 focus:outline-none focus:border-brand-red"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-1.5">
+                      End Date
+                    </label>
+                    <input
+                      type="date"
+                      value={festEndDate}
+                      onChange={(e) => setFestEndDate(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 focus:outline-none focus:border-brand-red"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-1.5">
+                    Description <span className="normal-case text-neutral-300">(optional)</span>
+                  </label>
+                  <textarea
+                    value={festDescription}
+                    onChange={(e) => setFestDescription(e.target.value)}
+                    rows={3}
+                    maxLength={2000}
+                    placeholder="A short description shown on the event listing"
+                    className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-300 focus:outline-none focus:border-brand-red resize-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-1.5">
+                      Website <span className="normal-case text-neutral-300">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={festWebsiteUrl}
+                      onChange={(e) => setFestWebsiteUrl(e.target.value)}
+                      placeholder="https://…"
+                      className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-300 focus:outline-none focus:border-brand-red"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-1.5">
+                      Image URL <span className="normal-case text-neutral-300">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={festImageUrl}
+                      onChange={(e) => setFestImageUrl(e.target.value)}
+                      placeholder="https://…"
+                      className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-300 focus:outline-none focus:border-brand-red"
+                    />
+                  </div>
+                </div>
+
+                {festError && (
+                  <p className="text-xs text-red-500 font-semibold">{festError}</p>
+                )}
+
+                {festSaved ? (
+                  <div className="flex items-center gap-2 py-3 px-4 bg-green-50 rounded-xl">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                    <p className="text-sm font-semibold text-green-700">Saved!</p>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={saveFestival}
+                      disabled={festSaving}
+                      className="py-2.5 px-5 bg-brand-red text-white rounded-xl font-black text-sm uppercase tracking-wide disabled:opacity-40 hover:bg-red-600 transition-colors active:scale-95"
+                    >
+                      {festSaving ? "Saving..." : editingFestivalId ? "Save Changes" : "Add Festival"}
+                    </button>
+                    {editingFestivalId && (
+                      <button
+                        onClick={resetFestivalForm}
+                        className="py-2.5 px-4 text-neutral-500 rounded-xl font-bold text-sm hover:text-neutral-700 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Festival list */}
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-black text-neutral-500 uppercase tracking-widest">
+                  All Festivals
+                </p>
+                <label className="flex items-center gap-2 text-xs font-semibold text-neutral-500">
+                  <input
+                    type="checkbox"
+                    checked={showAllFestivals}
+                    onChange={(e) => setShowAllFestivals(e.target.checked)}
+                  />
+                  Show past events
+                </label>
+              </div>
+
+              <div className="divide-y divide-neutral-50 border border-neutral-100 rounded-xl overflow-hidden">
+                {festivalsLoading ? (
+                  <div className="py-10 text-center text-sm text-neutral-400">Loading…</div>
+                ) : (() => {
+                  const todayISO = new Date().toISOString().split("T")[0];
+                  const visible = showAllFestivals
+                    ? festivals
+                    : festivals.filter((f) => f.end_date >= todayISO);
+                  if (visible.length === 0) {
+                    return (
+                      <div className="py-10 text-center text-sm text-neutral-400">
+                        No {showAllFestivals ? "" : "upcoming "}festivals yet — add one above.
+                      </div>
+                    );
+                  }
+                  return visible.map((f) => (
+                    <div key={f.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-neutral-50 transition-colors">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-neutral-800 truncate">{f.name}</p>
+                        <p className="text-xs text-neutral-400">
+                          {f.city}, {f.state_code} ·{" "}
+                          {new Date(f.start_date + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric" })}
+                          {f.end_date !== f.start_date && (
+                            <> – {new Date(f.end_date + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric" })}</>
+                          )}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => startEditFestival(f)}
+                        className="text-xs text-brand-red font-bold hover:underline flex-shrink-0"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => deleteFestival(f.id)}
+                        className="text-xs text-neutral-400 font-bold hover:text-red-500 transition-colors flex-shrink-0"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ));
+                })()}
               </div>
             </div>
           )}
