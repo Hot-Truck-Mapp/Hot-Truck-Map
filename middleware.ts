@@ -45,9 +45,11 @@ export async function middleware(request: NextRequest) {
   if (!user && PROTECTED_PREFIXES.some((p) => pathname.startsWith(p))) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    // Only keep the redirect param for same-origin paths to prevent open redirect
+    // Only keep the redirect param for same-origin paths to prevent open redirect.
+    // Preserve the query string too (not just pathname) so a protected route
+    // that depends on query params isn't stripped on the login round-trip.
     if (pathname.startsWith("/") && !pathname.startsWith("//")) {
-      url.searchParams.set("redirect", pathname);
+      url.searchParams.set("redirect", pathname + request.nextUrl.search);
     }
     return NextResponse.redirect(url);
   }

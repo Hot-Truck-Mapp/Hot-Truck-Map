@@ -3,6 +3,7 @@
 import { Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { safeRedirect } from "@/lib/safeRedirect";
 
 // Spinner shown while the Suspense boundary is resolving (or during redirect)
 function Spinner() {
@@ -22,6 +23,7 @@ function AuthCallbackInner() {
 
   useEffect(() => {
     async function handleRedirect() {
+      const destination = safeRedirect(searchParams.get("redirect"), window.location.origin);
       try {
         const supabase = createClient();
 
@@ -49,7 +51,7 @@ function AuthCallbackInner() {
         // Hard navigation so auth cookies are committed by the browser before
         // the next request. Client-side router.replace can race the cookie
         // write on iOS Safari and cause middleware to see the user as logged out.
-        window.location.assign("/");
+        window.location.assign(destination);
       } catch {
         window.location.assign("/");
       }

@@ -15,6 +15,15 @@ const nextConfig: NextConfig = {
     ],
   },
 
+  // /updates was renamed to /newsletter — keep old links/bookmarks/search
+  // results working instead of 404ing.
+  async redirects() {
+    return [
+      { source: "/updates", destination: "/newsletter", permanent: true },
+      { source: "/updates/:slug", destination: "/newsletter/:slug", permanent: true },
+    ];
+  },
+
   async headers() {
     return [
       {

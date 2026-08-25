@@ -1,10 +1,21 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { safeRedirect } from "@/lib/safeRedirect";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -37,7 +48,7 @@ export default function LoginPage() {
       // cookies before the next request. On iOS Safari, client-side navigation
       // can race the document.cookie write, causing middleware to see the user
       // as signed out on the very next request.
-      window.location.assign("/");
+      window.location.assign(safeRedirect(searchParams.get("redirect"), window.location.origin));
       // Keep loading=true; page will navigate away — no need to reset spinner
     } catch {
       if (mountedRef.current) {
@@ -53,10 +64,15 @@ export default function LoginPage() {
     setError(null);
     try {
       const supabase = createClient();
-      // After Google OAuth, the auth callback checks role and routes accordingly
+      const redirect = safeRedirect(searchParams.get("redirect"), window.location.origin);
+      // After Google OAuth, the auth callback checks role and routes accordingly.
+      // Carry the intended destination through so /auth/callback can send the
+      // user back to where they started (e.g. checkout), not just the homepage.
+      const callbackUrl = new URL("/auth/callback", window.location.origin);
+      if (redirect !== "/") callbackUrl.searchParams.set("redirect", redirect);
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: window.location.origin + "/auth/callback" },
+        options: { redirectTo: callbackUrl.toString() },
       });
       if (oauthError) { setError(oauthError.message); setLoading(false); }
       // On success the browser redirects — no need to reset loading

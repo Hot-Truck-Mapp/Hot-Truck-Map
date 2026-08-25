@@ -22,7 +22,6 @@
         "NSLocationWhenInUseUsageDescription": "Hot Truck Map uses your location to show nearby food trucks on the map.",
         "NSPhotoLibraryUsageDescription": "Hot Truck Map uses your photo library so you can upload photos of food trucks.",
         "NSPhotoLibraryAddUsageDescription": "Hot Truck Map saves truck photos to your photo library.",
-        "NSCameraUsageDescription": "Hot Truck Map uses your camera to take photos of food trucks.",
         "UIRequiresFullScreen": true,
         "UISupportedInterfaceOrientations~ipad": [
           "UIInterfaceOrientationPortrait",
@@ -71,12 +70,7 @@
       ],
       "expo-router",
       "expo-font",
-      [
-        "expo-location",
-        {
-          "locationAlwaysAndWhenInUsePermission": "Allow Hot Truck Map to use your location to show nearby food trucks."
-        }
-      ],
+      "expo-location",
       [
         "expo-notifications",
         {

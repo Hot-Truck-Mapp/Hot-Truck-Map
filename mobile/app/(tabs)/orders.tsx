@@ -3,6 +3,7 @@ import { StyleSheet, View, FlatList, Text, ActivityIndicator, RefreshControl, To
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/useAuth';
 import { Colors } from '@/constants/colors';
 import type { Order, OrderStatus } from '@shared/types';
 
@@ -26,11 +27,16 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
 
 export default function OrdersTab() {
   const router = useRouter();
+  // Live session, not a one-time getUser() snapshot — Expo Router keeps this
+  // tab mounted across tab switches, so a snapshot taken once on mount would
+  // keep showing the previous user's orders after a sign-out/sign-in on the
+  // same device.
+  const { session, loading: authLoading } = useAuth();
+  const userId = session?.user?.id ?? null;
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const mountedRef = useRef(true);
 
@@ -39,13 +45,7 @@ export default function OrdersTab() {
     return () => { mountedRef.current = false; };
   }, []);
 
-  const loadOrders = useCallback(async (uid?: string, mounted = true) => {
-    const id = uid ?? userId;
-    if (!id) {
-      if (mounted) setLoading(false);
-      if (mountedRef.current) setRefreshing(false); // also clear pull-to-refresh spinner
-      return;
-    }
+  const loadOrders = useCallback(async (id: string) => {
     try {
       const { data, error } = await supabase
         .from('orders')
@@ -66,58 +66,63 @@ export default function OrdersTab() {
         setRefreshing(false);
       }
     }
-  }, [userId]);
+  }, []);
 
   useEffect(() => {
-    let mounted = true;
-    async function init() {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user || !mounted) { if (mounted) setLoading(false); return; }
-        if (mounted) setUserId(user.id);
-        await loadOrders(user.id, mounted);
-
-        // Realtime — update order card immediately when operator changes status
-        if (!mounted) return;
-        channelRef.current = supabase
-          .channel(`customer-orders-${user.id}`)
-          .on(
-            'postgres_changes',
-            {
-              event: 'UPDATE',
-              schema: 'public',
-              table: 'orders',
-              filter: `customer_id=eq.${user.id}`,
-            },
-            (payload) => {
-              if (!mountedRef.current) return;
-              const { id, status, updated_at } = payload.new as { id: string; status: string; updated_at?: string };
-              setOrders((prev) =>
-                prev.map((o) => o.id === id ? { ...o, status: status as import('@shared/types').OrderStatus, ...(updated_at ? { updated_at } : {}) } : o)
-              );
-            }
-          )
-          .subscribe();
-      } catch { if (mounted) setLoading(false); }
+    // Clear any previous user's orders immediately on every userId change
+    // (including sign-out) so they never leak into view for the next user.
+    setOrders([]);
+    setLoadError(false);
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
     }
-    init();
+
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    loadOrders(userId);
+
+    // Realtime — update order card immediately when operator changes status
+    channelRef.current = supabase
+      .channel(`customer-orders-${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'orders',
+          filter: `customer_id=eq.${userId}`,
+        },
+        (payload) => {
+          if (!mountedRef.current) return;
+          const { id, status, updated_at } = payload.new as { id: string; status: string; updated_at?: string };
+          setOrders((prev) =>
+            prev.map((o) => o.id === id ? { ...o, status: status as import('@shared/types').OrderStatus, ...(updated_at ? { updated_at } : {}) } : o)
+          );
+        }
+      )
+      .subscribe();
+
     return () => {
-      mounted = false;
-      mountedRef.current = false;
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
     };
-  }, []);
+  }, [userId, loadOrders]);
 
   const onRefresh = useCallback(() => {
+    if (!userId) return;
     setRefreshing(true);
     setLoadError(false);
-    loadOrders(userId ?? undefined, mountedRef.current);
+    loadOrders(userId);
   }, [loadOrders, userId]);
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator size="large" color={Colors.primary} />
@@ -147,7 +152,7 @@ export default function OrdersTab() {
         <Text style={[styles.emptyBody, { marginBottom: 24 }]}>Check your connection and try again</Text>
         <TouchableOpacity
           style={styles.signInButton}
-          onPress={() => { setLoadError(false); setLoading(true); loadOrders(userId ?? undefined); }}
+          onPress={() => { if (!userId) return; setLoadError(false); setLoading(true); loadOrders(userId); }}
         >
           <Text style={styles.signInButtonText}>Try Again</Text>
         </TouchableOpacity>

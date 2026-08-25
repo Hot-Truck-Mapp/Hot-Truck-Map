@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { CUISINE_TYPES } from "@/lib/cuisines";
 
 export type MapFilters = {
   openNow: boolean;
@@ -16,10 +17,10 @@ type FilterBarProps = {
   resultCount: number;
 };
 
-const CUISINES = [
-  "All", "Tacos", "BBQ", "Burgers", "Asian", "Desserts",
-  "Pizza", "Sandwiches", "Healthy", "Breakfast", "Caribbean", "African",
-];
+// "All" plus every cuisine a truck profile can actually be saved under —
+// kept in sync with the operator profile editor via the shared CUISINE_TYPES
+// list, so a filter pill always exists for every cuisine a truck can have.
+const CUISINES = ["All", ...CUISINE_TYPES];
 
 const DIETARY = ["Vegan", "Gluten-Free", "Halal", "Vegetarian"];
 

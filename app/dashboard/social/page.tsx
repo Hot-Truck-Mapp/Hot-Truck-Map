@@ -137,7 +137,7 @@ export default function SocialPage() {
       // Use getUser() (server round-trip) not getSession() (cached) so revoked
       // sessions are caught before the broadcast is sent.
       const { data: { user: broadcastUser } } = await supabase.auth.getUser();
-      if (!broadcastUser) { router.replace("/login"); return; }
+      if (!broadcastUser) { router.replace("/login?redirect=%2Fdashboard%2Fsocial"); return; }
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch("/api/notify-followers", {
         method: "POST",

@@ -6,17 +6,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import VerificationBanner from "@/components/auth/VerificationBanner";
+import { CUISINE_TYPES } from "@/lib/cuisines";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const CUISINE_TYPES = [
-  "Tacos","BBQ","Burgers","Asian Fusion","Desserts",
-  "Pizza","Sandwiches","Healthy","Breakfast","Seafood",
-  "Mediterranean","Caribbean","African","Vegan","Halal","Other",
-];
 const ALLERGENS = ["Gluten","Dairy","Nuts","Eggs","Soy","Shellfish","Fish"];
 const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const HOURS = [
@@ -146,7 +142,7 @@ export default function Dashboard() {
       const { data: { user }, error: authErr } = await supabase.auth.getUser();
 
       if (authErr || !user) {
-        router.replace("/login");
+        router.replace("/login?redirect=%2Fdashboard");
         return;
       }
       setUserId(user.id);
@@ -536,6 +532,10 @@ export default function Dashboard() {
   async function broadcastLocation(lat: number, lng: number, address: string) {
     const supabase = createClient();
     if (!truckId) return;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0) ||
+        lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      throw new Error("Couldn't get a valid GPS location — try again.");
+    }
     const { error: upsertErr } = await supabase.from("locations").upsert(
       { truck_id: truckId, lat, lng, address: address.slice(0, 300), broadcasted_at: new Date().toISOString() },
       { onConflict: "truck_id" }
@@ -1378,8 +1378,8 @@ export default function Dashboard() {
             </div>
 
             {/* Fields */}
-            <Field label="Truck Name *">
-              <input value={profile.name} onChange={e => setProfile(p => ({ ...p, name: e.target.value }))}
+            <Field label="Truck Name *" id="truck-name">
+              <input id="truck-name" value={profile.name} onChange={e => setProfile(p => ({ ...p, name: e.target.value }))}
                 placeholder="e.g. The Taco Truck"
                 className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red bg-white"/>
             </Field>
@@ -1424,8 +1424,8 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <Field label="Description">
-              <textarea value={profile.description}
+            <Field label="Description" id="truck-description">
+              <textarea id="truck-description" value={profile.description}
                 onChange={e => setProfile(p => ({ ...p, description: e.target.value.slice(0,200) }))}
                 placeholder="Tell customers what makes your truck special..."
                 rows={3} maxLength={200}
@@ -1451,7 +1451,7 @@ export default function Dashboard() {
               </p>
             </div>
 
-            <Field label="Instagram">
+            <Field label="Instagram" id="truck-instagram">
               <div className="flex rounded-xl border border-neutral-200 overflow-hidden focus-within:border-brand-red transition-colors bg-white">
                 {/* Instagram brand badge */}
                 <div className="flex items-center gap-1.5 px-3 bg-neutral-50 border-r border-neutral-200 flex-shrink-0">
@@ -1472,6 +1472,7 @@ export default function Dashboard() {
                   <span className="text-neutral-500 text-sm font-bold select-none">@</span>
                 </div>
                 <input
+                  id="truck-instagram"
                   value={profile.instagram}
                   onChange={e => setProfile(p => ({ ...p, instagram: e.target.value.replace("@","").slice(0, 30) }))}
                   placeholder="yourtruck"
@@ -2227,25 +2228,26 @@ export default function Dashboard() {
               <input ref={menuPhotoRef} type="file" accept="image/*" className="hidden"
                 onChange={e => { const f = e.target.files?.[0]; if (f) uploadMenuPhoto(f); }}/>
 
-              <Field label="Item Name *">
-                <input value={itemForm.name} onChange={e => setItemForm(f => ({ ...f, name: e.target.value }))}
+              <Field label="Item Name *" id="item-name">
+                <input id="item-name" value={itemForm.name} onChange={e => setItemForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="e.g. Al Pastor Taco" maxLength={100}
                   className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red"/>
               </Field>
 
-              <Field label="Description">
-                <textarea value={itemForm.description} onChange={e => setItemForm(f => ({ ...f, description: e.target.value }))}
+              <Field label="Description" id="item-description">
+                <textarea id="item-description" value={itemForm.description} onChange={e => setItemForm(f => ({ ...f, description: e.target.value }))}
                   placeholder="Marinated pork, pineapple, cilantro..." rows={2} maxLength={500}
                   className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red resize-none"/>
               </Field>
 
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Price *">
+                <Field label="Price *" id="item-price">
                   <div className="flex rounded-xl border border-neutral-200 overflow-hidden focus-within:border-brand-red transition-colors bg-white">
                     <div className="flex items-center px-3 bg-neutral-50 border-r border-neutral-200 flex-shrink-0">
                       <span className="text-neutral-600 font-black text-base select-none">$</span>
                     </div>
                     <input
+                      id="item-price"
                       type="number"
                       value={itemForm.price}
                       onChange={e => setItemForm(f => ({ ...f, price: e.target.value }))}
@@ -2257,8 +2259,8 @@ export default function Dashboard() {
                     />
                   </div>
                 </Field>
-                <Field label="Category">
-                  <input value={itemForm.category} onChange={e => setItemForm(f => ({ ...f, category: e.target.value }))}
+                <Field label="Category" id="item-category">
+                  <input id="item-category" value={itemForm.category} onChange={e => setItemForm(f => ({ ...f, category: e.target.value }))}
                     placeholder="e.g. Tacos, Sides"
                     className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-base focus:outline-none focus:border-brand-red"/>
                 </Field>
@@ -2400,10 +2402,10 @@ export default function Dashboard() {
 }
 
 // ─── Small helper component ───────────────────────────────────────────────────
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, id, children }: { label: string; id?: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="text-sm font-semibold text-neutral-700 mb-1.5">{label}</p>
+      <label htmlFor={id} className="text-sm font-semibold text-neutral-700 mb-1.5 block">{label}</label>
       {children}
     </div>
   );

@@ -6,11 +6,12 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { TruckCardSkeleton } from "@/components/ui/Skeleton";
+import { CUISINE_TYPES } from "@/lib/cuisines";
 
-const CUISINES = [
-  "All", "Tacos", "BBQ", "Burgers", "Asian Fusion",
-  "Desserts", "Pizza", "Sandwiches", "Healthy", "Breakfast", "Seafood", "Caribbean", "African",
-];
+// "All" plus every cuisine a truck profile can actually be saved under —
+// kept in sync with the operator profile editor via the shared CUISINE_TYPES
+// list so a filter pill always exists for every cuisine a truck can have.
+const CUISINES = ["All", ...CUISINE_TYPES];
 
 const DIETARY = ["Vegan", "Gluten-Free", "Halal", "Vegetarian"];
 
@@ -55,7 +56,7 @@ export default function TrucksListPage() {
   async function toggleFavorite(e: React.MouseEvent, truckId: string) {
     e.preventDefault();
     e.stopPropagation();
-    if (!userId) { router.push("/login"); return; }
+    if (!userId) { router.push("/login?redirect=%2Ftrucks"); return; }
     if (inFlightFavRef.current.has(truckId)) return; // prevent double-tap race
     inFlightFavRef.current.add(truckId);
     const isFaved = favorites.has(truckId);
