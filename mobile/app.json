@@ -35,7 +35,7 @@
         "backgroundColor": "#FF6B35"
       },
       "package": "hottruckmap.com",
-      "versionCode": 24,
+      "versionCode": 25,
       "jsEngine": "hermes",
       "config": {
         "googleMaps": {
