@@ -67,11 +67,16 @@ CREATE POLICY "trucks_public_read" ON trucks FOR SELECT USING (
 -- the leaderboard, so a self-review is direct rating manipulation. The
 -- unique constraint from schema_fixes.sql caps it at one per truck,
 -- which limits the damage but doesn't make it legitimate.
+-- IS DISTINCT FROM, not <>. If the subselect returns NULL — a truck with no
+-- owner_id, or a truck_id that matches nothing — then `auth.uid() <> NULL` is
+-- NULL, the whole WITH CHECK evaluates to NULL, and the insert is rejected.
+-- That would make an ownerless truck silently un-reviewable by everyone.
+-- Every truck has an owner today, so this is about not leaving a trap.
 DROP POLICY IF EXISTS "reviews_auth_insert" ON reviews;
 CREATE POLICY "reviews_auth_insert" ON reviews FOR INSERT WITH CHECK (
   auth.uid() IS NOT NULL
   AND auth.uid() = user_id
-  AND auth.uid() <> (SELECT owner_id FROM trucks WHERE id = truck_id)
+  AND auth.uid() IS DISTINCT FROM (SELECT owner_id FROM trucks WHERE id = truck_id)
 );
 
 
