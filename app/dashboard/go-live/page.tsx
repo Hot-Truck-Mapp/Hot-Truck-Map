@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
-export default function GoLivePage() {
-  redirect("/dashboard");
+// "Go Live" is the `live` tab on the dashboard.
+export default function Page() {
+  redirect("/dashboard?tab=live");
 }

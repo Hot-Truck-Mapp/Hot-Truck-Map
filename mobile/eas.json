@@ -10,7 +10,8 @@
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://ikrhlifpznzdtgxleubz.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrcmhsaWZwem56ZHRneGxldWJ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwODYxNjksImV4cCI6MjA5MDY2MjE2OX0.dv1HfyEDKR8fDJDLFPSQ23chiTdKnRPjULQRlRPwixg",
-        "EXPO_PUBLIC_EAS_PROJECT_ID": "85d76d4f-319b-425e-b7d5-9cae22928aa9"
+        "EXPO_PUBLIC_EAS_PROJECT_ID": "85d76d4f-319b-425e-b7d5-9cae22928aa9",
+        "EXPO_PUBLIC_API_URL": "https://hottruckmap.com"
       }
     },
     "preview": {
@@ -21,7 +22,8 @@
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://ikrhlifpznzdtgxleubz.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrcmhsaWZwem56ZHRneGxldWJ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwODYxNjksImV4cCI6MjA5MDY2MjE2OX0.dv1HfyEDKR8fDJDLFPSQ23chiTdKnRPjULQRlRPwixg",
-        "EXPO_PUBLIC_EAS_PROJECT_ID": "85d76d4f-319b-425e-b7d5-9cae22928aa9"
+        "EXPO_PUBLIC_EAS_PROJECT_ID": "85d76d4f-319b-425e-b7d5-9cae22928aa9",
+        "EXPO_PUBLIC_API_URL": "https://hottruckmap.com"
       }
     },
     "production": {
@@ -33,7 +35,8 @@
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://ikrhlifpznzdtgxleubz.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrcmhsaWZwem56ZHRneGxldWJ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwODYxNjksImV4cCI6MjA5MDY2MjE2OX0.dv1HfyEDKR8fDJDLFPSQ23chiTdKnRPjULQRlRPwixg",
-        "EXPO_PUBLIC_EAS_PROJECT_ID": "85d76d4f-319b-425e-b7d5-9cae22928aa9"
+        "EXPO_PUBLIC_EAS_PROJECT_ID": "85d76d4f-319b-425e-b7d5-9cae22928aa9",
+        "EXPO_PUBLIC_API_URL": "https://hottruckmap.com"
       }
     }
   },

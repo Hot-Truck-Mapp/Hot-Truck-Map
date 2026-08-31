@@ -5,7 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import VerificationBanner from "@/components/auth/VerificationBanner";
 import { CUISINE_TYPES } from "@/lib/cuisines";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -23,6 +22,31 @@ const HOURS = [
 ];
 type Tab = "live" | "profile" | "menu" | "schedule" | "analytics" | "orders";
 type AnalyticsRange = "weekly" | "monthly" | "yearly";
+
+const MENU_COLS =
+  "id, truck_id, name, description, price, category, allergens, is_popular, is_sold_out, photo, sort_order, created_at";
+
+/**
+ * Menu items in the operator's chosen order.
+ *
+ * sort_order was added in patch 006 but nothing ever read it, so every menu
+ * was stuck in the order it happened to be typed. Items created before the
+ * reorder controls existed have a null sort_order — those sort last by
+ * creation date, so an existing menu keeps its current order until the
+ * operator moves something.
+ */
+async function fetchMenuItems(
+  supabase: ReturnType<typeof createClient>,
+  truckId: string
+) {
+  return supabase
+    .from("menu_items")
+    .select(MENU_COLS)
+    .eq("truck_id", truckId)
+    .order("sort_order", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: true })
+    .limit(200);
+}
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function Dashboard() {
@@ -52,7 +76,12 @@ export default function Dashboard() {
   const [editingItem, setEditingItem] = useState<any | null>(null);
   const [menuUploading, setMenuUploading] = useState(false);
   const [menuSaving, setMenuSaving] = useState(false);
+  const [reorderingId, setReorderingId] = useState<string | null>(null);
   const menuPhotoRef = useRef<HTMLInputElement>(null);
+  // Photo uploaded for an item that hasn't been saved yet. Storage writes
+  // happen immediately but the row is only written on save, so abandoning
+  // the modal would otherwise leave the file behind forever.
+  const pendingMenuPhotoRef = useRef<string | null>(null);
   const emptyItem = { name:"", description:"", price:"", category:"", allergens:[] as string[], is_popular:false, is_sold_out:false, photo:"" };
   const [itemForm, setItemForm] = useState(emptyItem);
 
@@ -90,6 +119,8 @@ export default function Dashboard() {
   const locationIntervalRef             = useRef<ReturnType<typeof setInterval> | null>(null);
   const isBroadcastingRef               = useRef(false);
   const lastBroadcastPosRef             = useRef<{ lat: number; lng: number } | null>(null);
+  // One follower notification per live session, not one per GPS refresh.
+  const hasNotifiedFollowersRef         = useRef(false);
 
   // Analytics
   const [analyticsLoaded, setAnalyticsLoaded]   = useState(false);
@@ -134,7 +165,19 @@ export default function Dashboard() {
   }, []);
 
   // ── Initial load ────────────────────────────────────────────────────────────
-  useEffect(() => { loadAll(); }, []);
+  // ?tab=menu etc. lets the /dashboard/* stub routes land on the right tab.
+  // Read from window.location rather than useSearchParams so this component
+  // doesn't need its own Suspense boundary.
+  const requestedTabRef = useRef<Tab | null>(null);
+  useEffect(() => {
+    const raw = new URLSearchParams(window.location.search).get("tab");
+    const valid: Tab[] = ["live", "profile", "menu", "schedule", "analytics", "orders"];
+    if (raw && (valid as string[]).includes(raw)) {
+      requestedTabRef.current = raw as Tab;
+      setActiveTab(raw as Tab);
+    }
+    loadAll();
+  }, []);
 
   async function loadAll() {
     try {
@@ -215,7 +258,7 @@ export default function Dashboard() {
         }
 
         const [menuRes, schedRes, ordersRes, followsRes] = await Promise.all([
-          supabase.from("menu_items").select("id, truck_id, name, description, price, category, allergens, is_popular, is_sold_out, photo, sort_order, created_at").eq("truck_id", truck.id).order("created_at").limit(200),
+          fetchMenuItems(supabase, truck.id),
           supabase.from("schedules").select("id, truck_id, day_of_week, open_time, close_time, location, notes").eq("truck_id", truck.id).order("day_of_week").limit(7),
           supabase.from("orders").select("id, truck_id, pickup_name, notes, items, total, status, created_at, customer_id").eq("truck_id", truck.id).order("created_at", { ascending: false }).limit(100),
           supabase.from("follows").select("*", { count: "exact", head: true }).eq("truck_id", truck.id),
@@ -225,8 +268,9 @@ export default function Dashboard() {
         setOrders(ordersRes.data ?? []);
         setTotalFollowers(followsRes.count ?? 0);
 
-        // Route new (incomplete) operators to Profile tab so they fill it in first
-        if (!truck.description || !truck.phone) {
+        // Route new (incomplete) operators to Profile tab so they fill it in
+        // first — unless they asked for a specific tab, in which case honour it.
+        if (!requestedTabRef.current && (!truck.description || !truck.phone)) {
           setActiveTab("profile");
         }
       } else {
@@ -279,6 +323,14 @@ export default function Dashboard() {
       showToast("Only JPG, PNG, or WebP images are allowed.");
       return;
     }
+    // The storage policy scopes writes to trucks/<truck-id>/… and checks
+    // that the caller owns that truck, so there is no path to upload to
+    // before the truck row exists. Say so rather than writing to a folder
+    // the policy will reject.
+    if (!truckId) {
+      showToast("Save your truck profile first, then add a photo.", true);
+      return;
+    }
     setPhotoUploading(true);
     try {
       const supabase = createClient();
@@ -288,8 +340,7 @@ export default function Dashboard() {
         .replace(/\.[^.]+$/, "")
         .replace(/[^a-zA-Z0-9._-]/g, "-")
         .slice(0, 64);
-      const scopeId = truckId ?? userId ?? "unknown";
-      const path = `trucks/${scopeId}/${safeName}-${Date.now()}.${ext}`;
+      const path = `trucks/${truckId}/${safeName}-${Date.now()}.${ext}`;
       const { error: uploadErr } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
       if (uploadErr) throw new Error(uploadErr.message);
       const { data } = supabase.storage.from("avatars").getPublicUrl(path);
@@ -317,6 +368,11 @@ export default function Dashboard() {
     setProfileSaving(true);
     try {
       const supabase = createClient();
+      // The textarea caps typing at 200 and shows a /200 counter; the 1000
+      // below is a defensive bound, not a second limit. Deliberately NOT
+      // lowered to 200: a truck whose description predates the 200-char cap
+      // would be silently truncated the next time its owner saved anything
+      // else on this form.
       if (truckId) {
         const { error } = await supabase.from("trucks").update({
           name: profile.name.trim(), description: profile.description.slice(0, 1000),
@@ -354,6 +410,13 @@ export default function Dashboard() {
       showToast("Only JPG, PNG, or WebP images are allowed.");
       return;
     }
+    // Same as the profile photo: menu/<truck-id>/… is the only shape the
+    // storage policy accepts, so a missing truckId is a dead end, not a
+    // reason to fall back to an "unknown" folder.
+    if (!truckId) {
+      showToast("Save your truck profile first, then add menu photos.", true);
+      return;
+    }
     setMenuUploading(true);
     try {
       const supabase = createClient();
@@ -363,20 +426,29 @@ export default function Dashboard() {
         .replace(/\.[^.]+$/, "")
         .replace(/[^a-zA-Z0-9._-]/g, "-")
         .slice(0, 64);
-      const path = `menu/${truckId ?? "unknown"}/${safeName}-${Date.now()}.${ext}`;
+      const path = `menu/${truckId}/${safeName}-${Date.now()}.${ext}`;
       const { error: uploadErr } = await supabase.storage.from("menu-photos").upload(path, file, { upsert: true });
       if (uploadErr) throw new Error(uploadErr.message);
       const { data } = supabase.storage.from("menu-photos").getPublicUrl(path);
       if (!data?.publicUrl) throw new Error("Could not get photo URL — try again.");
       setItemForm(f => ({ ...f, photo: data.publicUrl }));
       if (editingItem) {
-        const { error: saveErr } = await supabase.from("menu_items").update({ photo: data.publicUrl }).eq("id", editingItem.id).eq("truck_id", truckId!);
+        const { error: saveErr } = await supabase.from("menu_items").update({ photo: data.publicUrl }).eq("id", editingItem.id).eq("truck_id", truckId);
         if (saveErr) {
           // Clean up orphaned storage file before surfacing the error
           void supabase.storage.from("menu-photos").remove([path]).catch(() => {});
           throw new Error("Photo uploaded but failed to save: " + saveErr.message);
         }
         setMenuItems(items => items.map(i => i.id === editingItem.id ? { ...i, photo: data.publicUrl } : i));
+      } else {
+        // New item: no row to attach to yet. Track the file so closing the
+        // modal without saving cleans it up, and drop any earlier pick from
+        // this same modal session.
+        const previous = pendingMenuPhotoRef.current;
+        if (previous && previous !== path) {
+          void supabase.storage.from("menu-photos").remove([previous]).catch(() => {});
+        }
+        pendingMenuPhotoRef.current = path;
       }
     } catch (err: any) { showToast(err?.message ?? "Photo upload failed"); }
     setMenuUploading(false);
@@ -385,9 +457,23 @@ export default function Dashboard() {
   function openAddItem() {
     setItemForm(emptyItem);
     setEditingItem(null);
+    pendingMenuPhotoRef.current = null;
     setMenuModal(true);
   }
+
+  // Dismissing the modal discards the draft, so a photo uploaded for an item
+  // that was never saved has to go with it.
+  function closeMenuModal() {
+    const orphan = pendingMenuPhotoRef.current;
+    pendingMenuPhotoRef.current = null;
+    if (orphan) {
+      const supabase = createClient();
+      void supabase.storage.from("menu-photos").remove([orphan]).catch(() => {});
+    }
+    setMenuModal(false);
+  }
   function openEditItem(item: any) {
+    pendingMenuPhotoRef.current = null;
     setItemForm({
       name: item.name, description: item.description ?? "",
       price: String(item.price), category: item.category ?? "",
@@ -420,11 +506,22 @@ export default function Dashboard() {
         const { error } = await supabase.from("menu_items").update(payload).eq("id", editingItem.id).eq("truck_id", truckId);
         if (error) throw new Error(error.message);
       } else {
-        const { error } = await supabase.from("menu_items").insert(payload);
+        // New items go to the end of the list rather than wherever their
+        // creation timestamp happens to land them.
+        const highest = menuItems.reduce(
+          (max, i) => (typeof i.sort_order === "number" && i.sort_order > max ? i.sort_order : max),
+          -1
+        );
+        const { error } = await supabase
+          .from("menu_items")
+          .insert({ ...payload, sort_order: highest + 1 });
         if (error) throw new Error(error.message);
       }
-      const { data } = await supabase.from("menu_items").select("id, truck_id, name, description, price, category, allergens, is_popular, is_sold_out, photo, sort_order, created_at").eq("truck_id", truckId).order("created_at").limit(200);
+      const { data } = await fetchMenuItems(supabase, truckId);
       setMenuItems(data ?? []);
+      // Saved successfully — the photo now belongs to a row, so it is no
+      // longer an orphan to clean up.
+      pendingMenuPhotoRef.current = null;
       showToast(editingItem ? "Item updated!" : "Item added!", false);
       setMenuModal(false);
     } catch (err: any) {
@@ -464,6 +561,57 @@ export default function Dashboard() {
     } catch {
       setMenuItems(items => items.map(i => i.id === item.id ? { ...i, is_sold_out: item.is_sold_out } : i));
       showToast("Could not update item — check your connection");
+    }
+  }
+
+  /**
+   * Move an item up or down within its category.
+   *
+   * menuItems is already in display order, so the move is a swap with the
+   * nearest neighbour that shares a category — which is what the operator
+   * sees, since the list is grouped by category.
+   *
+   * sort_order is null for every item created before this existed, so the
+   * first move rewrites the whole list to sequential values. After that only
+   * the two swapped rows differ and only those two are written.
+   */
+  async function moveMenuItem(item: any, direction: -1 | 1) {
+    if (!truckId || reorderingId) return;
+    const ordered = [...menuItems];
+    const from = ordered.findIndex(i => i.id === item.id);
+    if (from === -1) return;
+
+    const category = item.category || "Other";
+    let to = -1;
+    for (let i = from + direction; i >= 0 && i < ordered.length; i += direction) {
+      if ((ordered[i].category || "Other") === category) { to = i; break; }
+    }
+    if (to === -1) return; // already first or last in its category
+
+    [ordered[from], ordered[to]] = [ordered[to], ordered[from]];
+
+    const changed = ordered
+      .map((it, index) => ({ it, index }))
+      .filter(({ it, index }) => it.sort_order !== index);
+    if (changed.length === 0) return;
+
+    const previous = menuItems;
+    setReorderingId(item.id);
+    setMenuItems(ordered.map((it, index) => ({ ...it, sort_order: index })));
+    try {
+      const supabase = createClient();
+      const results = await Promise.all(
+        changed.map(({ it, index }) =>
+          supabase.from("menu_items").update({ sort_order: index }).eq("id", it.id).eq("truck_id", truckId)
+        )
+      );
+      const failed = results.find(r => r.error);
+      if (failed?.error) throw new Error(failed.error.message);
+    } catch (err: any) {
+      setMenuItems(previous); // roll back to what the server still has
+      showToast("Could not reorder: " + (err?.message ?? "please try again."));
+    } finally {
+      setReorderingId(null);
     }
   }
 
@@ -546,6 +694,31 @@ export default function Dashboard() {
     setLiveAddress(address);
     setLiveStatus("live");
     setIsLive(true);
+
+    // Tell followers, once per live session.
+    //
+    // The mobile app has always done this; the web dashboard never did, so a
+    // web-only operator's followers were never told they'd gone live. It has
+    // to be guarded: the GPS watcher re-broadcasts every time the truck moves
+    // 50m, and a push on every move is how you get people to turn them off.
+    if (!hasNotifiedFollowersRef.current) {
+      hasNotifiedFollowersRef.current = true;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          // Fire-and-forget: a failed notification must never make the
+          // operator think they aren't live, because they are.
+          void fetch("/api/notify-followers", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ truck_id: truckId, truck_name: profile.name }),
+          }).catch(() => {});
+        }
+      } catch { /* no session — the broadcast itself already succeeded */ }
+    }
   }
 
   async function reverseGeocode(lat: number, lng: number): Promise<string> {
@@ -653,6 +826,9 @@ export default function Dashboard() {
       if (error) { showToast("Could not go offline: " + error.message); return; }
       setLiveStatus("idle"); setIsLive(false); setLiveAddress(null);
       setManualAddr(""); setShowManual(false);
+      // Next Go Live is a new session, so followers get told again.
+      hasNotifiedFollowersRef.current = false;
+      lastBroadcastPosRef.current = null;
     } catch {
       showToast("Could not go offline — check your connection and try again");
     }
@@ -1010,8 +1186,10 @@ export default function Dashboard() {
         </a>
       </div>
 
-      {/* Email verification reminder */}
-      <VerificationBanner />
+      {/* No VerificationBanner here: an unverified operator never reaches this
+          render at all — the `!emailConfirmed` gate above returns a full-screen
+          "Confirm Your Email" page with its own resend button. The banner was
+          dead markup on the one page that mounted it. */}
 
       {/* Profile completeness nudge */}
       {(() => {
@@ -1436,6 +1614,11 @@ export default function Dashboard() {
             </Field>
 
             <div>
+              {/* TWILIO_ACCOUNT_SID / AUTH_TOKEN / PHONE_NUMBER are set in
+                  Vercel for Development, Preview and Production, so
+                  notifyOperatorBySMS() in /api/orders really does send. They
+                  are absent from .env.local, which means SMS is the one thing
+                  here that won't fire against a local dev server. */}
               <p className="text-sm font-semibold text-neutral-700 mb-1.5">
                 Phone Number
                 <span className="ml-2 text-[11px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
@@ -1601,6 +1784,29 @@ export default function Dashboard() {
                               </div>
                             )}
                             <div className="flex items-center gap-3 mt-2">
+                              {/* Reorder within this category — the order customers see */}
+                              {items.length > 1 && (
+                                <div className="flex items-center gap-0.5 flex-shrink-0">
+                                  <button
+                                    onClick={() => moveMenuItem(item, -1)}
+                                    disabled={idx === 0 || reorderingId !== null}
+                                    aria-label={`Move ${item.name} up`}
+                                    className="w-6 h-6 rounded-md flex items-center justify-center text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 disabled:opacity-25 disabled:hover:bg-transparent transition-colors">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                      <path d="m18 15-6-6-6 6"/>
+                                    </svg>
+                                  </button>
+                                  <button
+                                    onClick={() => moveMenuItem(item, 1)}
+                                    disabled={idx === items.length - 1 || reorderingId !== null}
+                                    aria-label={`Move ${item.name} down`}
+                                    className="w-6 h-6 rounded-md flex items-center justify-center text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 disabled:opacity-25 disabled:hover:bg-transparent transition-colors">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                      <path d="m6 9 6 6 6-6"/>
+                                    </svg>
+                                  </button>
+                                </div>
+                              )}
                               <button onClick={() => toggleSoldOut(item)}
                                 className={`text-xs font-bold px-3 py-1 rounded-full ${item.is_sold_out ? "bg-neutral-100 text-neutral-500" : "bg-red-50 text-brand-red"}`}>
                                 {item.is_sold_out ? "Mark Available" : "Mark Sold Out"}
@@ -2205,7 +2411,7 @@ export default function Dashboard() {
           <div className="bg-white w-full rounded-t-3xl max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100 sticky top-0 bg-white z-10">
               <h2 className="text-lg font-black text-neutral-900">{editingItem ? "Edit Item" : "New Item"}</h2>
-              <button onClick={() => setMenuModal(false)} aria-label="Close menu item editor"
+              <button onClick={closeMenuModal} aria-label="Close menu item editor"
                 className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
                   <path d="M18 6 6 18M6 6l12 12"/>

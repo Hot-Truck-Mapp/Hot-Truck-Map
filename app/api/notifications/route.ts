@@ -1,19 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import webpush from "web-push";
 import { isRateLimited } from "@/lib/rateLimit";
-
-// Configure VAPID credentials lazily inside the handler so env vars are
-// always read at runtime, not at module-evaluation / build time.
-function configureVapid() {
-  const email = process.env.VAPID_EMAIL;
-  const pub   = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  const priv  = process.env.VAPID_PRIVATE_KEY;
-  if (!email || !pub || !priv) return false;
-  webpush.setVapidDetails(email, pub, priv);
-  return true;
-}
+import { purgeStaleSubscriptions, sendPushBatch } from "@/lib/push";
 
 // Service-role client (bypasses RLS so we can read all followers/subscriptions)
 function getServiceClient() {
@@ -118,91 +106,15 @@ export async function POST(req: NextRequest) {
 
   const title = truck_name ? `${truck_name} is now live!` : "A truck you follow is now live!";
   const body = custom_message ?? "Tap to see where they are on the map.";
-  const url = "/";
 
-  const payload = JSON.stringify({ title, body, url });
-
-  // Configure VAPID once before the parallel send loop (not per-notification)
-  const vapidReady = configureVapid();
-
-  let sent = 0;
-  let failed = 0;
-  const staleEndpoints: string[] = [];
-
-  await Promise.all(
-    subscriptions.map(async (sub: any) => {
-      try {
-        if (sub.platform === "web") {
-          if (!vapidReady) {
-            failed++;
-            return;
-          }
-          await webpush.sendNotification(
-            {
-              endpoint: sub.endpoint,
-              keys: {
-                p256dh: sub.p256dh,
-                auth: sub.auth_key,
-              },
-            },
-            payload
-          );
-          sent++;
-        } else if (sub.platform === "expo") {
-          const res = await fetch("https://exp.host/--/api/v2/push/send", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Accept: "application/json",
-              "Accept-Encoding": "gzip, deflate",
-            },
-            body: JSON.stringify({
-              to: sub.endpoint, // expo push token stored in endpoint column
-              title,
-              body,
-              data: { url },
-              sound: "default",
-            }),
-          });
-
-          if (!res.ok) {
-            failed++;
-            return;
-          }
-
-          const json = await res.json();
-          const ticketData = json?.data;
-          if (ticketData?.status === "error") {
-            failed++;
-            // Mark as stale if the token is no longer valid
-            if (
-              ticketData.details?.error === "DeviceNotRegistered" ||
-              ticketData.details?.error === "InvalidCredentials"
-            ) {
-              staleEndpoints.push(sub.endpoint);
-            }
-          } else {
-            sent++;
-          }
-        }
-      } catch (err: any) {
-        failed++;
-        // web-push throws for 404/410 when subscription is expired
-        if (err?.statusCode === 404 || err?.statusCode === 410) {
-          staleEndpoints.push(sub.endpoint);
-        }
-      }
-    })
+  // Delivery (web push + Expo), stale-endpoint detection and chunking all
+  // live in lib/push.ts, shared with the owner's announcement broadcast.
+  const { sent, failed, staleEndpoints } = await sendPushBatch(
+    subscriptions as any,
+    { title, body, url: "/" }
   );
 
-  // 3. Clean up stale subscriptions (fire-and-forget)
-  if (staleEndpoints.length > 0) {
-    void (async () => {
-      try {
-        await db.from("push_subscriptions").delete().in("endpoint", staleEndpoints);
-      } catch { /* ignore */ }
-    })();
-  }
+  purgeStaleSubscriptions(db, staleEndpoints);
 
   return NextResponse.json({ sent, failed });
 }

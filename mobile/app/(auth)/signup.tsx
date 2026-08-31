@@ -38,8 +38,11 @@ export default function SignupScreen() {
       Alert.alert('Password mismatch', 'Passwords do not match.');
       return;
     }
-    if (password.length < 6) {
-      Alert.alert('Weak password', 'Password must be at least 6 characters.');
+    // Matches the web signup. Mobile used to accept 6, so anyone typing 7
+    // passed this check and then hit Supabase's own minimum — which surfaced
+    // through the generic handler below as "you may already have an account".
+    if (password.length < 8) {
+      Alert.alert('Weak password', 'Password must be at least 8 characters.');
       return;
     }
     setLoading(true);
@@ -50,8 +53,19 @@ export default function SignupScreen() {
         options: { data: { role: 'customer', display_name: displayName.trim() } },
       });
       if (error) {
-        // Use a generic message to prevent email enumeration
-        Alert.alert('Sign up failed', 'Could not create account. If you already have an account, try signing in instead.');
+        // The generic message exists to prevent email enumeration, so it must
+        // only cover the "this address is already registered" case. Applying
+        // it to every failure told people with a weak or rejected password
+        // that they might already have an account — which sent them to the
+        // login screen to fail there instead.
+        const raw = error.message ?? '';
+        const isEnumerationRisk = /already|registered|exists/i.test(raw);
+        Alert.alert(
+          'Sign up failed',
+          isEnumerationRisk
+            ? 'Could not create account. If you already have an account, try signing in instead.'
+            : raw || 'Could not create account. Please check your details and try again.'
+        );
       } else {
         Alert.alert(
           'Check your email',

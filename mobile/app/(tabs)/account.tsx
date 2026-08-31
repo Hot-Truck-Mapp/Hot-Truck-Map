@@ -47,6 +47,76 @@ export default function AccountTab() {
     ]);
   }
 
+  /**
+   * Performs the deletion. `deleteTruck` acknowledges the truck cascade —
+   * the API refuses with 409 + requiresTruckAck until it is true for an
+   * account that owns a listing.
+   */
+  async function runDeleteAccount(deleteTruck: boolean) {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      const { data: { session: s } } = await supabase.auth.getSession();
+      if (!s?.access_token) throw new Error('Not signed in');
+
+      const res = await fetch(`${API_BASE}/api/account/delete`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${s.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ deleteTruck }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as {
+          error?: string;
+          requiresTruckAck?: boolean;
+          truck?: { name: string; menuItems: number; followers: number };
+        };
+
+        // This account owns a truck. Deleting the auth user cascades to the
+        // listing, its menu, schedule, photos, followers and reviews. Say so
+        // plainly and take a second confirmation rather than failing here —
+        // in-app deletion has to remain completable (App Store 5.1.1(v)).
+        if (err.requiresTruckAck && err.truck) {
+          const t = err.truck;
+          if (mountedRef.current) setDeleting(false);
+          Alert.alert(
+            `This also deletes ${t.name}`,
+            `Your truck listing is tied to this account. Deleting it removes:\n\n` +
+              `• Your listing and its place on the map\n` +
+              `• ${t.menuItems} menu item${t.menuItems === 1 ? '' : 's'}, your weekly schedule and your photos\n` +
+              `• ${t.followers} follower${t.followers === 1 ? '' : 's'} and every review customers have left you\n\n` +
+              `Past orders are kept for your records but will no longer be linked to the truck. ` +
+              `None of this can be restored.`,
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Delete Truck & Account',
+                style: 'destructive',
+                onPress: () => { void runDeleteAccount(true); },
+              },
+            ]
+          );
+          return;
+        }
+        throw new Error(err.error ?? 'Deletion failed');
+      }
+
+      Alert.alert('Account Deleted', 'Your account has been permanently deleted.');
+      await clearPushToken();
+      await supabase.auth.signOut();
+    } catch (err) {
+      if (mountedRef.current) {
+        const message = err instanceof Error ? err.message : 'Could not delete account. Please try again.';
+        Alert.alert('Error', message);
+      }
+    } finally {
+      if (mountedRef.current) setDeleting(false);
+    }
+  }
+
   async function handleDeleteAccount() {
     Alert.alert(
       'Delete Account',
@@ -56,35 +126,7 @@ export default function AccountTab() {
         {
           text: 'Delete My Account',
           style: 'destructive',
-          onPress: async () => {
-            if (deleting) return;
-            setDeleting(true);
-            try {
-              const { data: { session: s } } = await supabase.auth.getSession();
-              if (!s?.access_token) throw new Error('Not signed in');
-
-              const res = await fetch(`${API_BASE}/api/account/delete`, {
-                method: 'DELETE',
-                headers: { Authorization: `Bearer ${s.access_token}` },
-              });
-
-              if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error((err as { error?: string }).error ?? 'Deletion failed');
-              }
-
-              Alert.alert('Account Deleted', 'Your account has been permanently deleted.');
-              await clearPushToken();
-              await supabase.auth.signOut();
-            } catch (err) {
-              if (mountedRef.current) {
-                const message = err instanceof Error ? err.message : 'Could not delete account. Please try again.';
-                Alert.alert('Error', message);
-              }
-            } finally {
-              if (mountedRef.current) setDeleting(false);
-            }
-          },
+          onPress: () => { void runDeleteAccount(false); },
         },
       ]
     );

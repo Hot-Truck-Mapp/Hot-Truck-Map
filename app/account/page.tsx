@@ -16,6 +16,9 @@ export default function AccountPage() {
     newLocation: true,
     orderReady: true,
     weeklyDigest: false,
+    // Platform-wide announcements from Hot Truck Map. Defaults on, and the
+    // admin broadcast (/api/admin/announce) skips anyone who turns it off.
+    announcements: true,
   });
   const [savingNotif, setSavingNotif] = useState(false);
   const [pushToastMsg, setPushToastMsg] = useState<string | null>(null);
@@ -25,6 +28,12 @@ export default function AccountPage() {
   const [avatarToast, setAvatarToast] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // Set when the delete API reports this account owns a truck. Holds what the
+  // cascade would take, so the warning can be specific rather than generic.
+  const [ownedTruck, setOwnedTruck] = useState<
+    { name: string; menuItems: number; followers: number } | null
+  >(null);
+  const [truckAck, setTruckAck] = useState(false);
   const avatarRef = useRef<HTMLInputElement>(null);
   const avatarToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pushToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -101,9 +110,13 @@ export default function AccountPage() {
       setFollowed(follows ?? []);
       setOrders(orderData ?? []);
 
-      // Load saved notification preferences from user metadata
+      // Load saved notification preferences from user metadata. Merge over the
+      // defaults rather than replacing: a preference saved before a new toggle
+      // existed has no key for it, and spreading keeps that toggle showing its
+      // default (on) instead of rendering as off while the server treats the
+      // missing key as opted in.
       const saved = userData.user_metadata?.notifications;
-      if (saved) setNotifications(saved);
+      if (saved) setNotifications((prev) => ({ ...prev, ...saved }));
     } catch {
       // network error — show sign-in prompt
     } finally {
@@ -176,12 +189,31 @@ export default function AccountPage() {
 
       const res = await fetch("/api/account/delete", {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${session.access_token}` },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        // Only sent once the operator has seen exactly what the cascade takes
+        // with it and confirmed a second time.
+        body: JSON.stringify({ deleteTruck: truckAck }),
       });
 
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error((err as { error?: string }).error ?? "Deletion failed");
+        const err = await res.json().catch(() => ({})) as {
+          error?: string;
+          requiresTruckAck?: boolean;
+          truck?: { name: string; menuItems: number; followers: number };
+        };
+        // This account owns a truck. Deleting it cascades to the listing, its
+        // menu, schedule and followers — show that before going any further.
+        if (err.requiresTruckAck && err.truck) {
+          if (mountedRef.current) {
+            setOwnedTruck(err.truck);
+            setDeleting(false);
+          }
+          return;
+        }
+        throw new Error(err.error ?? "Deletion failed");
       }
 
       window.location.href = "/";
@@ -541,6 +573,12 @@ export default function AccountPage() {
                   value={notifications.weeklyDigest}
                   onChange={(v) => updateNotification("weeklyDigest", v)}
                 />
+                <NotificationRow
+                  label="Hot Truck Map announcements"
+                  description="Occasional news about the app itself"
+                  value={notifications.announcements}
+                  onChange={(v) => updateNotification("announcements", v)}
+                />
               </div>
             </div>
 
@@ -640,18 +678,58 @@ export default function AccountPage() {
               </p>
               {deleteConfirm ? (
                 <div className="flex flex-col gap-2">
+                  {ownedTruck && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-1 text-left">
+                      <p className="text-sm font-black text-red-800 mb-1.5">
+                        This also deletes {ownedTruck.name}
+                      </p>
+                      <p className="text-xs text-red-700 leading-relaxed mb-2">
+                        Your truck listing is tied to this account. Deleting it removes:
+                      </p>
+                      <ul className="text-xs text-red-700 leading-relaxed list-disc pl-4 mb-2 flex flex-col gap-0.5">
+                        <li>Your listing and its place on the map</li>
+                        <li>
+                          {ownedTruck.menuItems} menu item{ownedTruck.menuItems === 1 ? "" : "s"}, your
+                          weekly schedule and your photos
+                        </li>
+                        <li>
+                          {ownedTruck.followers} follower{ownedTruck.followers === 1 ? "" : "s"} and every
+                          review customers have left you
+                        </li>
+                      </ul>
+                      <p className="text-xs text-red-700 leading-relaxed mb-2.5">
+                        Past orders are kept for your records but will no longer be linked to the truck.
+                        None of this can be restored.
+                      </p>
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={truckAck}
+                          onChange={(e) => setTruckAck(e.target.checked)}
+                          className="mt-0.5 accent-red-600 flex-shrink-0"
+                        />
+                        <span className="text-xs font-bold text-red-800">
+                          I understand my truck listing will be permanently deleted
+                        </span>
+                      </label>
+                    </div>
+                  )}
                   <p className="text-xs text-red-500 font-semibold text-center">
                     Are you sure? This is irreversible.
                   </p>
                   <button
                     onClick={deleteAccount}
-                    disabled={deleting}
+                    disabled={deleting || (!!ownedTruck && !truckAck)}
                     className="w-full py-3 bg-red-600 text-white rounded-xl font-semibold text-sm disabled:opacity-50"
                   >
-                    {deleting ? "Deleting..." : "Yes, Delete My Account"}
+                    {deleting
+                      ? "Deleting..."
+                      : ownedTruck
+                        ? "Yes, Delete My Truck & Account"
+                        : "Yes, Delete My Account"}
                   </button>
                   <button
-                    onClick={() => setDeleteConfirm(false)}
+                    onClick={() => { setDeleteConfirm(false); setOwnedTruck(null); setTruckAck(false); }}
                     disabled={deleting}
                     className="w-full py-3 border border-neutral-200 text-neutral-600 rounded-xl font-semibold text-sm"
                   >

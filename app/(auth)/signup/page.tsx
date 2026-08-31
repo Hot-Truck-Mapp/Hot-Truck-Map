@@ -74,7 +74,16 @@ export default function SignupPage() {
           password: opPassword,
           truckName: truckName.trim(),
           cuisine: cuisine || null,
-          emailRedirectTo: window.location.origin + "/dashboard",
+          // Point at /auth/callback, not /dashboard. The callback page is the
+          // only one that calls exchangeCodeForSession, so it's the only place
+          // the confirmation link can actually establish a session. Sending
+          // them straight to /dashboard meant middleware saw no session and
+          // bounced them to /login to retype the password they'd just set.
+          //
+          // No ?redirect here on purpose: Supabase matches redirect_to against
+          // its own allowlist, and a bare path is the safest thing to get past
+          // it. The callback sends truck owners to /dashboard by itself.
+          emailRedirectTo: window.location.origin + "/auth/callback",
         }),
       });
 
@@ -115,7 +124,9 @@ export default function SignupPage() {
         password: cuPassword,
         options: {
           data: { role: "customer", display_name: cuName.trim() },
-          emailRedirectTo: window.location.origin + "/",
+          // Same reason as the operator flow: only /auth/callback exchanges
+          // the code for a session.
+          emailRedirectTo: window.location.origin + "/auth/callback",
         },
       });
 
@@ -381,6 +392,8 @@ export default function SignupPage() {
                 {opLoading ? "Setting up your truck..." : "List My Truck — It's Free"}
               </button>
 
+              <LegalNotice />
+
               <p className="text-center text-sm text-neutral-500">
                 Already have an account?{" "}
                 <Link href="/login" className="text-brand-red font-semibold">Sign In</Link>
@@ -484,6 +497,8 @@ export default function SignupPage() {
               >
                 {cuLoading ? "Creating account..." : "Create Account"}
               </button>
+
+              <LegalNotice />
 
               <p className="text-center text-sm text-neutral-500">
                 Already have an account?{" "}
@@ -597,6 +612,25 @@ export default function SignupPage() {
         </Link>
       </div>
     </div>
+  );
+}
+
+// ── Shared legal notice ──────────────────────────────────────────────────────
+// The mobile app has always shown this above its signup button; the web app,
+// where every operator actually signs up, never did.
+function LegalNotice() {
+  return (
+    <p className="text-center text-xs text-neutral-400 leading-relaxed">
+      By creating an account you agree to our{" "}
+      <Link href="/terms" className="text-neutral-500 font-semibold underline underline-offset-2 hover:text-brand-red">
+        Terms of Service
+      </Link>{" "}
+      and{" "}
+      <Link href="/privacy" className="text-neutral-500 font-semibold underline underline-offset-2 hover:text-brand-red">
+        Privacy Policy
+      </Link>
+      .
+    </p>
   );
 }
 
