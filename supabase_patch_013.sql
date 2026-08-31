@@ -121,12 +121,21 @@ ORDER BY policyname;
 
 
 -- ── 4. Remove the probe object ───────────────────────────────
--- The anonymous upload that exposed this left a 1-byte file behind, and
--- it could not be deleted anonymously because DELETE was never open.
--- This runs as the SQL editor's privileged role, so it can.
-DELETE FROM storage.objects
-WHERE bucket_id = 'menu-photos'
-  AND name = 'menu/00000000-0000-0000-0000-000000000000/probe.jpg';
+-- NOT done here. Supabase installs a storage.protect_delete() trigger that
+-- rejects direct DELETE on storage.objects:
+--
+--   ERROR: 42501: Direct deletion from storage tables is not allowed.
+--          Use the Storage API instead.
+--
+-- The SQL editor runs a pasted file as one transaction, so including that
+-- DELETE rolled back the policy drops above with it. Deleting the object
+-- has to happen through the Storage API or the dashboard:
+--
+--   Storage → menu-photos → menu → 00000000-0000-0000-0000-000000000000
+--     → probe.jpg → Delete
+--
+-- It is a 1-byte file left by the unauthenticated upload that exposed this,
+-- and it could not be removed anonymously because DELETE was never open.
 
 
 -- ── 5. Re-test after running this ────────────────────────────
