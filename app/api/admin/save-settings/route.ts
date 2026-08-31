@@ -1,23 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient as createServerClient } from "@/lib/supabase/server";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-
-// Owner emails allowed to call this endpoint (server-side check)
-const OWNER_EMAILS = ["hottruckmap@gmail.com"];
-
-function getServiceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) throw new Error("Missing service role config");
-  return createSupabaseClient(url, serviceKey);
-}
+import { getServiceClient, requireAdmin } from "@/lib/admin-server";
 
 export async function POST(req: NextRequest) {
   try {
-    // Verify the caller is authenticated as an owner
-    const supabase = await createServerClient();
-    const { data: { user }, error: authErr } = await supabase.auth.getUser();
-    if (authErr || !user || !OWNER_EMAILS.includes((user.email ?? "").toLowerCase())) {
+    // Verify the caller is authenticated as an admin
+    if (!(await requireAdmin())) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

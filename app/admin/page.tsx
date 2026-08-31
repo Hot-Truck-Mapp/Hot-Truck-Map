@@ -1,325 +1,82 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { US_STATES } from "@/lib/us-states";
-import type { Festival } from "@/lib/types";
+import { fetchSection, money } from "@/components/admin/shared";
+import type { AdminStats, TabId } from "@/components/admin/types";
+import OverviewPanel from "@/components/admin/OverviewPanel";
+import TrucksPanel from "@/components/admin/TrucksPanel";
+import UsersPanel from "@/components/admin/UsersPanel";
+import OrdersPanel from "@/components/admin/OrdersPanel";
+import CateringPanel from "@/components/admin/CateringPanel";
+import ContactPanel from "@/components/admin/ContactPanel";
+import ReviewsPanel from "@/components/admin/ReviewsPanel";
+import ModerationPanel from "@/components/admin/ModerationPanel";
+import NewsletterPanel from "@/components/admin/NewsletterPanel";
+import AnnouncePanel from "@/components/admin/AnnouncePanel";
+import FeaturedPanel from "@/components/admin/FeaturedPanel";
+import FestivalsPanel from "@/components/admin/FestivalsPanel";
 
-// ── Owner emails — stored lower-cased for case-insensitive comparison ────────
-const OWNER_EMAILS = ["hottruckmap@gmail.com"];
-
-type Stats = {
-  totalTrucks: number;
-  liveTrucks: number;
-  totalUsers: number;
-  totalFollows: number;
-  totalViews: number;
-  newTrucksThisWeek: number;
-  newUsersThisWeek: number;
-};
-
-type Truck = {
-  id: string;
-  name: string;
-  cuisine: string;
-  is_live: boolean;
-  created_at: string;
-  owner_email?: string;
-  followers?: number;
-};
-
+/**
+ * Owner console. Access is enforced server-side, twice over: middleware.ts
+ * redirects non-admins away from /admin, and every /api/admin/* route
+ * re-checks before it touches data.
+ *
+ * This component doesn't evaluate the admin list itself — it asks. The first
+ * overview fetch is the gate: 200 means the server accepted this session and
+ * the dashboard renders, 403 means it didn't and the access-denied card does.
+ * That keeps the browser out of the authorization decision entirely, and
+ * means ADMIN_EMAILS never has to be mirrored into the public bundle.
+ */
 export default function AdminPage() {
   const mountedRef = useRef(true);
   const [authorized, setAuthorized] = useState<boolean | null>(null);
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [trucks, setTrucks] = useState<Truck[]>([]);
-  const [liveTrucks, setLiveTrucks] = useState<Truck[]>([]);
-  const [activeTab, setActiveTab] = useState<"overview" | "trucks" | "users" | "live" | "totw" | "festivals">("overview");
-  const [loading, setLoading] = useState(true);
-  const [lastRefresh, setLastRefresh] = useState(new Date());
-
-  // Truck of the Week state
-  const [totwTruckId, setTotwTruckId] = useState("");
-  const [totwMessage, setTotwMessage] = useState("");
-  const [totwSaving, setTotwSaving] = useState(false);
-  const [totwSaved, setTotwSaved] = useState(false);
-  const [totwError, setTotwError] = useState<string | null>(null);
-  const totwSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Festivals (events) state
-  const [festivals, setFestivals] = useState<Festival[]>([]);
-  const [festivalsLoading, setFestivalsLoading] = useState(false);
-  const [showAllFestivals, setShowAllFestivals] = useState(false);
-  const [editingFestivalId, setEditingFestivalId] = useState<string | null>(null);
-  const [festName, setFestName] = useState("");
-  const [festStateCode, setFestStateCode] = useState("");
-  const [festCity, setFestCity] = useState("");
-  const [festVenue, setFestVenue] = useState("");
-  const [festDescription, setFestDescription] = useState("");
-  const [festStartDate, setFestStartDate] = useState("");
-  const [festEndDate, setFestEndDate] = useState("");
-  const [festWebsiteUrl, setFestWebsiteUrl] = useState("");
-  const [festImageUrl, setFestImageUrl] = useState("");
-  const [festSaving, setFestSaving] = useState(false);
-  const [festSaved, setFestSaved] = useState(false);
-  const [festError, setFestError] = useState<string | null>(null);
-  const festSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [adminEmail, setAdminEmail] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<TabId>("overview");
+  const [refreshToken, setRefreshToken] = useState(0);
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
   useEffect(() => {
-    return () => {
-      mountedRef.current = false;
-      if (totwSavedTimerRef.current) clearTimeout(totwSavedTimerRef.current);
-      if (festSavedTimerRef.current) clearTimeout(festSavedTimerRef.current);
-    };
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
   }, []);
 
-  useEffect(() => {
-    checkAuth();
-  }, []);
-
-  async function checkAuth() {
+  const loadStats = useCallback(async (isFirstLoad = false) => {
     try {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-
-      if (!user || !OWNER_EMAILS.includes((user.email ?? "").toLowerCase())) {
-        setAuthorized(false);
-        setLoading(false);
-        return;
-      }
-
-      setAuthorized(true);
-      await loadData();
-    } catch {
-      // Network error during auth check — deny access and stop the spinner
-      setAuthorized(false);
-      setLoading(false);
-    }
-  }
-
-  async function loadData() {
-    try {
-      const supabase = createClient();
-      const weekAgo = new Date();
-      weekAgo.setDate(weekAgo.getDate() - 7);
-      const weekAgoISO = weekAgo.toISOString();
-
-      const [
-        { count: totalTrucks },
-        { count: liveTrucksCount },
-        { count: totalFollows },
-        { count: totalViews },
-        { count: newTrucksThisWeek },
-        { data: truckList },
-        { data: liveTruckList },
-      ] = await Promise.all([
-        supabase.from("trucks").select("id", { count: "exact", head: true }),
-        supabase.from("trucks").select("id", { count: "exact", head: true }).eq("is_live", true),
-        supabase.from("follows").select("*", { count: "exact", head: true }),
-        supabase.from("truck_views").select("id", { count: "exact", head: true }),
-        supabase.from("trucks").select("id", { count: "exact", head: true }).gte("created_at", weekAgoISO),
-        supabase
-          .from("trucks")
-          .select("id, name, cuisine, is_live, created_at, follows_agg:follows(count)")
-          .order("created_at", { ascending: false })
-          .limit(500),
-        supabase
-          .from("trucks")
-          .select("id, name, cuisine, is_live, created_at, locations(address, broadcasted_at)")
-          .eq("is_live", true)
-          .limit(200),
-      ]);
-
-      // Follower counts come from the embedded follows_agg count — no row scanning
-      const trucksWithFollowers = (truckList ?? []).map((truck: any) => ({
-        ...truck,
-        followers: Number(truck.follows_agg?.[0]?.count ?? 0),
-      }));
-
-      setStats({
-        totalTrucks: totalTrucks ?? 0,
-        liveTrucks: liveTrucksCount ?? 0,
-        totalUsers: 0, // requires service role key to query auth.users
-        totalFollows: totalFollows ?? 0,
-        totalViews: totalViews ?? 0,
-        newTrucksThisWeek: newTrucksThisWeek ?? 0,
-        newUsersThisWeek: 0,
-      });
-
-      setTrucks(trucksWithFollowers);
-      setLiveTrucks(liveTruckList ?? []);
+      const json = await fetchSection<{ stats: AdminStats; admin: { email: string | null } }>("overview");
+      if (!mountedRef.current) return;
+      setStats(json.stats);
+      setAdminEmail(json.admin?.email ?? null);
+      setStatsError(null);
       setLastRefresh(new Date());
-
-      // Load Truck of the Week settings
-      const { data: settingsData } = await supabase
-        .from("site_settings")
-        .select("key, value")
-        .in("key", ["featured_truck_id", "featured_message"]);
-      if (mountedRef.current && settingsData) {
-        const sm: Record<string, string> = {};
-        for (const row of settingsData) sm[row.key] = row.value ?? "";
-        setTotwTruckId(sm["featured_truck_id"] ?? "");
-        setTotwMessage(sm["featured_message"] ?? "");
-      }
-
-      await loadFestivals();
-    } catch {
-      // Network error — keep showing last loaded data (or empty state on first load)
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function refresh() {
-    setLoading(true);
-    await loadData();
-  }
-
-  async function loadFestivals() {
-    setFestivalsLoading(true);
-    try {
-      const res = await fetch("/api/admin/festivals");
-      if (!mountedRef.current) return;
-      if (res.ok) {
-        const json = await res.json();
-        setFestivals(json.festivals ?? []);
-      }
-    } catch {
-      // Network error — keep showing last loaded list
-    } finally {
-      if (mountedRef.current) setFestivalsLoading(false);
-    }
-  }
-
-  async function saveTotw() {
-    if (totwSaving) return; // in-flight guard
-    // Validate truck ID is a proper UUID if provided
-    const trimmedTruckId = totwTruckId.trim();
-    if (trimmedTruckId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmedTruckId)) {
-      setTotwError("Invalid truck ID — paste a valid UUID from the trucks list.");
-      return;
-    }
-    setTotwSaving(true);
-    setTotwError(null);
-    try {
-      const res = await fetch("/api/admin/save-settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ featured_truck_id: trimmedTruckId || null, featured_message: totwMessage }),
-      });
-      if (!mountedRef.current) return;
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error(json?.error ?? "Failed to save settings");
-      }
-      setTotwSaved(true);
-      totwSavedTimerRef.current = setTimeout(() => {
-        if (mountedRef.current) setTotwSaved(false);
-      }, 3000);
+      setAuthorized(true);
     } catch (err: any) {
-      if (mountedRef.current) setTotwError(err?.message ?? "Failed to save. Please try again.");
-    } finally {
-      if (mountedRef.current) setTotwSaving(false);
-    }
-  }
-
-  function resetFestivalForm() {
-    setEditingFestivalId(null);
-    setFestName("");
-    setFestStateCode("");
-    setFestCity("");
-    setFestVenue("");
-    setFestDescription("");
-    setFestStartDate("");
-    setFestEndDate("");
-    setFestWebsiteUrl("");
-    setFestImageUrl("");
-    setFestError(null);
-  }
-
-  function startEditFestival(f: Festival) {
-    setEditingFestivalId(f.id);
-    setFestName(f.name);
-    setFestStateCode(f.state_code);
-    setFestCity(f.city);
-    setFestVenue(f.venue ?? "");
-    setFestDescription(f.description ?? "");
-    setFestStartDate(f.start_date);
-    setFestEndDate(f.end_date);
-    setFestWebsiteUrl(f.website_url ?? "");
-    setFestImageUrl(f.image_url ?? "");
-    setFestError(null);
-  }
-
-  async function saveFestival() {
-    if (festSaving) return; // in-flight guard
-
-    const name = festName.trim();
-    const city = festCity.trim();
-    if (!name) return setFestError("Festival name is required.");
-    if (!festStateCode) return setFestError("Select a state.");
-    if (!city) return setFestError("City is required.");
-    if (!festStartDate || !festEndDate) return setFestError("Start and end dates are required.");
-    if (festEndDate < festStartDate) return setFestError("End date must be on or after the start date.");
-
-    setFestSaving(true);
-    setFestError(null);
-    try {
-      const body = {
-        ...(editingFestivalId ? { id: editingFestivalId } : {}),
-        name,
-        state_code: festStateCode,
-        city,
-        venue: festVenue.trim() || null,
-        description: festDescription.trim() || null,
-        start_date: festStartDate,
-        end_date: festEndDate,
-        website_url: festWebsiteUrl.trim() || null,
-        image_url: festImageUrl.trim() || null,
-      };
-      const res = await fetch("/api/admin/festivals", {
-        method: editingFestivalId ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
       if (!mountedRef.current) return;
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error(json?.error ?? "Failed to save festival");
+      const message: string = err?.message ?? "Failed to load stats";
+      // A rejected first load is the access decision; later failures are just
+      // a bad refresh and shouldn't throw the owner out of a working page.
+      if (isFirstLoad) {
+        setAuthorized(message === "Forbidden" ? false : true);
       }
-      await loadFestivals();
-      if (!mountedRef.current) return;
-      resetFestivalForm();
-      setFestSaved(true);
-      festSavedTimerRef.current = setTimeout(() => {
-        if (mountedRef.current) setFestSaved(false);
-      }, 3000);
-    } catch (err: any) {
-      if (mountedRef.current) setFestError(err?.message ?? "Failed to save. Please try again.");
-    } finally {
-      if (mountedRef.current) setFestSaving(false);
+      setStatsError(message === "Forbidden" ? null : message);
     }
+  }, []);
+
+  useEffect(() => { void loadStats(true); }, [loadStats]);
+
+  function refresh() {
+    setRefreshToken((t) => t + 1);
+    void loadStats();
   }
 
-  async function deleteFestival(id: string) {
-    if (!window.confirm("Delete this festival? This can't be undone.")) return;
-    try {
-      const res = await fetch(`/api/admin/festivals?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error(json?.error ?? "Failed to delete festival");
-      }
-      if (mountedRef.current) {
-        setFestivals((prev) => prev.filter((f) => f.id !== id));
-        if (editingFestivalId === id) resetFestivalForm();
-      }
-    } catch (err: any) {
-      if (mountedRef.current) setFestError(err?.message ?? "Failed to delete. Please try again.");
-    }
-  }
+  const headerSubtitle = [
+    adminEmail,
+    lastRefresh && `updated ${lastRefresh.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
+  ].filter(Boolean).join(" · ");
 
-  // ── Not authorized ──────────────────────────────────────────────────────────
+  // ── Not authorized ────────────────────────────────────────────────────
   if (authorized === false) {
     return (
       <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center p-6 text-center">
@@ -331,15 +88,20 @@ export default function AdminPage() {
         </div>
         <h1 className="text-xl font-black text-neutral-800 mb-2">Access Denied</h1>
         <p className="text-neutral-500 text-sm mb-6">This page is only accessible to the platform owner.</p>
-        <Link href="/" className="px-5 py-2.5 bg-brand-red text-white rounded-xl font-semibold text-sm">
-          Back to Map
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/login?redirect=/admin" className="px-5 py-2.5 bg-brand-red text-white rounded-xl font-semibold text-sm">
+            Sign in
+          </Link>
+          <Link href="/" className="px-5 py-2.5 bg-neutral-100 text-neutral-600 rounded-xl font-semibold text-sm">
+            Back to Map
+          </Link>
+        </div>
       </div>
     );
   }
 
-  // ── Loading ─────────────────────────────────────────────────────────────────
-  if (loading || authorized === null) {
+  // ── Checking session ──────────────────────────────────────────────────
+  if (authorized === null) {
     return (
       <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
         <div className="text-center">
@@ -350,11 +112,27 @@ export default function AdminPage() {
     );
   }
 
+  const TABS: { id: TabId; label: string; badge?: number }[] = [
+    { id: "overview", label: "Overview" },
+    { id: "live", label: "Live Now", badge: stats?.liveTrucks },
+    { id: "trucks", label: "All Trucks", badge: stats?.totalTrucks },
+    { id: "users", label: "Accounts", badge: stats?.totalUsers },
+    { id: "orders", label: "Orders", badge: stats?.openOrders },
+    { id: "catering", label: "Catering", badge: stats?.pendingCatering },
+    { id: "contact", label: "Inbox", badge: stats?.newContacts },
+    { id: "reviews", label: "Reviews" },
+    { id: "moderation", label: "Moderation" },
+    { id: "newsletter", label: "Newsletter", badge: stats?.newsletterActive },
+    { id: "announce", label: "📣 Announce" },
+    { id: "totw", label: "🏆 Truck of the Week" },
+    { id: "festivals", label: "🎪 Festivals" },
+  ];
+
   return (
     <div className="min-h-screen bg-neutral-100">
 
       {/* Header */}
-      <div className="bg-neutral-900 px-4 md:px-8 py-4 flex items-center justify-between">
+      <div className="bg-neutral-900 px-4 md:px-8 py-4 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-brand-red rounded-full flex items-center justify-center">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
@@ -371,9 +149,7 @@ export default function AdminPage() {
                 OWNER
               </span>
             </div>
-            <p className="text-neutral-500 text-xs">
-              Last updated {lastRefresh.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-            </p>
+            <p className="text-neutral-500 text-xs">{headerSubtitle}</p>
           </div>
         </div>
 
@@ -407,7 +183,16 @@ export default function AdminPage() {
         </div>
       )}
 
-      <div className="max-w-6xl mx-auto p-4 md:p-6">
+      <div className="max-w-7xl mx-auto p-4 md:p-6">
+
+        {statsError && (
+          <div className="bg-red-50 border border-red-100 rounded-2xl px-4 py-3 mb-4 flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-sm font-semibold text-red-600">{statsError}</p>
+            <button onClick={refresh} className="px-3 py-1.5 rounded-lg bg-white text-red-600 text-xs font-bold">
+              Retry
+            </button>
+          </div>
+        )}
 
         {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
@@ -437,9 +222,9 @@ export default function AdminPage() {
             }
           />
           <StatCard
-            label="Total Follows"
-            value={stats?.totalFollows ?? 0}
-            sub="across all trucks"
+            label="Total Users"
+            value={stats?.totalUsers ?? 0}
+            sub={`+${stats?.newUsersThisWeek ?? 0} this week`}
             color="orange"
             icon={
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -450,14 +235,14 @@ export default function AdminPage() {
             }
           />
           <StatCard
-            label="Profile Views"
-            value={stats?.totalViews ?? 0}
-            sub="total truck views"
+            label="Revenue"
+            value={money(stats?.revenueAllTime ?? 0)}
+            sub={`${money(stats?.revenueThisWeek ?? 0)} this week`}
             color="blue"
             icon={
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                <circle cx="12" cy="12" r="3"/>
+                <line x1="12" y1="1" x2="12" y2="23"/>
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
               </svg>
             }
           />
@@ -466,17 +251,10 @@ export default function AdminPage() {
         {/* Tabs */}
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
           <div className="flex border-b border-neutral-100 overflow-x-auto scrollbar-none">
-            {[
-              { id: "overview", label: "Overview" },
-              { id: "live", label: "Live Now", badge: stats?.liveTrucks },
-              { id: "trucks", label: "All Trucks", badge: stats?.totalTrucks },
-              { id: "users", label: "Recent Signups" },
-              { id: "totw", label: "🏆 Truck of the Week" },
-              { id: "festivals", label: "🎪 Festivals" },
-            ].map((tab) => (
+            {TABS.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => setActiveTab(tab.id)}
                 className={`flex-shrink-0 flex items-center gap-2 px-5 py-3.5 text-sm font-bold transition-colors border-b-2 ${
                   activeTab === tab.id
                     ? "text-brand-red border-brand-red"
@@ -495,513 +273,22 @@ export default function AdminPage() {
             ))}
           </div>
 
-          {/* Overview Tab */}
-          {activeTab === "overview" && (
-            <div className="p-6">
-              <div className="grid md:grid-cols-2 gap-6">
-
-                {/* Top trucks by followers */}
-                <div>
-                  <h3 className="text-sm font-black text-neutral-500 uppercase tracking-widest mb-4">
-                    Top Trucks by Followers
-                  </h3>
-                  <div className="flex flex-col gap-2">
-                    {[...trucks]
-                      .sort((a, b) => (b.followers ?? 0) - (a.followers ?? 0))
-                      .slice(0, 5)
-                      .map((truck, i) => (
-                        <div key={truck.id} className="flex items-center gap-3 py-2 border-b border-neutral-50 last:border-0">
-                          <span className="text-xs font-black text-neutral-300 w-5 text-center">{i + 1}</span>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-neutral-800 truncate">{truck.name}</p>
-                            <p className="text-xs text-neutral-400">{truck.cuisine}</p>
-                          </div>
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            {truck.is_live && (
-                              <span className="relative flex h-1.5 w-1.5">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-red opacity-75" />
-                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-brand-red" />
-                              </span>
-                            )}
-                            <span className="text-sm font-bold text-neutral-700">{truck.followers}</span>
-                            <span className="text-xs text-neutral-400">followers</span>
-                          </div>
-                        </div>
-                      ))}
-                    {trucks.length === 0 && (
-                      <p className="text-sm text-neutral-400 py-4 text-center">No trucks yet</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Recent activity */}
-                <div>
-                  <h3 className="text-sm font-black text-neutral-500 uppercase tracking-widest mb-4">
-                    Recently Joined Trucks
-                  </h3>
-                  <div className="flex flex-col gap-2">
-                    {trucks.slice(0, 5).map((truck) => (
-                      <div key={truck.id} className="flex items-center gap-3 py-2 border-b border-neutral-50 last:border-0">
-                        <div className="w-8 h-8 bg-neutral-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="2" strokeLinecap="round">
-                            <path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7V8z"/>
-                            <circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
-                          </svg>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-neutral-800 truncate">{truck.name}</p>
-                          <p className="text-xs text-neutral-400">
-                            {truck.cuisine} · joined {new Date(truck.created_at).toLocaleDateString()}
-                          </p>
-                        </div>
-                        {truck.is_live && (
-                          <span className="text-[10px] font-black px-2 py-0.5 bg-brand-red text-white rounded-full">LIVE</span>
-                        )}
-                      </div>
-                    ))}
-                    {trucks.length === 0 && (
-                      <p className="text-sm text-neutral-400 py-4 text-center">No trucks yet</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Live Now Tab */}
-          {activeTab === "live" && (
-            <div className="divide-y divide-neutral-50">
-              {liveTrucks.length === 0 ? (
-                <div className="py-16 text-center">
-                  <p className="text-neutral-400 text-sm">No trucks live right now</p>
-                </div>
-              ) : (
-                liveTrucks.map((truck: any) => (
-                  <div key={truck.id} className="flex items-center gap-4 px-6 py-4">
-                    <div className="relative flex h-3 w-3 flex-shrink-0">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-red opacity-75" />
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-brand-red" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold text-neutral-900">{truck.name}</p>
-                      <p className="text-sm text-neutral-500">{truck.cuisine}</p>
-                      {truck.locations?.[0] && (
-                        <p className="text-xs text-neutral-400 mt-0.5">
-                          {truck.locations[0].address} ·{" "}
-                          went live {new Date(truck.locations[0].broadcasted_at).toLocaleTimeString([], {
-                            hour: "2-digit", minute: "2-digit"
-                          })}
-                        </p>
-                      )}
-                    </div>
-                    <Link
-                      href={"/truck/" + truck.id}
-                      className="text-xs text-brand-red font-bold hover:underline flex-shrink-0"
-                    >
-                      View →
-                    </Link>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-
-          {/* All Trucks Tab */}
-          {activeTab === "trucks" && (
-            <div className="divide-y divide-neutral-50">
-              {/* Table header */}
-              <div className="grid grid-cols-[1fr_auto_auto_auto] gap-4 px-6 py-3 bg-neutral-50">
-                <span className="text-xs font-black text-neutral-400 uppercase tracking-wider">Truck</span>
-                <span className="text-xs font-black text-neutral-400 uppercase tracking-wider">Followers</span>
-                <span className="text-xs font-black text-neutral-400 uppercase tracking-wider">Status</span>
-                <span className="text-xs font-black text-neutral-400 uppercase tracking-wider">Joined</span>
-              </div>
-              {trucks.length === 0 ? (
-                <div className="py-16 text-center">
-                  <p className="text-neutral-400 text-sm">No trucks signed up yet</p>
-                </div>
-              ) : (
-                trucks.map((truck) => (
-                  <div key={truck.id} className="grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center px-6 py-4 hover:bg-neutral-50 transition-colors">
-                    <div className="min-w-0">
-                      <Link href={"/truck/" + truck.id} className="font-semibold text-neutral-800 hover:text-brand-red transition-colors truncate block">
-                        {truck.name}
-                      </Link>
-                      <p className="text-xs text-neutral-400">{truck.cuisine}</p>
-                    </div>
-                    <span className="text-sm font-bold text-neutral-700 text-center">{truck.followers ?? 0}</span>
-                    <span className={`text-[10px] font-black px-2 py-1 rounded-full text-center ${
-                      truck.is_live
-                        ? "bg-green-50 text-green-700"
-                        : "bg-neutral-100 text-neutral-400"
-                    }`}>
-                      {truck.is_live ? "LIVE" : "Offline"}
-                    </span>
-                    <span className="text-xs text-neutral-400 text-right">
-                      {new Date(truck.created_at).toLocaleDateString([], { month: "short", day: "numeric" })}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-
-          {/* Recent Signups Tab */}
-          {activeTab === "users" && (
-            <div className="p-6">
-              <div className="bg-neutral-50 rounded-xl p-4 mb-4 flex items-start gap-3">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E8481C" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0 mt-0.5">
-                  <circle cx="12" cy="12" r="10"/>
-                  <line x1="12" y1="8" x2="12" y2="12"/>
-                  <line x1="12" y1="16" x2="12.01" y2="16"/>
-                </svg>
-                <div>
-                  <p className="text-sm font-semibold text-neutral-700">User data requires a Supabase service role key</p>
-                  <p className="text-xs text-neutral-500 mt-0.5">
-                    To see full user signups, add <code className="bg-white px-1 py-0.5 rounded text-xs">SUPABASE_SERVICE_ROLE_KEY</code> to your environment variables, then view the Supabase Auth → Users tab in your project dashboard.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3">
-                <p className="text-xs font-black text-neutral-400 uppercase tracking-widest">Quick Links</p>
-                {[
-                  { label: "View all users in Supabase", href: "https://supabase.com/dashboard", desc: "Full user list with emails, sign-in history" },
-                  { label: "Database tables", href: "https://supabase.com/dashboard", desc: "Browse trucks, follows, orders, reviews" },
-                  { label: "Vercel Analytics", href: "https://vercel.com/dashboard", desc: "Page views, traffic sources, top pages" },
-                ].map((link) => (
-                  <a
-                    key={link.href}
-                    href={link.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-3 p-4 bg-white border border-neutral-100 rounded-xl hover:border-brand-red/30 transition-colors group"
-                  >
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-neutral-800 group-hover:text-brand-red transition-colors">{link.label}</p>
-                      <p className="text-xs text-neutral-400 mt-0.5">{link.desc}</p>
-                    </div>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E8481C" strokeWidth="2.5" strokeLinecap="round" className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                      <path d="M5 12h14M12 5l7 7-7 7"/>
-                    </svg>
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Truck of the Week Tab */}
-          {activeTab === "totw" && (
-            <div className="p-6 max-w-lg">
-              <p className="text-sm font-black text-neutral-500 uppercase tracking-widest mb-5">
-                Truck of the Week
-              </p>
-
-              <div className="flex flex-col gap-4">
-                <div>
-                  <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-1.5">
-                    Select Truck
-                  </label>
-                  <select
-                    value={totwTruckId}
-                    onChange={(e) => setTotwTruckId(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 focus:outline-none focus:border-brand-red bg-white"
-                  >
-                    <option value="">— None (clear featured truck) —</option>
-                    {trucks.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}{t.cuisine ? ` · ${t.cuisine}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-1.5">
-                    Featured Message
-                  </label>
-                  <textarea
-                    value={totwMessage}
-                    onChange={(e) => setTotwMessage(e.target.value)}
-                    rows={3}
-                    maxLength={500}
-                    placeholder="e.g. This week's must-try truck!"
-                    className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-300 focus:outline-none focus:border-brand-red resize-none"
-                  />
-                </div>
-
-                {totwError && (
-                  <p className="text-xs text-red-500 font-semibold">{totwError}</p>
-                )}
-
-                {totwSaved ? (
-                  <div className="flex items-center gap-2 py-3 px-4 bg-green-50 rounded-xl">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round">
-                      <polyline points="20 6 9 17 4 12"/>
-                    </svg>
-                    <p className="text-sm font-semibold text-green-700">Saved! Homepage banner updated.</p>
-                  </div>
-                ) : (
-                  <button
-                    onClick={saveTotw}
-                    disabled={totwSaving}
-                    className="py-2.5 bg-brand-red text-white rounded-xl font-black text-sm uppercase tracking-wide disabled:opacity-40 hover:bg-red-600 transition-colors active:scale-95"
-                  >
-                    {totwSaving ? "Saving..." : "Save Truck of the Week"}
-                  </button>
-                )}
-
-                {totwTruckId && (
-                  <div className="bg-neutral-50 rounded-xl p-4 flex items-start gap-3">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E8481C" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0 mt-0.5">
-                      <circle cx="12" cy="12" r="10"/>
-                      <line x1="12" y1="8" x2="12" y2="12"/>
-                      <line x1="12" y1="16" x2="12.01" y2="16"/>
-                    </svg>
-                    <div>
-                      <p className="text-sm font-semibold text-neutral-700">Currently featured</p>
-                      <p className="text-xs text-neutral-500 mt-0.5">
-                        {trucks.find((t) => t.id === totwTruckId)?.name ?? totwTruckId}
-                        {totwMessage && ` — "${totwMessage}"`}
-                      </p>
-                      <Link href="/" target="_blank" rel="noopener noreferrer" className="text-xs text-brand-red font-semibold mt-1 inline-block hover:underline">
-                        Preview homepage →
-                      </Link>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Festivals (Events) Tab */}
-          {activeTab === "festivals" && (
-            <div className="p-6">
-              <p className="text-sm font-black text-neutral-500 uppercase tracking-widest mb-5">
-                {editingFestivalId ? "Edit Festival" : "Add Festival"}
-              </p>
-
-              <div className="flex flex-col gap-4 max-w-lg mb-8">
-                <div>
-                  <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-1.5">
-                    Name
-                  </label>
-                  <input
-                    type="text"
-                    value={festName}
-                    onChange={(e) => setFestName(e.target.value)}
-                    maxLength={200}
-                    placeholder="e.g. Newark Food Truck Fest"
-                    className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-300 focus:outline-none focus:border-brand-red"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-1.5">
-                      State
-                    </label>
-                    <select
-                      value={festStateCode}
-                      onChange={(e) => setFestStateCode(e.target.value)}
-                      className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 focus:outline-none focus:border-brand-red bg-white"
-                    >
-                      <option value="">Select state…</option>
-                      {US_STATES.map((s) => (
-                        <option key={s.code} value={s.code}>{s.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-1.5">
-                      City
-                    </label>
-                    <input
-                      type="text"
-                      value={festCity}
-                      onChange={(e) => setFestCity(e.target.value)}
-                      maxLength={100}
-                      placeholder="e.g. Newark"
-                      className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-300 focus:outline-none focus:border-brand-red"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-1.5">
-                    Venue / Address <span className="normal-case text-neutral-300">(optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={festVenue}
-                    onChange={(e) => setFestVenue(e.target.value)}
-                    maxLength={200}
-                    placeholder="e.g. Military Park"
-                    className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-300 focus:outline-none focus:border-brand-red"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-1.5">
-                      Start Date
-                    </label>
-                    <input
-                      type="date"
-                      value={festStartDate}
-                      onChange={(e) => setFestStartDate(e.target.value)}
-                      className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 focus:outline-none focus:border-brand-red"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-1.5">
-                      End Date
-                    </label>
-                    <input
-                      type="date"
-                      value={festEndDate}
-                      onChange={(e) => setFestEndDate(e.target.value)}
-                      className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 focus:outline-none focus:border-brand-red"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-1.5">
-                    Description <span className="normal-case text-neutral-300">(optional)</span>
-                  </label>
-                  <textarea
-                    value={festDescription}
-                    onChange={(e) => setFestDescription(e.target.value)}
-                    rows={3}
-                    maxLength={2000}
-                    placeholder="A short description shown on the event listing"
-                    className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-300 focus:outline-none focus:border-brand-red resize-none"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-1.5">
-                      Website <span className="normal-case text-neutral-300">(optional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={festWebsiteUrl}
-                      onChange={(e) => setFestWebsiteUrl(e.target.value)}
-                      placeholder="https://…"
-                      className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-300 focus:outline-none focus:border-brand-red"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-1.5">
-                      Image URL <span className="normal-case text-neutral-300">(optional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={festImageUrl}
-                      onChange={(e) => setFestImageUrl(e.target.value)}
-                      placeholder="https://…"
-                      className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-300 focus:outline-none focus:border-brand-red"
-                    />
-                  </div>
-                </div>
-
-                {festError && (
-                  <p className="text-xs text-red-500 font-semibold">{festError}</p>
-                )}
-
-                {festSaved ? (
-                  <div className="flex items-center gap-2 py-3 px-4 bg-green-50 rounded-xl">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round">
-                      <polyline points="20 6 9 17 4 12"/>
-                    </svg>
-                    <p className="text-sm font-semibold text-green-700">Saved!</p>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={saveFestival}
-                      disabled={festSaving}
-                      className="py-2.5 px-5 bg-brand-red text-white rounded-xl font-black text-sm uppercase tracking-wide disabled:opacity-40 hover:bg-red-600 transition-colors active:scale-95"
-                    >
-                      {festSaving ? "Saving..." : editingFestivalId ? "Save Changes" : "Add Festival"}
-                    </button>
-                    {editingFestivalId && (
-                      <button
-                        onClick={resetFestivalForm}
-                        className="py-2.5 px-4 text-neutral-500 rounded-xl font-bold text-sm hover:text-neutral-700 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Festival list */}
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm font-black text-neutral-500 uppercase tracking-widest">
-                  All Festivals
-                </p>
-                <label className="flex items-center gap-2 text-xs font-semibold text-neutral-500">
-                  <input
-                    type="checkbox"
-                    checked={showAllFestivals}
-                    onChange={(e) => setShowAllFestivals(e.target.checked)}
-                  />
-                  Show past events
-                </label>
-              </div>
-
-              <div className="divide-y divide-neutral-50 border border-neutral-100 rounded-xl overflow-hidden">
-                {festivalsLoading ? (
-                  <div className="py-10 text-center text-sm text-neutral-400">Loading…</div>
-                ) : (() => {
-                  const todayISO = new Date().toISOString().split("T")[0];
-                  const visible = showAllFestivals
-                    ? festivals
-                    : festivals.filter((f) => f.end_date >= todayISO);
-                  if (visible.length === 0) {
-                    return (
-                      <div className="py-10 text-center text-sm text-neutral-400">
-                        No {showAllFestivals ? "" : "upcoming "}festivals yet — add one above.
-                      </div>
-                    );
-                  }
-                  return visible.map((f) => (
-                    <div key={f.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-neutral-50 transition-colors">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-neutral-800 truncate">{f.name}</p>
-                        <p className="text-xs text-neutral-400">
-                          {f.city}, {f.state_code} ·{" "}
-                          {new Date(f.start_date + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric" })}
-                          {f.end_date !== f.start_date && (
-                            <> – {new Date(f.end_date + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric" })}</>
-                          )}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => startEditFestival(f)}
-                        className="text-xs text-brand-red font-bold hover:underline flex-shrink-0"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => deleteFestival(f.id)}
-                        className="text-xs text-neutral-400 font-bold hover:text-red-500 transition-colors flex-shrink-0"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  ));
-                })()}
-              </div>
-            </div>
-          )}
+          {/* Panels mount lazily — a tab's data is only fetched once opened. */}
+          {activeTab === "overview" && <OverviewPanel stats={stats} onGoToTab={setActiveTab} />}
+          {activeTab === "live" && <TrucksPanel refreshToken={refreshToken} liveOnly />}
+          {activeTab === "trucks" && <TrucksPanel refreshToken={refreshToken} />}
+          {activeTab === "users" && <UsersPanel refreshToken={refreshToken} />}
+          {activeTab === "orders" && <OrdersPanel refreshToken={refreshToken} />}
+          {activeTab === "catering" && <CateringPanel refreshToken={refreshToken} />}
+          {activeTab === "contact" && <ContactPanel refreshToken={refreshToken} />}
+          {activeTab === "reviews" && <ReviewsPanel refreshToken={refreshToken} />}
+          {activeTab === "moderation" && <ModerationPanel refreshToken={refreshToken} />}
+          {activeTab === "newsletter" && <NewsletterPanel refreshToken={refreshToken} />}
+          {activeTab === "announce" && <AnnouncePanel refreshToken={refreshToken} />}
+          {activeTab === "totw" && <FeaturedPanel refreshToken={refreshToken} />}
+          {activeTab === "festivals" && <FestivalsPanel refreshToken={refreshToken} />}
         </div>
 
-        {/* Footer note */}
         <p className="text-center text-xs text-neutral-400 mt-6">
           Admin panel · hottruckmap.com · Only visible to owner
         </p>
@@ -1010,42 +297,40 @@ export default function AdminPage() {
   );
 }
 
-// ── Stat card component ────────────────────────────────────────────────────────
 function StatCard({
-  label, value, sub, color, pulse, icon
+  label, value, sub, color, icon, pulse,
 }: {
   label: string;
-  value: number;
+  value: number | string;
   sub: string;
   color: "red" | "green" | "orange" | "blue";
-  pulse?: boolean;
   icon: React.ReactNode;
+  pulse?: boolean;
 }) {
   const colors = {
-    red:    "bg-red-50 text-brand-red",
-    green:  "bg-green-50 text-green-600",
-    orange: "bg-orange-50 text-orange-500",
-    blue:   "bg-blue-50 text-blue-500",
+    red: "text-brand-red bg-red-50",
+    green: "text-green-600 bg-green-50",
+    orange: "text-orange-500 bg-orange-50",
+    blue: "text-blue-500 bg-blue-50",
   };
-
   return (
-    <div className="bg-white rounded-2xl shadow-sm p-4 flex flex-col gap-3">
-      <div className="flex items-center justify-between">
+    <div className="bg-white rounded-2xl p-4 shadow-sm">
+      <div className="flex items-start justify-between mb-3">
         <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${colors[color]}`}>
           {icon}
         </div>
-        {pulse && value > 0 && (
-          <span className="relative flex h-2.5 w-2.5">
+        {pulse && typeof value === "number" && value > 0 && (
+          <span className="relative flex h-2 w-2 mt-1">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
           </span>
         )}
       </div>
-      <div>
-        <p className="text-2xl font-black text-neutral-800">{value.toLocaleString()}</p>
-        <p className="text-xs font-semibold text-neutral-500 mt-0.5">{label}</p>
-        <p className="text-[10px] text-neutral-400 mt-0.5">{sub}</p>
-      </div>
+      <p className="text-2xl font-black text-neutral-800 leading-none">
+        {typeof value === "number" ? value.toLocaleString() : value}
+      </p>
+      <p className="text-xs font-bold text-neutral-500 mt-1">{label}</p>
+      <p className="text-[11px] text-neutral-400 mt-0.5">{sub}</p>
     </div>
   );
 }

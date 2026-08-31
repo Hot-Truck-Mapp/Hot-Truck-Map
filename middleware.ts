@@ -1,9 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { isAdminEmail } from "@/lib/admin";
 
 const PROTECTED_PREFIXES = ["/dashboard", "/admin", "/account"];
-const ADMIN_EMAILS = ["hottruckmap@gmail.com"];
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -56,7 +56,7 @@ export async function middleware(request: NextRequest) {
 
   // ── Admin role gate (server-side backstop) ───────────────────────────
   if (pathname.startsWith("/admin") && user) {
-    if (!ADMIN_EMAILS.includes((user.email ?? "").toLowerCase())) {
+    if (!isAdminEmail(user.email)) {
       const url = request.nextUrl.clone();
       url.pathname = "/";
       return NextResponse.redirect(url);

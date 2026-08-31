@@ -1,29 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient as createServerClient } from "@/lib/supabase/server";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { isValidStateCode, stateNameForCode } from "@/lib/us-states";
-
-// Owner emails allowed to call this endpoint (server-side check)
-const OWNER_EMAILS = ["hottruckmap@gmail.com"];
+import { getServiceClient, requireAdmin } from "@/lib/admin-server";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-function getServiceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) throw new Error("Missing service role config");
-  return createSupabaseClient(url, serviceKey);
-}
-
-async function requireOwner() {
-  const supabase = await createServerClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user || !OWNER_EMAILS.includes((user.email ?? "").toLowerCase())) {
-    return null;
-  }
-  return user;
-}
 
 /** Validates the shared festival fields from a request body. Returns either
  * a cleaned record ready to insert/update, or a NextResponse error to return
@@ -88,7 +68,7 @@ function validateFestivalBody(body: Record<string, unknown>):
 
 export async function GET(req: NextRequest) {
   try {
-    const user = await requireOwner();
+    const user = await requireAdmin();
     if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const db = getServiceClient();
@@ -111,7 +91,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await requireOwner();
+    const user = await requireAdmin();
     if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const body = await req.json();
@@ -130,7 +110,7 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const user = await requireOwner();
+    const user = await requireAdmin();
     if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const body = await req.json();
@@ -157,7 +137,7 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const user = await requireOwner();
+    const user = await requireAdmin();
     if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const id = req.nextUrl.searchParams.get("id") ?? "";
