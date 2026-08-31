@@ -49,10 +49,28 @@ ON CONFLICT (id) DO UPDATE SET public = true;
 
 -- Cap uploads server-side. The clients already check 5 MB and the three
 -- image mime types, but a client check is a courtesy, not a control.
-UPDATE storage.buckets
-SET file_size_limit = 5242880,
-    allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp']
-WHERE id IN ('avatars', 'menu-photos', 'truck-photos');
+--
+-- Guarded on column existence: file_size_limit / allowed_mime_types were
+-- added to storage.buckets in later Supabase versions, and the SQL editor
+-- runs this file in one transaction — an unguarded UPDATE against an older
+-- project would roll back every policy below with it.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'storage'
+      AND table_name   = 'buckets'
+      AND column_name  = 'file_size_limit'
+  ) THEN
+    UPDATE storage.buckets
+    SET file_size_limit    = 5242880,
+        allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp']
+    WHERE id IN ('avatars', 'menu-photos', 'truck-photos');
+    RAISE NOTICE 'Bucket limits set: 5 MB, jpeg/png/webp.';
+  ELSE
+    RAISE NOTICE 'storage.buckets has no file_size_limit column on this project — skipped. Set the limits in the Storage UI instead.';
+  END IF;
+END $$;
 
 
 -- ── 1. avatars ───────────────────────────────────────────────
