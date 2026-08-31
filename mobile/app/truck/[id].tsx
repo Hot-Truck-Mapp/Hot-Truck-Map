@@ -63,7 +63,11 @@ function timeAgo(dateStr: string): string {
 }
 
 function fmt24to12(time24: string): string {
-  if (!time24 || !time24.includes(':')) return time24 ?? '';
+  if (!time24) return '';
+  // The operator dashboard stores times already formatted as "10:00 AM" —
+  // leave those alone rather than re-parsing "10" as an hour.
+  if (/[ap]\.?m\.?$/i.test(time24.trim())) return time24.trim();
+  if (!time24.includes(':')) return time24;
   const [hStr, mStr] = time24.split(':');
   let h = parseInt(hStr, 10);
   if (isNaN(h)) return time24;
@@ -77,6 +81,47 @@ const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 const DAY_LABELS: Record<string, string> = {
   mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun',
 };
+
+// schedules.day_of_week is 0-6 starting Sunday (JS getDay), which is how the
+// operator dashboard writes it. DAY_KEYS runs Mon-first for display.
+const DAY_KEY_BY_INDEX = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+type ScheduleRow = {
+  day_of_week: number;
+  open_time: string | null;
+  close_time: string | null;
+  location: string | null;
+};
+
+/**
+ * Collapse `schedules` rows into the day-keyed shape this screen renders.
+ *
+ * A truck can have more than one stop on the same day — the dashboard has an
+ * explicit "Add Another Stop" — so rows are grouped and the extras are noted
+ * rather than silently dropped.
+ */
+function scheduleFromRows(rows: ScheduleRow[]): Schedule {
+  const byDay: Record<string, ScheduleRow[]> = {};
+  for (const row of rows) {
+    const key = DAY_KEY_BY_INDEX[row.day_of_week];
+    if (!key) continue;
+    (byDay[key] ??= []).push(row);
+  }
+
+  const schedule: Schedule = {};
+  for (const [key, dayRows] of Object.entries(byDay)) {
+    const [first, ...rest] = dayRows;
+    schedule[key] = {
+      open: true,
+      open_time: first.open_time ?? undefined,
+      close_time: first.close_time ?? undefined,
+      location: rest.length
+        ? `${first.location ?? ''} +${rest.length} more`
+        : first.location ?? undefined,
+    };
+  }
+  return schedule;
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -133,9 +178,21 @@ export default function TruckScreen() {
     if (!id) { setLoading(false); return; }
     async function load() {
       try {
-        const [truckRes, menuRes, locationRes, spottedRes, reviewsRes] = await Promise.all([
-          supabase.from('trucks').select('id, name, cuisine, description, profile_photo, is_live, dietary_tags, instagram, phone, avg_rating, review_count, catering_description, catering_starting_price, catering_min_guests, schedule, offers_catering').eq('id', id).maybeSingle(),
-          supabase.from('menu_items').select('id, truck_id, name, description, price, allergens, is_sold_out, photo, is_popular, sort_order, category').eq('truck_id', id).limit(200),
+        const [truckRes, schedRes, menuRes, locationRes, spottedRes, reviewsRes] = await Promise.all([
+          // NOTE: no `schedule` column here. This used to select trucks.schedule,
+          // which no migration creates and nothing ever writes — the operator
+          // dashboard saves to the `schedules` table. The result was a weekly
+          // schedule that read "No schedule posted yet" for every truck, and a
+          // query that fails outright (42703) on a database without the column,
+          // blanking the whole screen. Read the real table instead.
+          supabase.from('trucks').select('id, name, cuisine, description, profile_photo, is_live, dietary_tags, instagram, phone, avg_rating, review_count, catering_description, catering_starting_price, catering_min_guests, offers_catering').eq('id', id).maybeSingle(),
+          supabase
+            .from('schedules')
+            .select('id, day_of_week, open_time, close_time, location, notes')
+            .eq('truck_id', id)
+            .order('day_of_week', { ascending: true })
+            .limit(20),
+          supabase.from('menu_items').select('id, truck_id, name, description, price, allergens, is_sold_out, photo, is_popular, sort_order, category').eq('truck_id', id).order('sort_order', { ascending: true, nullsFirst: false }).order('created_at', { ascending: true }).limit(200),
           supabase
             .from('locations')
             .select('id, lat, lng, address, broadcasted_at')
@@ -164,6 +221,7 @@ export default function TruckScreen() {
             ...truckRes.data,
             menu_items: menuRes.data ?? [],
             location: locationRes.data ?? undefined,
+            schedule: scheduleFromRows(schedRes.data ?? []),
           });
         }
         setSpottedPosts(spottedRes.data ?? []);

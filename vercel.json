@@ -3,6 +3,10 @@
     {
       "path": "/api/orders/auto-cancel",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/trucks/auto-offline",
+      "schedule": "0 * * * *"
     }
   ]
 }

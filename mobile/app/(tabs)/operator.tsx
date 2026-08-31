@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, View, Text, TouchableOpacity,
-  Alert, ActivityIndicator, ScrollView, TextInput,
+  Alert, ActivityIndicator, ScrollView, TextInput, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -14,6 +14,12 @@ type Status = 'idle' | 'locating' | 'live' | 'going-offline';
 
 const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'https://hottruckmap.com';
 
+/** ["a", "b", "c"] → "a, b and c" */
+function listToSentence(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? '';
+  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+}
+
 export default function OperatorTab() {
   const { session } = useAuth();
   const router = useRouter();
@@ -21,6 +27,12 @@ export default function OperatorTab() {
 
   const [checking, setChecking] = useState(true);
   const [truck, setTruck] = useState<{ id: string; name: string } | null>(null);
+  // What's still missing before this truck should be on the map. The web
+  // dashboard gates Go Live behind the same three checks; mobile had none, so
+  // a truck with no description, phone or menu could go live and customers
+  // would find an order page with nothing on it.
+  const [missing, setMissing] = useState<string[]>([]);
+  const [loadError, setLoadError] = useState(false);
   const [status, setStatus] = useState<Status>('idle');
   const [address, setAddress] = useState<string | null>(null);
   const [showManual, setShowManual] = useState(false);
@@ -33,14 +45,35 @@ export default function OperatorTab() {
 
   async function checkOperatorStatus() {
     try {
-      const { data } = await supabase
+      setLoadError(false);
+      const { data, error } = await supabase
         .from('trucks')
-        .select('id, name, is_live')
+        .select('id, name, is_live, description, phone')
         .eq('owner_id', session!.user.id)
         .maybeSingle();
       if (!mountedRef.current) return;
+      if (error) throw new Error(error.message);
+
       setTruck(data ? { id: data.id, name: data.name } : null);
       if (data?.is_live) setStatus('live');
+
+      if (data) {
+        const { count } = await supabase
+          .from('menu_items')
+          .select('id', { count: 'exact', head: true })
+          .eq('truck_id', data.id);
+        if (!mountedRef.current) return;
+        const gaps: string[] = [];
+        if (!data.description) gaps.push('a short description');
+        if (!data.phone) gaps.push('a phone number');
+        if (!count) gaps.push('at least one menu item');
+        setMissing(gaps);
+      }
+    } catch {
+      // Without this, a network blip threw out of the async function and left
+      // truck as null — showing a real operator the "List Your Truck" screen
+      // as though they'd never signed up.
+      if (mountedRef.current) setLoadError(true);
     } finally {
       if (mountedRef.current) setChecking(false);
     }
@@ -77,8 +110,20 @@ export default function OperatorTab() {
     }
   }
 
+  /** Same three checks the web dashboard enforces before Go Live. */
+  function blockedBySetup(): boolean {
+    if (missing.length === 0) return false;
+    Alert.alert(
+      'Finish your profile first',
+      `Before going live, add ${listToSentence(missing)} at hottruckmap.com/dashboard. ` +
+        'Customers who find you need something to order.'
+    );
+    return true;
+  }
+
   async function goLiveGPS() {
     if (status !== 'idle') return;
+    if (blockedBySetup()) return;
     setStatus('locating');
     try {
       const { status: perm } = await Location.requestForegroundPermissionsAsync();
@@ -104,10 +149,20 @@ export default function OperatorTab() {
 
   async function goLiveManual() {
     if (!manualAddress.trim() || status !== 'idle') return;
+    if (blockedBySetup()) return;
     setStatus('locating');
     try {
+      // Supplied as an EAS environment variable rather than through
+      // eas.json — GitHub push protection flags Mapbox tokens, so it is
+      // deliberately not in the repo. See mobile/.env.example for how to
+      // set it. It was in no build profile at all until now, which made
+      // this whole fallback dead in every shipped build.
       const token = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
-      if (!token) throw new Error('Map service not configured.');
+      if (!token) {
+        throw new Error(
+          'Address lookup is unavailable in this build. Use GPS to go live, or update your location from the dashboard.'
+        );
+      }
       const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(manualAddress)}.json?access_token=${token}`);
       const data = await res.json();
       const feature = data.features?.[0];
@@ -168,6 +223,26 @@ export default function OperatorTab() {
     );
   }
 
+  // ── Couldn't reach the server ──────────────────────────────────────────────
+  // Distinct from "not an operator": we don't know either way, so don't tell
+  // someone who owns a truck that they don't.
+  if (loadError && !truck) {
+    return (
+      <SafeAreaView style={[styles.container, styles.centered]}>
+        <Text style={styles.emoji}>📡</Text>
+        <Text style={styles.title}>Couldn&apos;t load your truck</Text>
+        <Text style={styles.subtitle}>Check your connection and try again.</Text>
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          onPress={() => { setChecking(true); checkOperatorStatus(); }}
+          accessibilityRole="button"
+        >
+          <Text style={styles.primaryBtnText}>Try Again</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
   // ── Not an operator ────────────────────────────────────────────────────────
   if (!truck) {
     return (
@@ -175,9 +250,21 @@ export default function OperatorTab() {
         <Text style={styles.emoji}>🚚</Text>
         <Text style={styles.title}>List Your Truck</Text>
         <Text style={styles.subtitle}>
-          Sign up as a food truck operator at hottruckmap.com to go live on the map.
+          Food truck signup happens on the web. It takes about two minutes, and
+          then you can go live from right here.
         </Text>
-        <Text style={styles.url}>hottruckmap.com/signup</Text>
+        {/* This used to be flat, untappable text reading "hottruckmap.com/signup",
+            which left the operator to retype a URL by hand. ?role=operator is
+            read by the web signup page and jumps straight to the operator step. */}
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          onPress={() => Linking.openURL(`${API_BASE}/signup?role=operator`)}
+          accessibilityLabel="Sign up as a food truck operator"
+          accessibilityRole="link"
+        >
+          <Text style={styles.primaryBtnText}>Sign Up My Truck</Text>
+        </TouchableOpacity>
+        <Text style={styles.urlHint}>Opens hottruckmap.com in your browser</Text>
       </SafeAreaView>
     );
   }
@@ -216,10 +303,30 @@ export default function OperatorTab() {
           </View>
         )}
 
+        {/* Setup gaps — same three the web dashboard checks */}
+        {status === 'idle' && missing.length > 0 && (
+          <View style={styles.setupBox}>
+            <Text style={styles.setupTitle}>Finish setup to go live</Text>
+            <Text style={styles.setupBody}>
+              Add {listToSentence(missing)} in your dashboard at hottruckmap.com.
+            </Text>
+            <TouchableOpacity
+              onPress={() => Linking.openURL(`${API_BASE}/dashboard`)}
+              accessibilityRole="link"
+            >
+              <Text style={styles.setupLink}>Open my dashboard →</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* IDLE state */}
         {status === 'idle' && (
           <View style={styles.idleSection}>
-            <TouchableOpacity style={styles.goLiveBtn} onPress={goLiveGPS} activeOpacity={0.85}>
+            <TouchableOpacity
+              style={[styles.goLiveBtn, missing.length > 0 && styles.btnDisabled]}
+              onPress={goLiveGPS}
+              activeOpacity={0.85}
+            >
               <Text style={styles.goLiveBtnText}>📍  Go Live</Text>
               <Text style={styles.goLiveSubtext}>Tap to broadcast your GPS location</Text>
             </TouchableOpacity>
@@ -270,7 +377,15 @@ const styles = StyleSheet.create({
   emoji: { fontSize: 48, marginBottom: 12 },
   title: { fontSize: 22, fontWeight: '800', color: Colors.text, textAlign: 'center', marginBottom: 8 },
   subtitle: { fontSize: 15, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22, marginBottom: 24 },
-  url: { fontSize: 14, color: Colors.primary, fontWeight: '600' },
+  urlHint: { fontSize: 12, color: Colors.textSecondary, marginTop: 12, textAlign: 'center' },
+
+  setupBox: {
+    width: '100%', backgroundColor: Colors.card, borderRadius: 14, padding: 16,
+    marginBottom: 20, borderWidth: 1, borderColor: Colors.border,
+  },
+  setupTitle: { fontSize: 15, fontWeight: '800', color: Colors.text, marginBottom: 6 },
+  setupBody: { fontSize: 13, color: Colors.textSecondary, lineHeight: 19, marginBottom: 10 },
+  setupLink: { fontSize: 13, fontWeight: '700', color: Colors.primary },
 
   truckName: { fontSize: 20, fontWeight: '800', color: Colors.text, marginBottom: 32, textAlign: 'center' },
 
