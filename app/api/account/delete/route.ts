@@ -41,6 +41,72 @@ export async function DELETE(req: NextRequest) {
   // Use the service role client to clean up data and delete the account
   const admin = createClient(supabaseUrl, serviceRoleKey);
 
+  // ── Operators: this deletes their whole business, not just an account ──
+  //
+  // trucks.owner_id is ON DELETE CASCADE, so deleting the auth user takes the
+  // truck row with it — and menu_items, schedules, locations, follows,
+  // catering_packages, reviews and truck_views all cascade from trucks in
+  // turn. orders.truck_id is ON DELETE SET NULL, so orders survive but with a
+  // null truck_id, which makes them unreachable to the dashboard (every query
+  // there filters on truck_id). The "keep order records for operator
+  // bookkeeping" intent below is defeated for the operator's own truck.
+  //
+  // None of that was surfaced anywhere: the account page said only
+  // "Permanently delete your account and all associated data". Require an
+  // explicit acknowledgement so an operator cannot destroy their listing by
+  // clicking through a generic confirm.
+  const { data: ownedTruck } = await admin
+    .from("trucks")
+    .select("id, name")
+    .eq("owner_id", userId)
+    .maybeSingle();
+
+  if (ownedTruck) {
+    let acknowledged = false;
+    try {
+      const body = await req.json();
+      acknowledged = body?.deleteTruck === true;
+    } catch { /* no body sent */ }
+
+    if (!acknowledged) {
+      const [{ count: menuCount }, { count: followerCount }] = await Promise.all([
+        admin.from("menu_items").select("id", { count: "exact", head: true }).eq("truck_id", ownedTruck.id),
+        admin.from("follows").select("user_id", { count: "exact", head: true }).eq("truck_id", ownedTruck.id),
+      ]);
+      return NextResponse.json(
+        {
+          error: "This account owns a food truck listing.",
+          requiresTruckAck: true,
+          truck: {
+            name: ownedTruck.name,
+            menuItems: menuCount ?? 0,
+            followers: followerCount ?? 0,
+          },
+        },
+        { status: 409 }
+      );
+    }
+
+    // Acknowledged — remove the truck's storage before the cascade removes the
+    // rows that point at it. Previously only customers/<uid>.<ext> was cleaned
+    // up, so every truck profile photo and menu photo was orphaned in storage
+    // permanently, with nothing left in the database to find them by.
+    for (const [bucket, prefix] of [
+      ["avatars", `trucks/${ownedTruck.id}`],
+      ["menu-photos", `menu/${ownedTruck.id}`],
+    ] as const) {
+      try {
+        const { data: files } = await admin.storage.from(bucket).list(prefix, { limit: 1000 });
+        if (files?.length) {
+          await admin.storage.from(bucket).remove(files.map((f) => `${prefix}/${f.name}`));
+        }
+      } catch {
+        // Storage cleanup is best-effort — it must not block the deletion the
+        // user has explicitly asked for and already confirmed twice.
+      }
+    }
+  }
+
   // 1. Delete push subscriptions
   const { error: pushErr } = await admin
     .from("push_subscriptions")

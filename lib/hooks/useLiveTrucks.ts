@@ -28,10 +28,19 @@ export function useLiveTrucks(filters: MapFilters) {
 
     async function fetchTrucks() {
       try {
+        // Explicit columns, not `*`. This query runs for every anonymous
+        // visitor to the map, and `*` was returning owner_id — a real
+        // auth.users UUID for every operator on the platform — along with
+        // a set of orphan columns on trucks (schedule, location, is_open,
+        // opens_at, closes_at, cuisine_type) that nothing writes and
+        // nothing should read. Every other query in the app already names
+        // its columns; this one didn't.
         const { data, error: queryError } = await supabase
           .from("trucks")
           .select(`
-            *,
+            id, name, cuisine, description, phone, instagram, profile_photo,
+            is_live, dietary_tags, avg_rating, review_count, created_at,
+            offers_catering,
             location:locations(
               id, lat, lng, address, broadcasted_at
             )

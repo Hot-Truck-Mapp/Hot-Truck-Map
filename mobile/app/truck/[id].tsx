@@ -179,12 +179,16 @@ export default function TruckScreen() {
     async function load() {
       try {
         const [truckRes, schedRes, menuRes, locationRes, spottedRes, reviewsRes] = await Promise.all([
-          // NOTE: no `schedule` column here. This used to select trucks.schedule,
-          // which no migration creates and nothing ever writes — the operator
-          // dashboard saves to the `schedules` table. The result was a weekly
-          // schedule that read "No schedule posted yet" for every truck, and a
-          // query that fails outright (42703) on a database without the column,
-          // blanking the whole screen. Read the real table instead.
+          // NOTE: no `schedule` column here. This used to select trucks.schedule.
+          // That column does exist on the live table — but no migration in this
+          // repo creates it and nothing in either app ever writes it. The
+          // operator dashboard saves to the `schedules` table. So the query
+          // succeeded and always returned null, and every truck's weekly
+          // schedule read "No schedule posted yet". Read the real table instead.
+          //
+          // trucks has several such orphan columns that shadow the real source
+          // of truth (schedule, location, is_open, opens_at, closes_at,
+          // cuisine_type). Prefer the dedicated tables over any of them.
           supabase.from('trucks').select('id, name, cuisine, description, profile_photo, is_live, dietary_tags, instagram, phone, avg_rating, review_count, catering_description, catering_starting_price, catering_min_guests, offers_catering').eq('id', id).maybeSingle(),
           supabase
             .from('schedules')
