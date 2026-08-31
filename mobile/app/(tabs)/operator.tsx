@@ -152,11 +152,15 @@ export default function OperatorTab() {
     if (blockedBySetup()) return;
     setStatus('locating');
     try {
-      // Supplied as an EAS environment variable rather than through
-      // eas.json — GitHub push protection flags Mapbox tokens, so it is
-      // deliberately not in the repo. See mobile/.env.example for how to
-      // set it. It was in no build profile at all until now, which made
-      // this whole fallback dead in every shipped build.
+      // Supplied as an EAS project environment variable, set for
+      // development, preview and production — not through eas.json, since
+      // GitHub push protection flags Mapbox tokens in commits. Builds pick
+      // it up automatically; see mobile/.env.example.
+      //
+      // It was in no build profile at all before, which made this whole
+      // fallback dead in every shipped build — the one path an operator
+      // has after declining the location prompt. The guard below stays as
+      // a safety net for a local run with no .env.
       const token = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
       if (!token) {
         throw new Error(
