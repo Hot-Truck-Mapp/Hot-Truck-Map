@@ -3,7 +3,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { US_STATES } from "@/lib/us-states";
 import type { Festival } from "@/lib/types";
+import { parseFestivalLines, type ParsedFestival, type ParseIssue } from "@/lib/festivals-bulk";
 import { PanelHeader } from "./shared";
+
+const BULK_PLACEHOLDER = `# Paste a month's events — one per line
+# Name | City | Date | Venue | Description
+# Venue and Description are optional. Lines starting with # are ignored.
+
+Ridgefield PBA 330 Food Truck Festival | Ridgefield | Sept 12 | Veterans Memorial Field | 11 AM-7 PM. Food-truck focused.
+Bergen County Fall Harvest Festival | Ridgefield Park | Sept 18-20 | Overpeck County Park
+Saddle Brook Street Fair | Saddle Brook | Sept 20`;
 
 /**
  * City/state food-truck events shown at /events. Reads and writes go through
@@ -31,6 +40,16 @@ export default function FestivalsPanel({ refreshToken }: { refreshToken: number 
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Bulk paste
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkText, setBulkText] = useState("");
+  const [bulkState, setBulkState] = useState("");
+  const [bulkRows, setBulkRows] = useState<ParsedFestival[] | null>(null);
+  const [bulkIssues, setBulkIssues] = useState<ParseIssue[]>([]);
+  const [bulkImporting, setBulkImporting] = useState(false);
+  const [bulkResult, setBulkResult] = useState<string | null>(null);
+  const [bulkError, setBulkError] = useState<string | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -121,8 +140,10 @@ export default function FestivalsPanel({ refreshToken }: { refreshToken: number 
       savedTimer.current = setTimeout(() => {
         if (mountedRef.current) setSaved(false);
       }, 3000);
-    } catch (err: any) {
-      if (mountedRef.current) setError(err?.message ?? "Failed to save. Please try again.");
+    } catch (err) {
+      if (mountedRef.current) {
+        setError(err instanceof Error ? err.message : "Failed to save. Please try again.");
+      }
     } finally {
       if (mountedRef.current) setSaving(false);
     }
@@ -140,8 +161,56 @@ export default function FestivalsPanel({ refreshToken }: { refreshToken: number 
         setFestivals((prev) => prev.filter((f) => f.id !== id));
         if (editingId === id) resetForm();
       }
-    } catch (err: any) {
-      if (mountedRef.current) setError(err?.message ?? "Failed to delete. Please try again.");
+    } catch (err) {
+      if (mountedRef.current) {
+        setError(err instanceof Error ? err.message : "Failed to delete. Please try again.");
+      }
+    }
+  }
+
+  /** Parses the paste box so the batch can be reviewed before anything is written. */
+  function previewBulk() {
+    setBulkError(null);
+    setBulkResult(null);
+    if (!bulkState) {
+      setBulkRows(null);
+      return setBulkError("Pick the state these events are in.");
+    }
+    const { rows, issues } = parseFestivalLines(bulkText);
+    setBulkRows(rows);
+    setBulkIssues(issues);
+    if (rows.length === 0 && issues.length === 0) setBulkError("Nothing to import — the box is empty.");
+  }
+
+  async function importBulk() {
+    if (bulkImporting || !bulkRows?.length) return;
+    setBulkImporting(true);
+    setBulkError(null);
+    try {
+      const res = await fetch("/api/admin/festivals/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ state_code: bulkState, festivals: bulkRows }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!mountedRef.current) return;
+      if (!res.ok) throw new Error(json?.error ?? "Import failed");
+
+      await load();
+      if (!mountedRef.current) return;
+      const parts = [`Added ${json.inserted} event${json.inserted === 1 ? "" : "s"}`];
+      if (json.skipped) parts.push(`${json.skipped} already there`);
+      if (json.rejected?.length) parts.push(`${json.rejected.length} rejected`);
+      setBulkResult(parts.join(" · "));
+      setBulkText("");
+      setBulkRows(null);
+      setBulkIssues([]);
+    } catch (err) {
+      if (mountedRef.current) {
+        setBulkError(err instanceof Error ? err.message : "Import failed. Please try again.");
+      }
+    } finally {
+      if (mountedRef.current) setBulkImporting(false);
     }
   }
 
@@ -268,6 +337,138 @@ export default function FestivalsPanel({ refreshToken }: { refreshToken: number 
                 Cancel
               </button>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* Bulk paste — a month's events arrive as a written list, so this takes
+          the whole list at once instead of one form submission per event. */}
+      <div className="mb-8 border border-neutral-100 rounded-xl overflow-hidden">
+        <button
+          onClick={() => setBulkOpen((v) => !v)}
+          className="w-full flex items-center justify-between px-5 py-3.5 bg-neutral-50 hover:bg-neutral-100 transition-colors"
+        >
+          <span className="text-sm font-black text-neutral-600 uppercase tracking-widest">
+            Paste a list of events
+          </span>
+          <span className="text-xs text-neutral-400 font-bold">{bulkOpen ? "Hide" : "Show"}</span>
+        </button>
+
+        {bulkOpen && (
+          <div className="p-5 flex flex-col gap-4">
+            <p className="text-xs text-neutral-500 leading-relaxed">
+              One event per line: <code className="text-neutral-700 font-mono">Name | City | Date | Venue | Description</code>.
+              Venue and Description are optional. Dates can be written as{" "}
+              <span className="text-neutral-700">Sept 12</span>,{" "}
+              <span className="text-neutral-700">Sept 18-20</span>,{" "}
+              <span className="text-neutral-700">9/12</span>, or{" "}
+              <span className="text-neutral-700">2026-09-12</span>. A year is assumed to be the
+              upcoming one. Events already listed are skipped, so re-pasting is safe.
+            </p>
+
+            <div className="max-w-xs">
+              <label className={labelClass}>State for this batch</label>
+              <select
+                value={bulkState}
+                onChange={(e) => { setBulkState(e.target.value); setBulkRows(null); }}
+                className={`${inputClass} bg-white`}
+              >
+                <option value="">Select state…</option>
+                {US_STATES.map((s) => (
+                  <option key={s.code} value={s.code}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <textarea
+              value={bulkText}
+              onChange={(e) => { setBulkText(e.target.value); setBulkRows(null); }}
+              rows={10}
+              placeholder={BULK_PLACEHOLDER}
+              spellCheck={false}
+              className={`${inputClass} font-mono text-xs leading-relaxed resize-y`}
+            />
+
+            {bulkError && <p className="text-xs text-red-500 font-semibold">{bulkError}</p>}
+            {bulkResult && (
+              <div className="flex items-center gap-2 py-3 px-4 bg-green-50 rounded-xl">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                <p className="text-sm font-semibold text-green-700">{bulkResult}</p>
+              </div>
+            )}
+
+            {bulkRows && (
+              <div className="flex flex-col gap-3">
+                {bulkIssues.length > 0 && (
+                  <div className="border border-amber-200 bg-amber-50 rounded-xl p-4">
+                    <p className="text-xs font-black text-amber-800 uppercase tracking-wider mb-2">
+                      {bulkIssues.length} line{bulkIssues.length === 1 ? "" : "s"} skipped
+                    </p>
+                    <ul className="flex flex-col gap-1.5">
+                      {bulkIssues.map((iss) => (
+                        <li key={iss.line} className="text-xs text-amber-900">
+                          <span className="font-bold">Line {iss.line}:</span> {iss.error}
+                          <span className="block text-amber-700/70 font-mono truncate">{iss.text}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {bulkRows.length > 0 && (
+                  <div className="border border-neutral-100 rounded-xl overflow-hidden">
+                    <p className="px-4 py-2.5 bg-neutral-50 text-xs font-black text-neutral-600 uppercase tracking-wider">
+                      {bulkRows.length} event{bulkRows.length === 1 ? "" : "s"} ready to add
+                    </p>
+                    <div className="max-h-64 overflow-y-auto divide-y divide-neutral-50">
+                      {bulkRows.map((r, i) => (
+                        <div key={`${r.name}-${r.start_date}-${i}`} className="px-4 py-2.5">
+                          <p className="text-sm font-bold text-neutral-800 truncate">{r.name}</p>
+                          <p className="text-xs text-neutral-400">
+                            {r.city}, {bulkState} ·{" "}
+                            {new Date(r.start_date + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
+                            {r.end_date !== r.start_date && (
+                              <> – {new Date(r.end_date + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric" })}</>
+                            )}
+                            {r.venue && <> · {r.venue}</>}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              {!bulkRows ? (
+                <button
+                  onClick={previewBulk}
+                  disabled={!bulkText.trim()}
+                  className="py-2.5 px-5 bg-neutral-800 text-white rounded-xl font-black text-sm uppercase tracking-wide disabled:opacity-40 hover:bg-neutral-700 transition-colors active:scale-95"
+                >
+                  Preview
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={importBulk}
+                    disabled={bulkImporting || bulkRows.length === 0}
+                    className="py-2.5 px-5 bg-brand-red text-white rounded-xl font-black text-sm uppercase tracking-wide disabled:opacity-40 hover:bg-red-600 transition-colors active:scale-95"
+                  >
+                    {bulkImporting ? "Adding…" : `Add ${bulkRows.length} Event${bulkRows.length === 1 ? "" : "s"}`}
+                  </button>
+                  <button
+                    onClick={() => { setBulkRows(null); setBulkIssues([]); }}
+                    className="py-2.5 px-4 text-neutral-500 rounded-xl font-bold text-sm hover:text-neutral-700 transition-colors"
+                  >
+                    Back to editing
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         )}
       </div>
