@@ -60,3 +60,12 @@ mobile/expo-env.d.ts
 mobile/*.aab
 mobile/*.apk
 mobile/*.ipa
+
+# Claude Code scratch worktrees — build output, never part of the repo
+.claude/worktrees/
+
+# Claude Code per-machine settings — may hold tokens; never commit
+.claude/settings.local.json
+
+# Generated marketing screenshots
+instagram-screenshots/

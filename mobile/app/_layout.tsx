@@ -1,3 +1,10 @@
+/* eslint-disable import/first --
+ * enableScreens(false) is deliberately called next to its own import, above the
+ * rest of the import block, so the crash workaround below stays legible as one
+ * unit. Metro/Babel hoist every require above top-level statements, so the call
+ * runs after all imports either way; moving it would only separate it from the
+ * comment explaining it.
+ */
 import { enableScreens } from 'react-native-screens';
 // Workaround: RNSTabBarController.updateTabBarAppearance throws an uncaught
 // NSException on A18 Pro devices (iPhone 16 Pro/Max) running iOS 26, crashing

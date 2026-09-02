@@ -68,7 +68,6 @@ export default function MapboxMap({ trucks }: Props) {
   useEffect(() => {
     if (map.current || !mapboxgl.accessToken || !mapContainer.current) return;
     let mounted = true; // guard geolocation callbacks against post-unmount execution
-    let geolocateTimerId: ReturnType<typeof setTimeout> | null = null;
 
     function buildMap(center: [number, number], zoom: number) {
       map.current = new mapboxgl.Map({

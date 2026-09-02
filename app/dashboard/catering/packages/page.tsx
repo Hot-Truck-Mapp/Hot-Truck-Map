@@ -715,7 +715,7 @@ export default function CateringPackagesPage() {
               {/* Includes */}
               <div>
                 <label className="text-xs font-black text-neutral-500 uppercase tracking-wider mb-2 block">
-                  What's Included
+                  What&rsquo;s Included
                 </label>
                 <div className="flex gap-2 mb-2">
                   <input

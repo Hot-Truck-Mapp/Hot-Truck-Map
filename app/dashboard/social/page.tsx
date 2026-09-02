@@ -437,7 +437,7 @@ export default function SocialPage() {
               Coming in Phase 5
             </h2>
             <p className="text-sm text-neutral-500 mb-6">
-              We're working on integrations for Facebook, X, and TikTok.
+              We&rsquo;re working on integrations for Facebook, X, and TikTok.
               Instagram is up first — stay tuned!
             </p>
             <button

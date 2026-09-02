@@ -544,7 +544,7 @@ export default function SignupPage() {
               Almost there!
             </h2>
             <p className="text-neutral-400 text-base leading-relaxed">
-              Just confirm your email and you'll be on the map within minutes.
+              Just confirm your email and you&rsquo;ll be on the map within minutes.
             </p>
           </div>
           <p className="text-neutral-600 text-xs relative z-10">HotTruckMap</p>
@@ -587,7 +587,7 @@ export default function SignupPage() {
             <Link href="/login" className="w-full py-4 bg-brand-red text-white rounded-2xl font-bold text-base text-center">
               Go to Sign In
             </Link>
-            <p className="text-center text-xs text-neutral-400">Can't find the email? Check your spam folder.</p>
+            <p className="text-center text-xs text-neutral-400">Can&rsquo;t find the email? Check your spam folder.</p>
           </div>
         </div>
       </div>
@@ -605,7 +605,7 @@ export default function SignupPage() {
             <span className="font-semibold text-neutral-700">{cuEmail}</span>.
             Click it to activate your account.
           </p>
-          <p className="text-xs text-neutral-400">Check your spam folder if you don't see it.</p>
+          <p className="text-xs text-neutral-400">Check your spam folder if you don&rsquo;t see it.</p>
         </div>
         <Link href="/login" className="w-full py-4 bg-brand-red text-white rounded-2xl font-bold text-base text-center">
           Back to Sign In

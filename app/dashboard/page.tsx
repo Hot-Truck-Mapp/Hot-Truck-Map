@@ -289,7 +289,7 @@ export default function Dashboard() {
     if (activeTab === "analytics" && truckId) {
       loadAnalytics(truckId, analyticsRange);
     }
-  }, [activeTab, truckId, analyticsRange]); // eslint-disable-line
+  }, [activeTab, truckId, analyticsRange]);
 
   // ── Real-time order notifications ───────────────────────────────────────────
   useEffect(() => {
@@ -312,7 +312,7 @@ export default function Dashboard() {
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [truckId]); // eslint-disable-line
+  }, [truckId]);
 
   // ── Profile ─────────────────────────────────────────────────────────────────
   async function uploadProfilePhoto(file: File) {
@@ -1108,9 +1108,9 @@ export default function Dashboard() {
       >
         {resendingEmail ? "Sending..." : "Resend Confirmation Email"}
       </button>
-      <a href="/" className="text-neutral-500 text-sm hover:text-neutral-300 transition-colors">
+      <Link href="/" className="text-neutral-500 text-sm hover:text-neutral-300 transition-colors">
         ← Back to Hot Truck Map
-      </a>
+      </Link>
     </div>
   );
 
@@ -1178,12 +1178,12 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-        <a href="/" className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-neutral-200 transition-colors px-3 py-1.5 rounded-lg hover:bg-white/10">
+        <Link href="/" className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-neutral-200 transition-colors px-3 py-1.5 rounded-lg hover:bg-white/10">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/>
           </svg>
           View Map
-        </a>
+        </Link>
       </div>
 
       {/* No VerificationBanner here: an unverified operator never reaches this

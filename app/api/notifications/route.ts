@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { isRateLimited } from "@/lib/rateLimit";
 import { purgeStaleSubscriptions, sendPushBatch } from "@/lib/push";
@@ -17,7 +18,7 @@ function timingSafeEqualStr(a: string, b: string): boolean {
     const maxLen = Math.max(a.length, b.length);
     const aBytes = Buffer.from(a.padEnd(maxLen), "utf8");
     const bBytes = Buffer.from(b.padEnd(maxLen), "utf8");
-    return require("crypto").timingSafeEqual(aBytes, bBytes) && a.length === b.length;
+    return timingSafeEqual(aBytes, bBytes) && a.length === b.length;
   } catch {
     return false;
   }

@@ -33,7 +33,7 @@ export default function Error({
 
         <h1 className="text-xl font-black text-neutral-800 mb-2">Something went wrong</h1>
         <p className="text-neutral-400 text-sm">
-          Don't worry — the trucks are still out there.
+          Don&rsquo;t worry — the trucks are still out there.
         </p>
       </div>
 

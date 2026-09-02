@@ -61,7 +61,7 @@ function ConfirmationContent({ id }: { id: string }) {
             </div>
             <div>
               <p className="text-sm font-bold text-neutral-800">Truck receives your order</p>
-              <p className="text-xs text-neutral-400">They'll start preparing it right away</p>
+              <p className="text-xs text-neutral-400">They&rsquo;ll start preparing it right away</p>
             </div>
           </div>
           <div className="flex items-start gap-3">

@@ -12,6 +12,13 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Nested build output (e.g. inside scratch worktrees) — minified chunks
+    // are not source and produced ~3.7k bogus warnings when linted.
+    "**/.next/**",
+    ".claude/**",
+    // The Expo app has its own toolchain and rules; lint it with
+    // `npm run lint` inside mobile/, not with the Next.js config.
+    "mobile/**",
   ]),
 ]);
 
