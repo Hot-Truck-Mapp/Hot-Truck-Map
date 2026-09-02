@@ -8,8 +8,15 @@
  *   Name | City | Date | Venue | Description
  *
  * Name, City and Date are required; Venue and Description are optional and may
- * be left empty or omitted entirely. Blank lines and `#` comments are skipped,
- * so a pasted list can keep its county headings as comments.
+ * be left empty or omitted entirely. Blank lines and `#` comments are skipped.
+ *
+ * Because the source lists are organised county by county, a heading line sets
+ * the county for every event beneath it, until the next heading:
+ *
+ *   # BERGEN COUNTY
+ *   Ridgefield PBA 330 Food Truck Festival | Ridgefield | Sept 12
+ *
+ * That means a researched list can be pasted with its own headings intact.
  *
  * Dates accept the shapes the source listings actually use — "Sept 12",
  * "September 12", "Sept 18-20", "Sep 10 - Oct 12", "9/12", "2026-09-12" — and
@@ -18,6 +25,7 @@
 
 export type ParsedFestival = {
   name: string;
+  county: string | null;
   city: string;
   venue: string | null;
   description: string | null;
@@ -48,6 +56,14 @@ const MONTHS: Record<string, number> = {
 };
 
 const ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** "BERGEN" and "bergen" both become "Bergen"; "McKean" style names survive. */
+function titleCase(s: string): string {
+  if (!/[a-z]/.test(s)) {
+    return s.toLowerCase().replace(/\b[a-z]/g, (m) => m.toUpperCase());
+  }
+  return s;
+}
 
 function iso(year: number, month: number, day: number): string {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -158,11 +174,21 @@ export function parseFestivalLines(input: string, today: Date = new Date()): Par
   const rows: ParsedFestival[] = [];
   const issues: ParseIssue[] = [];
   const seen = new Set<string>();
+  let county: string | null = null;
 
   input.split(/\r?\n/).forEach((rawLine, i) => {
     const lineNo = i + 1;
     const line = rawLine.trim();
-    if (!line || line.startsWith("#")) return;
+    if (!line) return;
+
+    // A heading sets the county for the events that follow it. Accepts
+    // "# BERGEN COUNTY", "## Bergen", and "# County: Bergen" alike; a bare
+    // "#" or "# ---" clears it rather than naming a county.
+    if (line.startsWith("#")) {
+      const heading = line.replace(/^#+\s*/, "").replace(/^county:\s*/i, "").replace(/\s+county$/i, "").trim();
+      county = /[a-z]/i.test(heading) ? titleCase(heading) : null;
+      return;
+    }
 
     const cells = line.split("|").map((c) => c.trim());
     if (cells.length < 3) {
@@ -192,6 +218,7 @@ export function parseFestivalLines(input: string, today: Date = new Date()): Par
 
     rows.push({
       name,
+      county: county ? county.slice(0, 100) : null,
       city,
       venue: venueCell ? venueCell.slice(0, 200) : null,
       description: description ? description.slice(0, 2000) : null,

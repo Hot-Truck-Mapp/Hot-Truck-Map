@@ -68,13 +68,28 @@ export default function StateEventsScreen() {
     );
   }
 
-  const byCity = festivals.reduce<Record<string, Festival[]>>((acc, f) => {
-    (acc[f.city] ??= []).push(f);
+  // County first, then town within it — matching the web page. A section is one
+  // town; the county is carried on the section so its heading can be drawn
+  // above the first town in that county. Events with no county recorded fall
+  // into a trailing group rather than being given a made-up one.
+  const UNGROUPED = ' ungrouped';
+  const byCounty = festivals.reduce<Record<string, Record<string, Festival[]>>>((acc, f) => {
+    const countyKey = f.county?.trim() ? f.county.trim() : UNGROUPED;
+    ((acc[countyKey] ??= {})[f.city] ??= []).push(f);
     return acc;
   }, {});
-  const sections = Object.keys(byCity)
-    .sort()
-    .map((city) => ({ title: city, data: byCity[city] }));
+  const sections = Object.keys(byCounty)
+    .sort((a, b) => (a === UNGROUPED ? 1 : b === UNGROUPED ? -1 : a.localeCompare(b)))
+    .flatMap((county) =>
+      Object.keys(byCounty[county])
+        .sort()
+        .map((city, i) => ({
+          title: city,
+          county: county === UNGROUPED ? null : county,
+          firstInCounty: i === 0,
+          data: byCounty[county][city],
+        }))
+    );
 
   return (
     <View style={styles.container}>
@@ -83,7 +98,14 @@ export default function StateEventsScreen() {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <EventCard event={item} />}
         renderSectionHeader={({ section }) => (
-          <Text style={styles.sectionHeader}>{section.title}</Text>
+          <View style={styles.headerGroup}>
+            {section.firstInCounty && section.county && (
+              <Text style={styles.countyHeader}>
+                {/county$/i.test(section.county) ? section.county : `${section.county} County`}
+              </Text>
+            )}
+            <Text style={styles.sectionHeader}>{section.title}</Text>
+          </View>
         )}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
@@ -103,6 +125,20 @@ const styles = StyleSheet.create({
   loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   errorText: { fontSize: 16, color: Colors.textSecondary, textAlign: 'center' },
   list: { paddingBottom: 32, flexGrow: 1 },
+  headerGroup: { backgroundColor: Colors.background },
+  countyHeader: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: Colors.text,
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 6,
+    borderBottomWidth: 2,
+    borderBottomColor: `${Colors.primary}33`,
+    marginHorizontal: 16,
+    paddingLeft: 0,
+    marginBottom: 2,
+  },
   sectionHeader: {
     fontSize: 12,
     fontWeight: '800',

@@ -24,6 +24,7 @@ function validateFestivalBody(body: Record<string, unknown>):
   const city = typeof body.city === "string" ? body.city.trim() : "";
   if (!city || city.length > 100) return err("city is required and must be 100 characters or fewer");
 
+  const county = typeof body.county === "string" && body.county.trim() ? body.county.trim().slice(0, 100) : null;
   const venue = typeof body.venue === "string" ? body.venue.trim().slice(0, 200) : null;
   const description = typeof body.description === "string" ? body.description.trim().slice(0, 2000) : null;
 
@@ -55,6 +56,7 @@ function validateFestivalBody(body: Record<string, unknown>):
       name,
       state_code: stateCode,
       state_name: stateName,
+      county,
       city,
       venue,
       description,

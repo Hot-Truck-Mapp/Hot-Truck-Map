@@ -6,13 +6,15 @@ import type { Festival } from "@/lib/types";
 import { parseFestivalLines, type ParsedFestival, type ParseIssue } from "@/lib/festivals-bulk";
 import { PanelHeader } from "./shared";
 
-const BULK_PLACEHOLDER = `# Paste a month's events — one per line
-# Name | City | Date | Venue | Description
-# Venue and Description are optional. Lines starting with # are ignored.
+const BULK_PLACEHOLDER = `# Name | City | Date | Venue | Description
+# Venue and Description are optional. A "# County" heading groups the events under it.
 
+# BERGEN COUNTY
 Ridgefield PBA 330 Food Truck Festival | Ridgefield | Sept 12 | Veterans Memorial Field | 11 AM-7 PM. Food-truck focused.
 Bergen County Fall Harvest Festival | Ridgefield Park | Sept 18-20 | Overpeck County Park
-Saddle Brook Street Fair | Saddle Brook | Sept 20`;
+
+# ESSEX COUNTY
+Pet Palooza & Food Truck Festival | Livingston | Sept 19 | Livingston Gazebo`;
 
 /**
  * City/state food-truck events shown at /events. Reads and writes go through
@@ -29,6 +31,7 @@ export default function FestivalsPanel({ refreshToken }: { refreshToken: number 
   const [name, setName] = useState("");
   const [stateCode, setStateCode] = useState("");
   const [city, setCity] = useState("");
+  const [county, setCounty] = useState("");
   const [venue, setVenue] = useState("");
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -79,7 +82,7 @@ export default function FestivalsPanel({ refreshToken }: { refreshToken: number 
 
   function resetForm() {
     setEditingId(null);
-    setName(""); setStateCode(""); setCity(""); setVenue("");
+    setName(""); setStateCode(""); setCity(""); setCounty(""); setVenue("");
     setDescription(""); setStartDate(""); setEndDate("");
     setWebsiteUrl(""); setImageUrl("");
     setError(null);
@@ -90,6 +93,7 @@ export default function FestivalsPanel({ refreshToken }: { refreshToken: number 
     setName(f.name);
     setStateCode(f.state_code);
     setCity(f.city);
+    setCounty(f.county ?? "");
     setVenue(f.venue ?? "");
     setDescription(f.description ?? "");
     setStartDate(f.start_date);
@@ -120,6 +124,7 @@ export default function FestivalsPanel({ refreshToken }: { refreshToken: number 
           name: trimmedName,
           state_code: stateCode,
           city: trimmedCity,
+          county: county.trim() || null,
           venue: venue.trim() || null,
           description: description.trim() || null,
           start_date: startDate,
@@ -259,6 +264,16 @@ export default function FestivalsPanel({ refreshToken }: { refreshToken: number 
 
         <div>
           <label className={labelClass}>
+            County <span className="normal-case text-neutral-300">(optional — groups the event on /events)</span>
+          </label>
+          <input
+            type="text" value={county} onChange={(e) => setCounty(e.target.value)}
+            maxLength={100} placeholder="e.g. Bergen" className={inputClass}
+          />
+        </div>
+
+        <div>
+          <label className={labelClass}>
             Venue / Address <span className="normal-case text-neutral-300">(optional)</span>
           </label>
           <input
@@ -363,7 +378,9 @@ export default function FestivalsPanel({ refreshToken }: { refreshToken: number 
               <span className="text-neutral-700">Sept 18-20</span>,{" "}
               <span className="text-neutral-700">9/12</span>, or{" "}
               <span className="text-neutral-700">2026-09-12</span>. A year is assumed to be the
-              upcoming one. Events already listed are skipped, so re-pasting is safe.
+              upcoming one. A <code className="text-neutral-700 font-mono"># County Name</code> heading
+              groups every event beneath it, so a researched list can be pasted with its own
+              headings intact. Events already listed are skipped, so re-pasting is safe.
             </p>
 
             <div className="max-w-xs">
@@ -427,7 +444,7 @@ export default function FestivalsPanel({ refreshToken }: { refreshToken: number 
                         <div key={`${r.name}-${r.start_date}-${i}`} className="px-4 py-2.5">
                           <p className="text-sm font-bold text-neutral-800 truncate">{r.name}</p>
                           <p className="text-xs text-neutral-400">
-                            {r.city}, {bulkState} ·{" "}
+                            {r.county ? `${r.county} County · ` : ""}{r.city}, {bulkState} ·{" "}
                             {new Date(r.start_date + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
                             {r.end_date !== r.start_date && (
                               <> – {new Date(r.end_date + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric" })}</>

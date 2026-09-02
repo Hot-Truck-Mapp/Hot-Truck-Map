@@ -17,6 +17,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 type IncomingRow = {
   name?: unknown;
+  county?: unknown;
   city?: unknown;
   venue?: unknown;
   description?: unknown;
@@ -28,6 +29,7 @@ type CleanRow = {
   name: string;
   state_code: string;
   state_name: string;
+  county: string | null;
   city: string;
   venue: string | null;
   description: string | null;
@@ -51,11 +53,12 @@ function cleanRow(row: IncomingRow, stateCode: string, stateName: string): Clean
   if (!DATE_RE.test(endDate) || Number.isNaN(new Date(endDate).getTime())) return "invalid end date";
   if (endDate < startDate) return "end date must be on or after the start date";
 
+  const county = typeof row.county === "string" && row.county.trim() ? row.county.trim().slice(0, 100) : null;
   const venue = typeof row.venue === "string" && row.venue.trim() ? row.venue.trim().slice(0, 200) : null;
   const description =
     typeof row.description === "string" && row.description.trim() ? row.description.trim().slice(0, 2000) : null;
 
-  return { name, state_code: stateCode, state_name: stateName, city, venue, description, start_date: startDate, end_date: endDate };
+  return { name, state_code: stateCode, state_name: stateName, county, city, venue, description, start_date: startDate, end_date: endDate };
 }
 
 export async function POST(req: NextRequest) {

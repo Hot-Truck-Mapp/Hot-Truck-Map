@@ -82,6 +82,8 @@ export type Festival = {
   name: string;
   state_code: string;
   state_name: string;
+  /** Nullable — events group by town alone when the county isn't known. */
+  county: string | null;
   city: string;
   venue: string | null;
   description: string | null;
