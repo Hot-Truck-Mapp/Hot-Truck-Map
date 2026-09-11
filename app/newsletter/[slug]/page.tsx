@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import NewsletterNav from "@/components/newsletter/NewsletterNav";
 import SubscribeForm from "@/components/newsletter/SubscribeForm";
+import EventGuide from "@/components/newsletter/EventGuide";
 import {
   ISSUES,
   getIssueBySlug,
@@ -40,12 +41,14 @@ const TAG_STYLES: Record<NewsletterItem["tag"], string> = {
   NEW: "bg-brand-red/10 text-brand-red",
   IMPROVED: "bg-brand-orange/10 text-orange-700",
   FIX: "bg-neutral-200 text-neutral-600",
+  TIP: "bg-amber-100 text-amber-800",
 };
 
 const TAG_BORDER: Record<NewsletterItem["tag"], string> = {
   NEW: "border-brand-red",
   IMPROVED: "border-brand-orange",
   FIX: "border-neutral-300",
+  TIP: "border-amber-400",
 };
 
 export default async function NewsletterIssuePage({ params }: Props) {
@@ -113,11 +116,14 @@ export default async function NewsletterIssuePage({ params }: Props) {
           )}
         </div>
 
+        {/* Weekend event guide */}
+        {issue.eventGuide && <EventGuide guide={issue.eventGuide} />}
+
         {/* Other items */}
         {issue.items.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm p-5 sm:p-7">
             <h3 className="text-[10px] font-black uppercase tracking-widest text-neutral-400 mb-4">
-              Also in This Issue
+              {issue.itemsHeading ?? "Also in This Issue"}
             </h3>
             <div className="space-y-4">
               {issue.items.map((item) => (
@@ -139,8 +145,9 @@ export default async function NewsletterIssuePage({ params }: Props) {
         {/* Sign-off */}
         <div className="bg-white rounded-2xl shadow-sm p-5 sm:p-7">
           <p className="text-sm text-neutral-700 leading-relaxed">
-            That&rsquo;s it for this issue — thanks for reading. Spot a bug, or want to see
-            something built? <Link href="/contact" className="text-brand-red font-bold hover:underline">Tell us</Link>.
+            That&rsquo;s it for this issue — thanks for reading.{" "}
+            {issue.signOffPrompt ?? "Spot a bug, or want to see something built?"}{" "}
+            <Link href="/contact" className="text-brand-red font-bold hover:underline">Tell us</Link>.
           </p>
           <p className="text-xs font-bold text-neutral-400 mt-3">— The Hot Truck Map Team</p>
         </div>

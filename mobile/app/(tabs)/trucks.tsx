@@ -134,6 +134,20 @@ export default function TrucksTab() {
     </TouchableOpacity>
   );
 
+  const newsletterEntryPoint = (
+    <TouchableOpacity
+      style={[styles.eventsEntry, styles.newsletterEntry]}
+      onPress={() => router.push('/newsletter')}
+      activeOpacity={0.8}
+      accessibilityLabel="Read the On the Menu newsletter"
+      accessibilityRole="button"
+    >
+      <Text style={styles.eventsEntryEmoji}>📰</Text>
+      <Text style={styles.eventsEntryText}>On the Menu — This Weekend&rsquo;s Guide</Text>
+      <Text style={styles.eventsEntryArrow}>→</Text>
+    </TouchableOpacity>
+  );
+
   const topTrucksHeader = topTrucks.length > 0 ? (
     <View style={styles.leaderboardSection}>
       <Text style={styles.leaderboardTitle}>🏆 Top Trucks</Text>
@@ -171,6 +185,7 @@ export default function TrucksTab() {
   const listHeader = (
     <View>
       {eventsEntryPoint}
+      {newsletterEntryPoint}
       {topTrucksHeader}
     </View>
   );
@@ -248,6 +263,7 @@ const styles = StyleSheet.create({
   eventsEntryEmoji: { fontSize: 16 },
   eventsEntryText: { flex: 1, fontSize: 14, fontWeight: '700', color: Colors.text },
   eventsEntryArrow: { fontSize: 14, color: Colors.primary, fontWeight: '700' },
+  newsletterEntry: { marginTop: 8 },
 
   // Leaderboard row
   leaderboardSection: { paddingHorizontal: 16, paddingVertical: 12 },

@@ -135,6 +135,14 @@ export default function RootLayout() {
           options={{ headerShown: true, title: '', headerBackTitle: 'Back' }}
         />
         <Stack.Screen
+          name="newsletter/index"
+          options={{ headerShown: true, title: 'Newsletter', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="newsletter/[slug]"
+          options={{ headerShown: true, title: '', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
           name="about"
           options={{ headerShown: true, title: 'About', headerBackTitle: 'Back' }}
         />

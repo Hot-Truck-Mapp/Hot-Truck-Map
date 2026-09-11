@@ -213,6 +213,13 @@ export default function AccountTab() {
           <Text style={styles.primaryButtonText}>Sign In</Text>
         </TouchableOpacity>
         <TouchableOpacity
+          onPress={() => router.push('/newsletter')}
+          accessibilityLabel="Newsletter"
+          accessibilityRole="button"
+        >
+          <Text style={styles.aboutLink}>Newsletter</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
           onPress={() => router.push('/about' as any)}
           accessibilityLabel="About Hot Truck Map"
           accessibilityRole="button"
@@ -275,6 +282,16 @@ export default function AccountTab() {
           accessibilityRole="button"
         >
           <Text style={styles.rowText}>My Orders</Text>
+          <Text style={styles.chevron}>›</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          style={styles.row}
+          onPress={() => router.push('/newsletter')}
+          accessibilityLabel="Newsletter"
+          accessibilityRole="button"
+        >
+          <Text style={styles.rowText}>Newsletter</Text>
           <Text style={styles.chevron}>›</Text>
         </TouchableOpacity>
         <TouchableOpacity
