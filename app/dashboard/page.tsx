@@ -1396,15 +1396,25 @@ export default function Dashboard() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-black text-white leading-tight">Go live faster with the app</p>
-                <p className="text-xs text-neutral-400 mt-0.5 leading-relaxed">The HotTruckMap mobile app uses your phone&apos;s GPS to broadcast your exact location in one tap.</p>
-                <a
-                  href="https://expo.dev"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block mt-2 text-xs font-bold text-brand-red hover:underline"
-                >
-                  Download the operator app →
-                </a>
+                <p className="text-xs text-neutral-400 mt-0.5 leading-relaxed">The HotTruckMap mobile app uses your phone&apos;s GPS to broadcast your exact location in one tap — and runs your whole dashboard from your phone.</p>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+                  <a
+                    href="https://apps.apple.com/us/app/hot-truck-map/id6774819599"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-bold text-brand-red hover:underline"
+                  >
+                    Download for iPhone →
+                  </a>
+                  <a
+                    href="https://play.google.com/store/apps/details?id=hottruckmap.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-bold text-brand-red hover:underline"
+                  >
+                    Download for Android →
+                  </a>
+                </div>
               </div>
             </div>
 
