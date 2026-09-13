@@ -1,105 +1,96 @@
 import { useEffect, useState, useRef } from 'react';
 import {
-  StyleSheet, Text, TextInput, TouchableOpacity,
-  ActivityIndicator, Alert, ScrollView, KeyboardAvoidingView,
-  Platform,
+  StyleSheet, Text, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, View, Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useNavigation } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { API_BASE } from '@/lib/api';
+import { useAuth } from '@/hooks/useAuth';
+import { useAsyncData } from '@/hooks/useAsyncData';
 import { Colors } from '@/constants/colors';
+import { Button, ErrorState, Input, LoadingState, Pill, SectionLabel, T, s as ui, shadow } from '@/components/ui';
 
-const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'https://hottruckmap.com';
+const EVENT_TYPES = ['Corporate Lunch', 'Wedding', 'Birthday Party', 'Festival', 'Private Party', 'Graduation', 'Other'];
 
+type Truck = {
+  id: string; name: string; cuisine: string | null; profile_photo: string | null;
+  catering_description: string | null; catering_starting_price: number | null; catering_min_guests: number | null;
+};
+type Pkg = {
+  id: string; name: string; description: string | null; price_per_person: number; minimum_guests: number;
+  maximum_guests: number; includes: string[] | null; photo: string | null;
+};
+
+async function fetchBooking(id: string): Promise<{ truck: Truck | null; packages: Pkg[] }> {
+  const [{ data: truck, error }, { data: pkgs }] = await Promise.all([
+    supabase.from('trucks').select('id, name, cuisine, profile_photo, catering_description, catering_starting_price, catering_min_guests').eq('id', id).maybeSingle(),
+    supabase.from('catering_packages').select('id, name, description, price_per_person, minimum_guests, maximum_guests, includes, photo').eq('truck_id', id).eq('is_active', true).limit(50),
+  ]);
+  if (error) throw error;
+  return { truck: (truck as Truck | null) ?? null, packages: (pkgs ?? []) as Pkg[] };
+}
+
+/** Mobile twin of /catering/book/[id]. */
 export default function CateringRequestScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   // useLocalSearchParams can return a string[] if the param appears multiple times;
   // always take the scalar value to avoid passing an array to Supabase or the API.
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
-  const navigation = useNavigation();
+  const router = useRouter();
+  const { session } = useAuth();
   const mountedRef = useRef(true);
   const inFlightRef = useRef(false);
 
-  const [truckName, setTruckName] = useState('');
+  const q = useAsyncData(id ? `book:${id}` : null, () => fetchBooking(id!));
+  const truck = q.data?.truck ?? null;
+  const packages = q.data?.packages ?? [];
+  const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-
-  // Form fields
-  const [customerName, setCustomerName] = useState('');
-  const [customerEmail, setCustomerEmail] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
-  const [eventDate, setEventDate] = useState('');
-  const [eventTime, setEventTime] = useState('');
-  const [eventLocation, setEventLocation] = useState('');
-  const [guestCount, setGuestCount] = useState('');
-  const [budget, setBudget] = useState('');
-  const [notes, setNotes] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [fields, setFields] = useState({
+    customer_name: '', customer_phone: '', event_date: '', event_time: '',
+    event_location: '', guest_count: '', budget: '', event_type: '', notes: '',
+  });
+  // null = untouched, so a signed-in customer's address is prefilled until they edit it.
+  const [emailInput, setEmailInput] = useState<string | null>(null);
+  const form = { ...fields, customer_email: emailInput ?? session?.user.email ?? '' };
+  const set = (key: keyof typeof form) => (value: string) => {
+    if (key === 'customer_email') setEmailInput(value);
+    else setFields((f) => ({ ...f, [key]: value }));
+    if (error) setError(null);
+  };
 
   useEffect(() => {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
 
-  // Load truck name for the header
-  useEffect(() => {
-    if (!id) return;
-    void supabase
-      .from('trucks')
-      .select('name')
-      .eq('id', id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data && mountedRef.current) {
-          setTruckName(data.name);
-          navigation.setOptions({ title: `Catering — ${data.name}` });
-        }
-      });
-  }, [id]);
-
   async function submit() {
     if (inFlightRef.current) return;
-
-    // Validate required fields
-    if (!customerName.trim()) { Alert.alert('Required', 'Please enter your name.'); return; }
-    if (!customerEmail.trim()) { Alert.alert('Required', 'Please enter your email.'); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())) {
-      Alert.alert('Invalid email', 'Please enter a valid email address.');
+    const f = form;
+    if (!f.customer_name.trim() || !f.customer_email.trim() || !f.event_date.trim() || !f.event_location.trim() || !f.guest_count) {
+      setError('Please fill in all required fields (*).');
       return;
     }
-    if (!eventLocation.trim()) { Alert.alert('Required', 'Please enter the event location.'); return; }
-    // Event date is required and must be ISO YYYY-MM-DD (matching API validation)
-    const trimmedDate = eventDate.trim();
-    if (!trimmedDate) {
-      Alert.alert('Required', 'Please enter the event date (YYYY-MM-DD).');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.customer_email.trim())) { setError('Please enter a valid email address.'); return; }
+    const date = f.event_date.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(new Date(`${date}T00:00:00`).getTime())) {
+      setError('Please enter the event date as YYYY-MM-DD (e.g. 2026-10-04).');
       return;
     }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmedDate) || isNaN(new Date(trimmedDate).getTime())) {
-      Alert.alert('Invalid date', 'Please enter a date in YYYY-MM-DD format (e.g. 2026-07-04).');
-      return;
-    }
-    const today = new Date().toISOString().slice(0, 10);
-    if (trimmedDate < today) {
-      Alert.alert('Invalid date', 'Event date must be today or in the future.');
-      return;
-    }
-
-    const guestNum = parseInt(guestCount, 10);
-    if (!guestCount || isNaN(guestNum) || guestNum < 1) {
-      Alert.alert('Required', 'Please enter a valid guest count.');
-      return;
-    }
-
-    const budgetNum = budget ? parseFloat(budget) : null;
-    if (budget && (isNaN(budgetNum as number) || (budgetNum as number) < 0)) {
-      Alert.alert('Invalid', 'Please enter a valid budget amount.');
-      return;
-    }
+    if (date < new Date().toISOString().slice(0, 10)) { setError('Please select a future date for your event.'); return; }
+    const guests = parseInt(f.guest_count, 10);
+    if (!Number.isFinite(guests) || guests < 1 || guests > 100000) { setError('Please enter a valid guest count.'); return; }
+    const budget = f.budget ? parseFloat(f.budget) : null;
+    if (budget !== null && (!Number.isFinite(budget) || budget < 0)) { setError('Please enter a valid budget amount.'); return; }
 
     inFlightRef.current = true;
     setSubmitting(true);
+    setError(null);
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
+      const timeout = setTimeout(() => controller.abort(), 15000);
       let res: Response;
       try {
         res = await fetch(`${API_BASE}/api/catering-request`, {
@@ -107,203 +98,211 @@ export default function CateringRequestScreen() {
           headers: { 'Content-Type': 'application/json' },
           signal: controller.signal,
           body: JSON.stringify({
-          truck_id: id,
-          customer_name: customerName.trim(),
-          customer_email: customerEmail.trim().toLowerCase(),
-          customer_phone: customerPhone.trim() || null,
-          event_date: trimmedDate,
-          event_time: eventTime.trim() || null,
-          event_location: eventLocation.trim(),
-          guest_count: guestNum,
-          budget: budgetNum,
-          notes: notes.trim() || null,
-        }),
-      });
+            truck_id: id,
+            customer_name: f.customer_name.trim(),
+            customer_email: f.customer_email.trim(),
+            customer_phone: f.customer_phone.trim() || null,
+            event_date: date,
+            event_time: f.event_time.trim() || null,
+            event_location: f.event_location.trim(),
+            guest_count: guests,
+            budget,
+            event_type: f.event_type,
+            notes: f.notes,
+            selected_package_id: selectedPackage,
+          }),
+        });
       } finally {
         clearTimeout(timeout);
       }
-
-      if (res.status === 429) {
-        inFlightRef.current = false;
-        if (mountedRef.current) setSubmitting(false);
-        Alert.alert('Too many requests', 'Please wait a few minutes before submitting another request.');
-        return;
-      }
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error((json as { error?: string })?.error ?? 'Could not submit request. Please try again.');
-      }
-      if (mountedRef.current) setSubmitted(true);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Could not submit request. Please try again.';
-      if (mountedRef.current) Alert.alert('Error', message);
+      if (!mountedRef.current) return;
+      if (res.ok) { setSubmitted(true); return; }
+      const json = await res.json().catch(() => ({})) as { error?: string };
+      setError(res.status === 429 ? 'Too many requests — please wait a few minutes and try again.' : json.error ?? 'Could not submit request. Please try again.');
+    } catch {
+      if (mountedRef.current) setError('Network error — please check your connection and try again.');
     } finally {
       inFlightRef.current = false;
       if (mountedRef.current) setSubmitting(false);
     }
   }
 
+  if (q.loading) return <LoadingState />;
+  if (q.error) return <ErrorState title="Could not load this truck" message="Check your connection and try again." onRetry={q.reload} />;
+  if (!truck) return <ErrorState title="Truck not found" message="This truck may no longer offer catering." />;
+
   if (submitted) {
     return (
-      <SafeAreaView style={styles.successContainer}>
-        <Text style={styles.successIcon}>🎉</Text>
-        <Text style={styles.successTitle}>Request Sent!</Text>
-        <Text style={styles.successBody}>
-          The operator will contact you within 24 hours.
-        </Text>
-      </SafeAreaView>
+      <View style={[ui.screen, styles.successWrap]}>
+        <View style={styles.successCard}>
+          <View style={styles.successIcon}><Text style={{ fontSize: 30, color: T.green600 }}>✓</Text></View>
+          <Text style={styles.successTitle}>REQUEST SENT!</Text>
+          <Text style={styles.successBody}>Your catering request has been sent to</Text>
+          <Text style={styles.successTruck}>{truck.name.toUpperCase()}</Text>
+          <Text style={styles.successNote}>
+            The operator will review your request and get back to you within 24 hours at{' '}
+            <Text style={{ fontWeight: '700', color: T.n600 }}>{form.customer_email}</Text>
+          </Text>
+          <Button title="BROWSE MORE TRUCKS" onPress={() => router.replace('/catering')} style={{ alignSelf: 'stretch' }} />
+          <Button title="Back to Map" variant="outline" onPress={() => router.replace('/(tabs)')} style={{ alignSelf: 'stretch', marginTop: 8 }} />
+        </View>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.flex}>
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        {truckName ? (
-          <Text style={styles.heading}>Catering Request for {truckName}</Text>
-        ) : (
-          <Text style={styles.heading}>Catering Request</Text>
-        )}
-        <Text style={styles.subheading}>Fill out the form below and we&apos;ll get back to you within 24 hours.</Text>
+    <KeyboardAvoidingView style={ui.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
+      <Stack.Screen options={{ title: `Catering — ${truck.name}` }} />
+      <ScrollView contentContainerStyle={{ paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
+        {/* Truck header */}
+        <View style={styles.cover}>
+          {truck.profile_photo ? <Image source={{ uri: truck.profile_photo }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : null}
+          <View style={styles.coverShade} />
+          <View style={styles.coverText}>
+            <Text style={styles.coverName}>{truck.name.toUpperCase()}</Text>
+            {truck.cuisine ? <Text style={styles.coverCuisine}>{truck.cuisine}</Text> : null}
+          </View>
+        </View>
+        <View style={styles.intro}>
+          <Text style={styles.introText}>{truck.catering_description ?? 'Available for private catering events'}</Text>
+          <View style={{ flexDirection: 'row', gap: 16, marginTop: 10 }}>
+            {truck.catering_starting_price ? <Text style={styles.introMeta}>$ From ${truck.catering_starting_price}/person</Text> : null}
+            {truck.catering_min_guests ? <Text style={styles.introMeta}>👥 Min {truck.catering_min_guests} guests</Text> : null}
+          </View>
+        </View>
 
-        <Text style={styles.label}>Your Name *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Jane Smith"
-          placeholderTextColor={Colors.textMuted}
-          value={customerName}
-          onChangeText={t => setCustomerName(t.slice(0, 100))}
-          maxLength={100}
-          autoCapitalize="words"
-        />
+        <View style={{ padding: 16, gap: 20 }}>
+          {packages.length > 0 && (
+            <View>
+              <SectionLabel>Select a Package</SectionLabel>
+              {packages.map((pkg) => {
+                const on = selectedPackage === pkg.id;
+                return (
+                  <TouchableOpacity key={pkg.id} onPress={() => setSelectedPackage(on ? null : pkg.id)} style={[styles.pkg, on && { borderColor: Colors.primary }]} activeOpacity={0.85}>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <Text style={styles.pkgName}>{pkg.name.toUpperCase()}</Text>
+                        {on && <Text style={styles.selected}>SELECTED</Text>}
+                      </View>
+                      {pkg.description ? <Text style={styles.pkgDesc}>{pkg.description}</Text> : null}
+                      {(pkg.includes?.length ?? 0) > 0 && (
+                        <View style={styles.includes}>
+                          {pkg.includes!.map((it) => <Text key={it} style={styles.include}>{it}</Text>)}
+                        </View>
+                      )}
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.pkgPrice}>${pkg.price_per_person}</Text>
+                      <Text style={styles.pkgMeta}>per person</Text>
+                      <Text style={styles.pkgMeta}>Min {pkg.minimum_guests} guests</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
 
-        <Text style={styles.label}>Email *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="jane@example.com"
-          placeholderTextColor={Colors.textMuted}
-          value={customerEmail}
-          onChangeText={t => setCustomerEmail(t.slice(0, 200))}
-          maxLength={200}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
+          <View>
+            <SectionLabel>Event Details</SectionLabel>
+            <View style={styles.formCard}>
+              <View style={styles.cell}>
+                <Text style={styles.label}>EVENT TYPE</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {EVENT_TYPES.map((t) => <Pill key={t} label={t} active={form.event_type === t} onPress={() => set('event_type')(t)} />)}
+                </View>
+              </View>
+              <View style={[styles.cell, { flexDirection: 'row', gap: 12 }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>EVENT DATE *</Text>
+                  <Input value={form.event_date} onChangeText={(t) => set('event_date')(t.replace(/[^0-9-]/g, '').slice(0, 10))} placeholder="YYYY-MM-DD" keyboardType="numbers-and-punctuation" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>EVENT TIME</Text>
+                  <Input value={form.event_time} onChangeText={(t) => set('event_time')(t.slice(0, 30))} placeholder="e.g. 6:00 PM" />
+                </View>
+              </View>
+              <View style={styles.cell}>
+                <Text style={styles.label}>EVENT LOCATION *</Text>
+                <Input value={form.event_location} onChangeText={(t) => set('event_location')(t.slice(0, 200))} placeholder="e.g. 123 Main St, Newark NJ" />
+              </View>
+              <View style={[styles.cell, { flexDirection: 'row', gap: 12, borderBottomWidth: 0 }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>GUEST COUNT *</Text>
+                  <Input value={form.guest_count} onChangeText={(t) => set('guest_count')(t.replace(/[^0-9]/g, '').slice(0, 6))} placeholder="e.g. 50" keyboardType="number-pad" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>BUDGET ($)</Text>
+                  <Input value={form.budget} onChangeText={(t) => set('budget')(t.replace(/[^0-9.]/g, '').slice(0, 10))} placeholder="Optional" keyboardType="decimal-pad" />
+                </View>
+              </View>
+            </View>
+          </View>
 
-        <Text style={styles.label}>Phone (optional)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="(555) 123-4567"
-          placeholderTextColor={Colors.textMuted}
-          value={customerPhone}
-          onChangeText={t => setCustomerPhone(t.slice(0, 30))}
-          maxLength={30}
-          keyboardType="phone-pad"
-        />
+          <View>
+            <SectionLabel>Additional Notes</SectionLabel>
+            <Input
+              value={form.notes}
+              onChangeText={(t) => set('notes')(t.slice(0, 1000))}
+              placeholder="Any special requests, dietary requirements, or details about your event..."
+              multiline
+              style={{ minHeight: 100 }}
+            />
+          </View>
 
-        <Text style={styles.label}>Event Date * (YYYY-MM-DD)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. 2026-07-04"
-          placeholderTextColor={Colors.textMuted}
-          value={eventDate}
-          onChangeText={t => setEventDate(t.slice(0, 50))}
-          maxLength={50}
-        />
+          <View>
+            <SectionLabel>Your Contact Info</SectionLabel>
+            <View style={styles.formCard}>
+              <View style={styles.cell}>
+                <Text style={styles.label}>FULL NAME *</Text>
+                <Input value={form.customer_name} onChangeText={(t) => set('customer_name')(t.slice(0, 100))} placeholder="Your full name" autoCapitalize="words" autoComplete="name" />
+              </View>
+              <View style={styles.cell}>
+                <Text style={styles.label}>EMAIL *</Text>
+                <Input value={form.customer_email} onChangeText={(t) => set('customer_email')(t.slice(0, 200))} placeholder="your@email.com" keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
+              </View>
+              <View style={[styles.cell, { borderBottomWidth: 0 }]}>
+                <Text style={styles.label}>PHONE</Text>
+                <Input value={form.customer_phone} onChangeText={(t) => set('customer_phone')(t.slice(0, 30))} placeholder="(201) 555-0123" keyboardType="phone-pad" autoComplete="tel" />
+              </View>
+            </View>
+          </View>
 
-        <Text style={styles.label}>Event Time (optional)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. 6:00 PM"
-          placeholderTextColor={Colors.textMuted}
-          value={eventTime}
-          onChangeText={t => setEventTime(t.slice(0, 30))}
-          maxLength={30}
-        />
-
-        <Text style={styles.label}>Event Location *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="123 Main St, Springfield"
-          placeholderTextColor={Colors.textMuted}
-          value={eventLocation}
-          onChangeText={t => setEventLocation(t.slice(0, 200))}
-          maxLength={200}
-        />
-
-        <Text style={styles.label}>Guest Count *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. 50"
-          placeholderTextColor={Colors.textMuted}
-          value={guestCount}
-          onChangeText={t => setGuestCount(t.replace(/[^0-9]/g, '').slice(0, 6))}
-          maxLength={6}
-          keyboardType="number-pad"
-        />
-
-        <Text style={styles.label}>Budget (optional, $)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. 2000"
-          placeholderTextColor={Colors.textMuted}
-          value={budget}
-          onChangeText={t => setBudget(t.replace(/[^0-9.]/g, '').slice(0, 10))}
-          maxLength={10}
-          keyboardType="decimal-pad"
-        />
-
-        <Text style={styles.label}>Notes (optional)</Text>
-        <TextInput
-          style={[styles.input, styles.inputMultiline]}
-          placeholder="Dietary restrictions, setup needs, special requests…"
-          placeholderTextColor={Colors.textMuted}
-          value={notes}
-          onChangeText={t => setNotes(t.slice(0, 500))}
-          maxLength={500}
-          multiline
-          numberOfLines={4}
-        />
-
-        <TouchableOpacity
-          style={[styles.submitBtn, submitting && styles.submitBtnDisabled]}
-          onPress={submit}
-          disabled={submitting}
-        >
-          {submitting
-            ? <ActivityIndicator size="small" color="#fff" />
-            : <Text style={styles.submitBtnText}>Send Catering Request</Text>}
-        </TouchableOpacity>
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          <Button title={submitting ? 'Sending...' : 'SEND CATERING REQUEST'} onPress={submit} loading={submitting} style={{ borderRadius: 16, paddingVertical: 16 }} />
+          <Text style={styles.fine}>No payment required — the operator will contact you to confirm details.</Text>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
-    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  container: { flex: 1, backgroundColor: Colors.background },
-  content: { padding: 20, paddingBottom: 60 },
-  heading: { fontSize: 22, fontWeight: '800', color: Colors.text, marginBottom: 6 },
-  subheading: { fontSize: 14, color: Colors.textSecondary, marginBottom: 24, lineHeight: 20 },
-  label: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary, marginBottom: 6 },
-  input: {
-    backgroundColor: Colors.card,
-    borderWidth: 1, borderColor: Colors.border,
-    borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10,
-    fontSize: 15, color: Colors.text, marginBottom: 14,
-  },
-  inputMultiline: { height: 100, textAlignVertical: 'top' },
-  submitBtn: {
-    backgroundColor: Colors.primary, borderRadius: 12,
-    paddingVertical: 16, alignItems: 'center', marginTop: 8,
-  },
-  submitBtnDisabled: { opacity: 0.6 },
-  submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  successContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, backgroundColor: Colors.background },
-  successIcon: { fontSize: 56, marginBottom: 16 },
-  successTitle: { fontSize: 24, fontWeight: '800', color: Colors.text, marginBottom: 10 },
-  successBody: { fontSize: 16, color: Colors.textSecondary, textAlign: 'center', lineHeight: 24 },
+  cover: { height: 160, backgroundColor: T.n800, justifyContent: 'flex-end' },
+  coverShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.35)' },
+  coverText: { padding: 20 },
+  coverName: { fontSize: 24, fontWeight: '900', color: '#fff', letterSpacing: 0.5 },
+  coverCuisine: { fontSize: 14, fontWeight: '600', color: '#FF9A5C', marginTop: 2 },
+  intro: { backgroundColor: '#fff', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: T.n200 },
+  introText: { fontSize: 14, color: T.n500, lineHeight: 20 },
+  introMeta: { fontSize: 14, fontWeight: '700', color: T.n700 },
+  pkg: { flexDirection: 'row', gap: 12, backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 2, borderColor: 'transparent', marginBottom: 12, ...shadow },
+  pkgName: { fontSize: 14, fontWeight: '900', color: T.n900, letterSpacing: 0.4 },
+  selected: { fontSize: 10, fontWeight: '900', color: '#fff', backgroundColor: Colors.primary, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2, overflow: 'hidden' },
+  pkgDesc: { fontSize: 12, color: T.n400, marginTop: 4, lineHeight: 17 },
+  includes: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 8 },
+  include: { fontSize: 10, fontWeight: '700', color: T.n500, backgroundColor: T.n100, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2, overflow: 'hidden' },
+  pkgPrice: { fontSize: 18, fontWeight: '900', color: Colors.primary },
+  pkgMeta: { fontSize: 12, color: T.n400 },
+  formCard: { backgroundColor: '#fff', borderRadius: 16, overflow: 'hidden', ...shadow },
+  cell: { padding: 16, borderBottomWidth: 1, borderBottomColor: T.n100 },
+  label: { fontSize: 11, fontWeight: '900', color: T.n500, letterSpacing: 0.8, marginBottom: 8 },
+  error: { fontSize: 14, color: T.red600, backgroundColor: T.red50, borderRadius: 12, padding: 12, overflow: 'hidden' },
+  fine: { fontSize: 12, color: T.n400, textAlign: 'center' },
+  successWrap: { alignItems: 'center', justifyContent: 'center', padding: 24 },
+  successCard: { backgroundColor: '#fff', borderRadius: 24, padding: 28, width: '100%', maxWidth: 380, alignItems: 'center', ...shadow },
+  successIcon: { width: 64, height: 64, borderRadius: 16, backgroundColor: '#DCFCE7', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  successTitle: { fontSize: 20, fontWeight: '900', color: T.n900, letterSpacing: 0.5, marginBottom: 8 },
+  successBody: { fontSize: 14, color: T.n500, marginBottom: 6 },
+  successTruck: { fontSize: 16, fontWeight: '900', color: Colors.primary, marginBottom: 14 },
+  successNote: { fontSize: 12, color: T.n400, textAlign: 'center', lineHeight: 18, marginBottom: 20 },
 });

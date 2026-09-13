@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   StyleSheet, View, ActivityIndicator, Text,
-  TouchableOpacity, Linking, Alert, ScrollView,
+  TouchableOpacity, Linking, Alert, ScrollView, TextInput, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import type { Region } from 'react-native-maps';
 import MapView from 'react-native-maps';
@@ -13,6 +14,43 @@ import { useLiveTrucks } from '@/hooks/useLiveTrucks';
 import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/colors';
 import { stateForName, type USState } from '@shared/us-states';
+import { CUISINE_TYPES } from '@shared/cuisines';
+import { T } from '@/components/ui';
+import { useAsyncData } from '@/hooks/useAsyncData';
+
+const DIETARY = ['Vegan', 'Gluten-Free', 'Halal', 'Vegetarian'];
+
+type FeaturedTruck = { id: string; name: string; cuisine: string | null; profile_photo: string | null; message: string };
+
+/** "Truck of the Week" — the same site_settings keys the web home page reads. */
+async function fetchFeaturedTruck(): Promise<FeaturedTruck | null> {
+  const { data: settings } = await supabase.from('site_settings').select('key, value').in('key', ['featured_truck_id', 'featured_message']);
+  const sm: Record<string, string> = {};
+  for (const row of settings ?? []) sm[row.key] = row.value ?? '';
+  if (!sm.featured_truck_id) return null;
+  const { data: truck } = await supabase.from('trucks').select('id, name, cuisine, profile_photo').eq('id', sm.featured_truck_id).maybeSingle();
+  return truck ? { ...truck, message: sm.featured_message ?? '' } : null;
+}
+
+async function fetchRecentReviews(): Promise<RecentReview[]> {
+  const { data, error } = await supabase
+    .from('reviews')
+    .select('id, rating, comment, created_at, truck_id, trucks(id, name)')
+    .order('created_at', { ascending: false })
+    .limit(5);
+  if (error) throw error;
+  return (data ?? []).map((r) => {
+    const truckRel = r.trucks as { name?: string } | { name?: string }[] | null;
+    return {
+      id: r.id,
+      rating: r.rating,
+      comment: r.comment,
+      created_at: r.created_at,
+      truck_id: r.truck_id,
+      truck_name: Array.isArray(truckRel) ? truckRel[0]?.name : truckRel?.name,
+    };
+  });
+}
 
 type RecentReview = {
   id: string;
@@ -42,43 +80,16 @@ export default function MapTab() {
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('requesting');
   const [nearbyState, setNearbyState] = useState<USState | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [recentReviews, setRecentReviews] = useState<RecentReview[]>([]);
-  const reviewsMountedRef = useRef(true);
+  const { data: reviewsData, reload: reloadReviews } = useAsyncData('recent-reviews', fetchRecentReviews);
+  const recentReviews = reviewsData ?? [];
+  const featured = useAsyncData('featured-truck', fetchFeaturedTruck).data ?? null;
   const mapRef = useRef<MapView>(null);
-
-  async function loadRecentReviews() {
-    try {
-      const { data: reviewData } = await supabase
-        .from('reviews')
-        .select('id, rating, comment, created_at, truck_id, trucks(id, name)')
-        .order('created_at', { ascending: false })
-        .limit(5);
-      if (!reviewsMountedRef.current || !reviewData) return;
-      setRecentReviews(reviewData.map((r) => {
-        const truckRel = r.trucks as { name?: string } | { name?: string }[] | null;
-        const truck_name = Array.isArray(truckRel) ? truckRel[0]?.name : truckRel?.name;
-        return {
-          id: r.id,
-          rating: r.rating,
-          comment: r.comment,
-          created_at: r.created_at,
-          truck_id: r.truck_id,
-          truck_name,
-        };
-      }));
-    } catch {
-      // non-critical — section just won't show
-    }
-  }
-
-  useEffect(() => {
-    reviewsMountedRef.current = true;
-    return () => { reviewsMountedRef.current = false; };
-  }, []);
-
-  useEffect(() => {
-    loadRecentReviews();
-  }, []);
+  const [search, setSearch] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [cuisine, setCuisine] = useState('All');
+  const [dietary, setDietary] = useState<string[]>([]);
+  const [showFilter, setShowFilter] = useState(false);
+  const [featuredDismissed, setFeaturedDismissed] = useState(false);
 
   // Resolves coordinates to a US state via Expo Location's built-in reverse
   // geocoder (no network call needed beyond the OS's own geocoding service).
@@ -172,11 +183,21 @@ export default function MapTab() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([refetch(), loadRecentReviews()]);
+      await Promise.all([refetch(), reloadReviews()]);
     } finally {
       setRefreshing(false);
     }
-  }, [refetch]);
+  }, [refetch, reloadReviews]);
+
+  const q = search.trim().toLowerCase();
+  const filtered = trucks.filter((t) => {
+    if (cuisine !== 'All' && t.cuisine !== cuisine) return false;
+    if (q && !(t.name ?? '').toLowerCase().includes(q) && !(t.cuisine ?? '').toLowerCase().includes(q)) return false;
+    if (dietary.length > 0 && !dietary.every((d) => (t.dietary_tags ?? []).includes(d))) return false;
+    return true;
+  });
+  const searchResults = q ? trucks.filter((t) => (t.name ?? '').toLowerCase().includes(q) || (t.cuisine ?? '').toLowerCase().includes(q)) : [];
+  const activeFilterCount = dietary.length + (cuisine !== 'All' ? 1 : 0);
 
   if (loading) {
     return (
@@ -231,11 +252,105 @@ export default function MapTab() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Live Trucks</Text>
         {trucks.length > 0 ? (
-          <Text style={styles.headerCount}>{trucks.length} live now</Text>
+          <Text style={styles.headerCount}>{filtered.length === trucks.length ? `${trucks.length} live now` : `${filtered.length} of ${trucks.length} live`}</Text>
         ) : (
           <Text style={styles.headerCountEmpty}>Check back soon</Text>
         )}
       </View>
+
+      {/* Search + filters — same controls as the web map */}
+      <View style={styles.searchWrap}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={16} color={T.n400} />
+          <TextInput
+            style={styles.searchInput}
+            value={search}
+            onChangeText={setSearch}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
+            placeholder="Search by name or cuisine..."
+            placeholderTextColor={T.n400}
+            autoCorrect={false}
+            returnKeyType="search"
+            accessibilityLabel="Search live food trucks"
+          />
+          {search ? (
+            <TouchableOpacity onPress={() => setSearch('')} style={styles.searchClear} accessibilityLabel="Clear search">
+              <Ionicons name="close" size={12} color={T.n600} />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              onPress={() => setShowFilter(!showFilter)}
+              style={[styles.filterBtn, (showFilter || activeFilterCount > 0) && { backgroundColor: Colors.primary }]}
+              accessibilityRole="button"
+              accessibilityLabel="Filters"
+            >
+              <Ionicons name="funnel" size={11} color={showFilter || activeFilterCount > 0 ? '#fff' : T.n600} />
+              <Text style={[styles.filterText, (showFilter || activeFilterCount > 0) && { color: '#fff' }]}>
+                {activeFilterCount > 0 ? `${activeFilterCount}` : 'Filter'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        {searchFocused && q.length > 0 && (
+          <View style={styles.dropdown}>
+            {searchResults.length === 0 ? (
+              <Text style={styles.dropdownEmpty}>No live trucks match &ldquo;{search}&rdquo;</Text>
+            ) : searchResults.slice(0, 6).map((t) => (
+              <TouchableOpacity key={t.id} style={styles.dropdownRow} onPress={() => router.push(`/truck/${t.id}`)}>
+                <Text style={styles.dropdownName} numberOfLines={1}>{t.name}</Text>
+                <Text style={styles.dropdownCuisine}>{t.cuisine ?? 'Food Truck'}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+        {showFilter && (
+          <View style={styles.filterPanel}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              {['All', ...CUISINE_TYPES].map((c) => (
+                <TouchableOpacity key={c} onPress={() => setCuisine(c)} style={[styles.pill, cuisine === c && { backgroundColor: T.n900 }]}>
+                  <Text style={[styles.pillText, cuisine === c && { color: '#fff' }]}>{c}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+              {DIETARY.map((d) => (
+                <TouchableOpacity key={d} onPress={() => setDietary(dietary.includes(d) ? dietary.filter((x) => x !== d) : [...dietary, d])} style={[styles.pill, dietary.includes(d) && { backgroundColor: Colors.primary }]}>
+                  <Text style={[styles.pillText, dietary.includes(d) && { color: '#fff' }]}>{d}</Text>
+                </TouchableOpacity>
+              ))}
+              {activeFilterCount > 0 && (
+                <TouchableOpacity onPress={() => { setCuisine('All'); setDietary([]); }} style={{ justifyContent: 'center', paddingHorizontal: 4 }}>
+                  <Text style={styles.clearFilters}>Clear</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
+      </View>
+
+      {/* Truck of the Week */}
+      {featured && !featuredDismissed && (
+        <View style={styles.featured}>
+          {featured.profile_photo ? (
+            <Image source={{ uri: featured.profile_photo }} style={styles.featuredPhoto} />
+          ) : (
+            <View style={[styles.featuredPhoto, { alignItems: 'center', justifyContent: 'center' }]}><Ionicons name="bus" size={20} color="#fff" /></View>
+          )}
+          <View style={{ flex: 1 }}>
+            <Text style={styles.featuredLabel}>🏆 TRUCK OF THE WEEK</Text>
+            <Text style={styles.featuredName} numberOfLines={1}>{featured.name.toUpperCase()}</Text>
+            {featured.cuisine ? <Text style={styles.featuredSub}>{featured.cuisine}</Text> : null}
+            {featured.message ? <Text style={styles.featuredMsg} numberOfLines={1}>{featured.message}</Text> : null}
+          </View>
+          <TouchableOpacity style={styles.featuredView} onPress={() => router.push(`/truck/${featured.id}`)}>
+            <Text style={styles.featuredViewText}>View</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setFeaturedDismissed(true)} hitSlop={8} accessibilityLabel="Dismiss featured truck">
+            <Ionicons name="close" size={16} color="#FECACA" />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Events near you — shown once we've resolved the user's state */}
       {locationStatus === 'granted' && nearbyState && (
@@ -261,7 +376,7 @@ export default function MapTab() {
 
       <View style={styles.mapWrapper}>
         <TruckMap
-          trucks={trucks}
+          trucks={filtered}
           initialRegion={region ?? US_REGION}
           mapRef={mapRef}
           showsUserLocation={locationStatus === 'granted'}
@@ -380,6 +495,42 @@ const styles = StyleSheet.create({
   eventsBannerText: { flex: 1, fontSize: 13, fontWeight: '700', color: Colors.text },
   eventsBannerArrow: { fontSize: 14, color: Colors.primary, fontWeight: '700' },
   mapWrapper: { flex: 1 },
+
+  // Search + filters
+  searchWrap: { paddingHorizontal: 16, paddingTop: 10, zIndex: 20 },
+  searchBar: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 12,
+    borderWidth: 1, borderColor: T.n200,
+  },
+  searchInput: { flex: 1, paddingHorizontal: 8, paddingVertical: 10, fontSize: 15, color: T.n800 },
+  searchClear: { width: 22, height: 22, borderRadius: 11, backgroundColor: T.n100, alignItems: 'center', justifyContent: 'center' },
+  filterBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: T.n100, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
+  filterText: { fontSize: 12, fontWeight: '700', color: T.n600 },
+  dropdown: {
+    position: 'absolute', top: 58, left: 16, right: 16, backgroundColor: '#fff', borderRadius: 14, paddingVertical: 4,
+    shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 8, zIndex: 30,
+  },
+  dropdownRow: { paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: T.n50 },
+  dropdownName: { fontSize: 14, fontWeight: '700', color: T.n900 },
+  dropdownCuisine: { fontSize: 12, color: Colors.primary, marginTop: 1 },
+  dropdownEmpty: { fontSize: 13, color: T.n400, padding: 14 },
+  filterPanel: { marginTop: 8 },
+  pill: { backgroundColor: T.n100, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+  pillText: { fontSize: 12, fontWeight: '700', color: T.n600 },
+  clearFilters: { fontSize: 12, fontWeight: '700', color: Colors.primary },
+
+  // Truck of the Week
+  featured: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginTop: 10, padding: 10,
+    backgroundColor: Colors.primary, borderRadius: 16,
+  },
+  featuredPhoto: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#B91C1C' },
+  featuredLabel: { fontSize: 9, fontWeight: '900', color: '#FECACA', letterSpacing: 1.2 },
+  featuredName: { fontSize: 13, fontWeight: '900', color: '#fff', letterSpacing: 0.3 },
+  featuredSub: { fontSize: 11, color: '#FECACA' },
+  featuredMsg: { fontSize: 11, color: '#FEE2E2', marginTop: 1 },
+  featuredView: { backgroundColor: '#fff', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+  featuredViewText: { fontSize: 12, fontWeight: '900', color: Colors.primary },
   refreshingBanner: {
     position: 'absolute',
     top: 0, left: 0, right: 0,

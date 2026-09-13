@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import {
   StyleSheet, View, Text, Image, ScrollView,
   TouchableOpacity, ActivityIndicator, Alert,
-  Modal, Dimensions, TextInput, KeyboardAvoidingView, Platform,
+  Modal, Dimensions, TextInput, KeyboardAvoidingView, Platform, Linking,
 } from 'react-native';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -656,9 +656,33 @@ export default function TruckScreen() {
 
           {/* Location */}
           {isLive && truck.location && (
-            <View style={styles.locationBox}>
-              <Text style={styles.locationLabel}>Current location</Text>
-              <Text style={styles.locationAddress}>{truck.location.address ?? ''}</Text>
+            <View style={[styles.locationBox, styles.locationRow]}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.locationLabel}>Current location</Text>
+                <Text style={styles.locationAddress}>{truck.location.address ?? ''}</Text>
+                {truck.location.broadcasted_at ? (
+                  <Text style={styles.locationUpdated}>
+                    Updated {new Date(truck.location.broadcasted_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                  </Text>
+                ) : null}
+              </View>
+              {Number.isFinite(truck.location.lat) && Number.isFinite(truck.location.lng) && (
+                <TouchableOpacity
+                  style={styles.directionsBtn}
+                  onPress={() => {
+                    const { lat, lng } = truck.location!;
+                    // The web links to Google Maps; on a phone, open the platform's own maps app.
+                    const url = Platform.OS === 'ios'
+                      ? `https://maps.apple.com/?daddr=${lat},${lng}`
+                      : `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+                    Linking.openURL(url).catch(() => {});
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Directions to ${truck.name}`}
+                >
+                  <Text style={styles.directionsText}>Directions</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
@@ -1052,6 +1076,10 @@ const styles = StyleSheet.create({
   locationBox: { backgroundColor: Colors.card, borderRadius: 10, padding: 14, marginBottom: 16 },
   locationLabel: { fontSize: 12, color: Colors.textSecondary, marginBottom: 4 },
   locationAddress: { fontSize: 15, color: Colors.text, fontWeight: '500' },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  locationUpdated: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
+  directionsBtn: { backgroundColor: Colors.primary, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
+  directionsText: { color: '#fff', fontSize: 12, fontWeight: '800' },
 
   // Schedule
   scheduleBox: { backgroundColor: Colors.card, borderRadius: 10, padding: 14, marginBottom: 16 },

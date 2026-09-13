@@ -143,6 +143,70 @@ export default function RootLayout() {
           options={{ headerShown: true, title: '', headerBackTitle: 'Back' }}
         />
         <Stack.Screen
+          name="dashboard/orders"
+          options={{ headerShown: true, title: 'Orders', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="dashboard/menu"
+          options={{ headerShown: true, title: 'Menu', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="dashboard/profile"
+          options={{ headerShown: true, title: 'Truck Profile', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="dashboard/schedule"
+          options={{ headerShown: true, title: 'Schedule', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="dashboard/analytics"
+          options={{ headerShown: true, title: 'Analytics', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="dashboard/catering/index"
+          options={{ headerShown: true, title: 'Catering', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="dashboard/catering/[id]"
+          options={{ headerShown: true, title: 'Request', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="dashboard/catering/packages"
+          options={{ headerShown: true, title: 'Packages', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="dashboard/social"
+          options={{ headerShown: true, title: 'Social', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="reviews"
+          options={{ headerShown: true, title: 'Reviews', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="leaderboard"
+          options={{ headerShown: true, title: 'Leaderboards', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="cities"
+          options={{ headerShown: true, title: 'Trucks by City', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="city/[city]"
+          options={{ headerShown: true, title: '', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="catering/index"
+          options={{ headerShown: true, title: 'Catering', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="contact"
+          options={{ headerShown: true, title: 'Contact', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="support"
+          options={{ headerShown: true, title: 'Support', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
           name="about"
           options={{ headerShown: true, title: 'About', headerBackTitle: 'Back' }}
         />
