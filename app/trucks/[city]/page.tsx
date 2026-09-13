@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import Image from "next/image";
 import Link from "next/link";
+import { firstOf } from "@/lib/discovery";
 
 type Props = {
   params: Promise<{ city: string }>;
@@ -55,9 +56,7 @@ export default async function CityPage({ params }: Props) {
 
     if (!error && data) {
       trucks = data.filter((truck: any) =>
-        truck.locations?.some((loc: any) =>
-          loc.address?.toLowerCase().includes(city.toLowerCase())
-        )
+        firstOf<{ address: string | null }>(truck.locations)?.address?.toLowerCase().includes(city.toLowerCase())
       );
     }
   } catch {
@@ -157,9 +156,9 @@ export default async function CityPage({ params }: Props) {
                 <p className="text-xs text-neutral-400 mt-1 line-clamp-2">
                   {truck.description}
                 </p>
-                {truck.locations?.[0] && (
+                {firstOf<{ address: string | null }>(truck.locations)?.address && (
                   <p className="text-xs text-neutral-400 mt-1">
-                    {truck.locations[0].address}
+                    {firstOf<{ address: string | null }>(truck.locations)!.address}
                   </p>
                 )}
               </div>

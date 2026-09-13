@@ -3,6 +3,7 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import webpush from "web-push";
 import { isRateLimited } from "@/lib/rateLimit";
+import { firstOf } from "@/lib/discovery";
 
 // Configure VAPID credentials lazily inside the handler so env vars are
 // always read at runtime, not at module-evaluation / build time.
@@ -74,7 +75,7 @@ export async function POST(req: NextRequest) {
 
   // Substitute template variables in the custom message
   if (custom_message) {
-    const locationAddress = (truck as any).locations?.[0]?.address ?? "";
+    const locationAddress = firstOf<{ address: string | null }>(truck.locations)?.address ?? "";
     const resolvedName = truck_name ?? (truck as any).name ?? "";
     custom_message = custom_message
       .replace(/\{location\}/gi, locationAddress)

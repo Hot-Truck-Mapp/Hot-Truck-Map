@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { TruckCardSkeleton } from "@/components/ui/Skeleton";
 import { CUISINE_TYPES } from "@/lib/cuisines";
+import { firstOf, formatMiles, milesBetween, sortByLiveThenDistance, toLatLng } from "@/lib/discovery";
+import { useDishSearch } from "@/lib/hooks/useDishSearch";
+import { useKnownPosition } from "@/lib/hooks/useKnownPosition";
 
 // "All" plus every cuisine a truck profile can actually be saved under —
 // kept in sync with the operator profile editor via the shared CUISINE_TYPES
@@ -15,13 +18,26 @@ const CUISINES = ["All", ...CUISINE_TYPES];
 
 const DIETARY = ["Vegan", "Gluten-Free", "Halal", "Vegetarian"];
 
+// useSearchParams() needs a Suspense boundary so the rest of the page can
+// still be prerendered.
 export default function TrucksListPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-neutral-100" />}>
+      <TrucksList />
+    </Suspense>
+  );
+}
+
+function TrucksList() {
   const router = useRouter();
+  // ?q= comes from "See all results" in the home page's search dropdown, which
+  // searches every truck — so start with Open Now off to match it.
+  const initialQuery = useSearchParams().get("q") ?? "";
   const mountedRef = useRef(true);
   const [trucks, setTrucks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [openNow, setOpenNow] = useState(true);
+  const [search, setSearch] = useState(initialQuery);
+  const [openNow, setOpenNow] = useState(!initialQuery);
   const [cuisine, setCuisine] = useState("All");
   const [dietary, setDietary] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
@@ -101,7 +117,7 @@ export default function TrucksListPage() {
       const supabase = createClient();
       const { data } = await supabase
         .from("trucks")
-        .select("id, name, cuisine, description, profile_photo, is_live, dietary_tags, avg_rating, review_count, locations(id, address), follows_agg:follows(count)")
+        .select("id, name, cuisine, description, profile_photo, is_live, dietary_tags, avg_rating, review_count, locations(id, address, lat, lng), follows_agg:follows(count)")
         .order("is_live", { ascending: false })
         .limit(200);
       if (!mountedRef.current) return;
@@ -113,20 +129,36 @@ export default function TrucksListPage() {
     }
   }
 
-  const filtered = trucks.filter((t) => {
-    if (openNow && !t.is_live) return false;
-    if (cuisine !== "All" && t.cuisine !== cuisine) return false;
-    if (
-      search.trim() !== "" &&
-      !t.name?.toLowerCase().includes(search.toLowerCase()) &&
-      !t.cuisine?.toLowerCase().includes(search.toLowerCase())
-    ) return false;
-    if (dietary.length > 0) {
-      const tags = t.dietary_tags ?? [];
-      if (!dietary.every((d) => tags.includes(d))) return false;
-    }
-    return true;
-  });
+  const dishes = useDishSearch(search);
+  const userPos = useKnownPosition();
+  const query = search.trim().toLowerCase();
+
+  // Live trucks only: an offline truck's stored position is where it last was.
+  const milesTo = (t: any): number | null => {
+    if (!userPos || !t.is_live) return null;
+    const pos = toLatLng(firstOf(t.locations));
+    return pos ? milesBetween(userPos, pos) : null;
+  };
+
+  const filtered = sortByLiveThenDistance(
+    trucks.filter((t) => {
+      if (openNow && !t.is_live) return false;
+      if (cuisine !== "All" && t.cuisine !== cuisine) return false;
+      if (
+        query &&
+        !t.name?.toLowerCase().includes(query) &&
+        !t.cuisine?.toLowerCase().includes(query) &&
+        !dishes[t.id]
+      ) return false;
+      if (dietary.length > 0) {
+        const tags = t.dietary_tags ?? [];
+        if (!dietary.every((d) => tags.includes(d))) return false;
+      }
+      return true;
+    }),
+    (t) => !!t.is_live,
+    milesTo,
+  );
 
   function toggleDietary(tag: string) {
     setDietary(
@@ -216,7 +248,7 @@ export default function TrucksListPage() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name or cuisine..."
+              placeholder="Search trucks, cuisines, or dishes..."
               className="flex-1 px-3 py-3 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none bg-transparent"
             />
             {search ? (
@@ -399,7 +431,9 @@ export default function TrucksListPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 md:gap-3">
         {filtered.map((truck) => {
           const followerCount = Number(truck.follows_agg?.[0]?.count ?? 0);
-          const address = truck.locations?.[0]?.address ?? null;
+          const address = truck.is_live ? firstOf(truck.locations)?.address ?? null : null;
+          const miles = milesTo(truck);
+          const dish = dishes[truck.id];
           return (
             <Link
               key={truck.id}
@@ -469,7 +503,16 @@ export default function TrucksListPage() {
                         <span className="text-[11px] text-neutral-400">({truck.review_count ?? 0})</span>
                       </div>
                     )}
+                    {miles != null && (
+                      <span className="text-[11px] font-bold text-neutral-600">· {formatMiles(miles)}</span>
+                    )}
                   </div>
+
+                  {dish && (
+                    <p className="text-xs text-neutral-500 mb-1.5 truncate">
+                      Serves <span className="font-semibold text-neutral-700">{dish}</span>
+                    </p>
+                  )}
 
                   {/* Description */}
                   {truck.description && (
@@ -489,7 +532,7 @@ export default function TrucksListPage() {
                         <span className="text-xs text-neutral-400 truncate">{address}</span>
                       </div>
                     ) : (
-                      <span className="text-xs text-neutral-300">No location set</span>
+                      <span className="text-xs text-neutral-300">Not out right now</span>
                     )}
 
                     {followerCount > 0 && (

@@ -5,6 +5,7 @@ import Link from "next/link";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { isValidStateCode, stateNameForCode } from "@/lib/us-states";
+import { firstOf, toLatLng, type LatLng } from "@/lib/discovery";
 
 /** Escape a value for safe insertion into an HTML string. */
 function esc(v: unknown): string {
@@ -18,8 +19,21 @@ function esc(v: unknown): string {
 
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
 
+type MapTruck = {
+  id: string;
+  name: string | null;
+  cuisine: string | null;
+  is_live: boolean;
+  avg_rating: number | null;
+  review_count: number | null;
+  locations?: { lat: number; lng: number } | { lat: number; lng: number }[] | null;
+  location?: { lat: number; lng: number } | null;
+};
+
 type Props = {
-  trucks: any[];
+  trucks: MapTruck[];
+  /** Called with the visitor's position whenever it's known or changes. */
+  onUserLocation?: (pos: LatLng) => void;
 };
 
 // Fallback center: middle of the continental US — shown only if geolocation
@@ -55,13 +69,18 @@ async function reverseGeocodeToState(
   }
 }
 
-export default function MapboxMap({ trucks }: Props) {
+export default function MapboxMap({ trucks, onUserLocation }: Props) {
   const mapContainer = useRef<HTMLDivElement>(null);
+  const onUserLocationRef = useRef(onUserLocation);
+  useEffect(() => { onUserLocationRef.current = onUserLocation; }, [onUserLocation]);
   const map = useRef<mapboxgl.Map | null>(null);
   const markers = useRef<mapboxgl.Marker[]>([]);
   const geolocateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mapReady, setMapReady] = useState(false);
-  const [geoState, setGeoState] = useState<GeoState>("locating");
+  // Without the Geolocation API there's nothing to wait for — start "denied".
+  const [geoState, setGeoState] = useState<GeoState>(() =>
+    typeof navigator !== "undefined" && navigator.geolocation ? "locating" : "denied"
+  );
   const [nearbyState, setNearbyState] = useState<{ code: string; name: string } | null>(null);
   const [nearbyBannerDismissed, setNearbyBannerDismissed] = useState(false);
 
@@ -84,8 +103,14 @@ export default function MapboxMap({ trucks }: Props) {
         fitBoundsOptions: { maxZoom: USER_ZOOM },
       });
 
-      map.current!.addControl(new mapboxgl.NavigationControl());
-      map.current!.addControl(geolocate);
+      // Bottom-right, not the default top-right: the home page's navbar and
+      // search card float over the top of the map and hid the controls.
+      map.current!.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "bottom-right");
+      map.current!.addControl(geolocate, "bottom-right");
+      geolocate.on("geolocate", (e) => {
+        const p = toLatLng({ lat: e.coords.latitude, lng: e.coords.longitude });
+        if (p) onUserLocationRef.current?.(p);
+      });
 
       map.current!.on("load", () => {
         setMapReady(true);
@@ -109,6 +134,8 @@ export default function MapboxMap({ trucks }: Props) {
           if (!mounted) return; // component unmounted before geolocation resolved
           setGeoState("granted");
           buildMap([pos.coords.longitude, pos.coords.latitude], USER_ZOOM);
+          const p = toLatLng({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          if (p) onUserLocationRef.current?.(p);
           // Fire-and-forget — powers the "Events near you" banner, never blocks the map
           reverseGeocodeToState(pos.coords.latitude, pos.coords.longitude).then((s) => {
             if (mounted && s) setNearbyState(s);
@@ -125,7 +152,6 @@ export default function MapboxMap({ trucks }: Props) {
       );
     } else {
       // Geolocation not supported (very old browsers)
-      setGeoState("denied");
       buildMap(US_CENTER, US_ZOOM);
     }
 
@@ -147,12 +173,13 @@ export default function MapboxMap({ trucks }: Props) {
     markers.current = [];
 
     trucks.forEach((truck) => {
-      const loc = truck.locations?.[0] ?? truck.location ?? null;
-      if (loc?.lat == null || loc?.lng == null) return;
+      // Only live trucks get a pin — an offline truck's last position is where
+      // it *was*, and sending someone there is worse than showing nothing.
+      if (!truck.is_live) return;
       // Validate coordinates are finite and in range before passing to Mapbox
-      const lat = Number(loc.lat);
-      const lng = Number(loc.lng);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
+      const pos = toLatLng(firstOf(truck.locations) ?? truck.location);
+      if (!pos) return;
+      const { lat, lng } = pos;
 
       const el = document.createElement("div");
       el.style.cssText = `
@@ -256,7 +283,7 @@ export default function MapboxMap({ trucks }: Props) {
       {/* ── Location denied banner — shown inside the map so user knows what happened ── */}
       {geoState === "denied" && (
         <div
-          style={{ position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 10 }}
+          style={{ position: "absolute", bottom: "calc(236px + env(safe-area-inset-bottom))", left: "50%", transform: "translateX(-50%)", zIndex: 10 }}
           className="flex items-center gap-3 bg-neutral-900/90 backdrop-blur-sm text-white px-4 py-3 rounded-2xl shadow-xl max-w-xs w-[calc(100%-32px)]"
         >
           <svg className="flex-shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f97316" strokeWidth="2.5" strokeLinecap="round">
@@ -275,7 +302,7 @@ export default function MapboxMap({ trucks }: Props) {
       {/* ── "Events near you" banner — shown once we've resolved the user's state ── */}
       {geoState === "granted" && nearbyState && !nearbyBannerDismissed && (
         <div
-          style={{ position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 10 }}
+          style={{ position: "absolute", bottom: "calc(236px + env(safe-area-inset-bottom))", left: "50%", transform: "translateX(-50%)", zIndex: 10 }}
           className="flex items-center gap-3 bg-neutral-900/90 backdrop-blur-sm text-white px-4 py-3 rounded-2xl shadow-xl max-w-xs w-[calc(100%-32px)]"
         >
           <span className="text-lg flex-shrink-0">🎪</span>

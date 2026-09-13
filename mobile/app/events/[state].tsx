@@ -13,10 +13,9 @@ export default function StateEventsScreen() {
   const router = useRouter();
   const mountedRef = useRef(true);
   const [festivals, setFestivals] = useState<Festival[]>([]);
-  const [loading, setLoading] = useState(true);
-
   const code = (state ?? '').toUpperCase();
   const valid = isValidStateCode(code);
+  const [loading, setLoading] = useState(valid); // invalid code → straight to not-found
   const stateName = stateNameForCode(code) ?? code;
 
   useEffect(() => {
@@ -29,7 +28,7 @@ export default function StateEventsScreen() {
   }, [navigation, valid, stateName]);
 
   useEffect(() => {
-    if (!valid) { setLoading(false); return; }
+    if (!valid) return;
     async function load() {
       try {
         const todayISO = new Date().toISOString().split('T')[0];

@@ -2,7 +2,7 @@
  * Single source of truth for who counts as a Hot Truck Map admin.
  *
  * This module is deliberately dependency-free so it can be imported from
- * both middleware (edge runtime) and route handlers. Server-only helpers
+ * both proxy.ts and route handlers. Server-only helpers
  * live in lib/admin-server.ts.
  *
  * Defaults to the platform owner's address. Set the ADMIN_EMAILS env var

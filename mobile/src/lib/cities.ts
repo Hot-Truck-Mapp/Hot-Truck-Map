@@ -1,8 +1,13 @@
 import { supabase } from '@/lib/supabase';
+import { firstOf } from '@shared/discovery';
+
+type TruckLocation = { id: string; address: string | null; broadcasted_at: string | null };
 
 export type LiveTruck = {
   id: string; name: string; cuisine: string | null; description: string | null; profile_photo: string | null;
-  is_live: boolean | null; locations: { id: string; address: string | null; broadcasted_at: string | null }[] | null;
+  is_live: boolean | null;
+  // One-to-one embed (locations is unique per truck), so usually an object — read it with firstOf().
+  locations: TruckLocation | TruckLocation[] | null;
 };
 
 /** "new-brunswick" → "New Brunswick", the same slug rule as /trucks/[city]. */
@@ -31,7 +36,7 @@ export async function fetchLiveTrucks(): Promise<LiveTruck[]> {
 
 export function trucksInCity(trucks: LiveTruck[], city: string): LiveTruck[] {
   const needle = city.toLowerCase();
-  return trucks.filter((t) => t.locations?.some((l) => l.address?.toLowerCase().includes(needle)));
+  return trucks.filter((t) => firstOf(t.locations)?.address?.toLowerCase().includes(needle));
 }
 
 /**
@@ -43,7 +48,7 @@ export function trucksInCity(trucks: LiveTruck[], city: string): LiveTruck[] {
 export function citiesFrom(trucks: LiveTruck[]): { city: string; count: number }[] {
   const counts = new Map<string, number>();
   for (const t of trucks) {
-    const addr = t.locations?.[0]?.address ?? '';
+    const addr = firstOf(t.locations)?.address ?? '';
     const parts = addr.split(',').map((p) => p.trim()).filter(Boolean);
     if (parts.length < 3) continue;
     const city = parts[1];

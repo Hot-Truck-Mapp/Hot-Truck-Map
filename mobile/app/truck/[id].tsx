@@ -10,6 +10,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/colors';
 import type { Truck, MenuItem, Location, Review } from '@shared/types';
+import { nextStop } from '@shared/discovery';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const PHOTO_COL_SIZE = (SCREEN_WIDTH - 48 - 8) / 2; // 2 columns with padding
@@ -47,6 +48,8 @@ type TruckDetail = Truck & {
   location?: Location;
   menu_items?: MenuItem[];
   schedule?: Schedule | null;
+  /** The raw `schedules` rows, for working out the next stop. */
+  schedule_rows?: ScheduleRow[];
   offers_catering?: boolean;
 };
 
@@ -135,7 +138,7 @@ export default function TruckScreen() {
 
   // Core
   const [truck, setTruck] = useState<TruckDetail | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !!id); // no id → straight to not-found
   const [following, setFollowing] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [authToken, setAuthToken] = useState<string | null>(null);
@@ -175,7 +178,7 @@ export default function TruckScreen() {
 
   // Load truck data
   useEffect(() => {
-    if (!id) { setLoading(false); return; }
+    if (!id) return;
     async function load() {
       try {
         const [truckRes, schedRes, menuRes, locationRes, spottedRes, reviewsRes] = await Promise.all([
@@ -226,6 +229,7 @@ export default function TruckScreen() {
             menu_items: menuRes.data ?? [],
             location: locationRes.data ?? undefined,
             schedule: scheduleFromRows(schedRes.data ?? []),
+            schedule_rows: schedRes.data ?? [],
           });
         }
         setSpottedPosts(spottedRes.data ?? []);
@@ -610,6 +614,8 @@ export default function TruckScreen() {
   }
 
   const isLive = truck.is_live === true;
+  // Not live: when and where they'll be next — the same card the web shows.
+  const upNext = isLive ? null : nextStop(truck.schedule_rows ?? []);
 
   const cartItemCount = cartCount();
   const cartTotalAmt = cartTotal();
@@ -682,6 +688,29 @@ export default function TruckScreen() {
                 >
                   <Text style={styles.directionsText}>Directions</Text>
                 </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          {!isLive && (
+            <View style={styles.locationBox}>
+              <Text style={styles.locationLabel}>
+                {upNext ? (upNext.status === 'open' ? 'Scheduled now' : 'Next stop') : 'Not out right now'}
+              </Text>
+              {upNext ? (
+                <>
+                  <Text style={styles.locationAddress}>
+                    {upNext.when} · {upNext.stop.open_time}–{upNext.stop.close_time}
+                  </Text>
+                  {upNext.stop.location ? <Text style={styles.locationUpdated}>{upNext.stop.location}</Text> : null}
+                  {upNext.status === 'open' ? (
+                    <Text style={styles.locationUpdated}>They haven&apos;t gone live on the map yet.</Text>
+                  ) : null}
+                </>
+              ) : (
+                <Text style={styles.locationUpdated}>
+                  No upcoming stops posted. Follow {truck.name} to get an alert the moment they go live.
+                </Text>
               )}
             </View>
           )}

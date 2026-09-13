@@ -259,7 +259,7 @@ export default function Dashboard() {
 
         const [menuRes, schedRes, ordersRes, followsRes] = await Promise.all([
           fetchMenuItems(supabase, truck.id),
-          supabase.from("schedules").select("id, truck_id, day_of_week, open_time, close_time, location, notes").eq("truck_id", truck.id).order("day_of_week").limit(7),
+          supabase.from("schedules").select("id, truck_id, day_of_week, open_time, close_time, location, notes").eq("truck_id", truck.id).order("day_of_week").limit(50),
           supabase.from("orders").select("id, truck_id, pickup_name, notes, items, total, status, created_at, customer_id").eq("truck_id", truck.id).order("created_at", { ascending: false }).limit(100),
           supabase.from("follows").select("*", { count: "exact", head: true }).eq("truck_id", truck.id),
         ]);
@@ -652,7 +652,7 @@ export default function Dashboard() {
         const { error } = await supabase.from("schedules").insert(payload);
         if (error) throw new Error(error.message);
       }
-      const { data } = await supabase.from("schedules").select("id, truck_id, day_of_week, open_time, close_time, location, notes").eq("truck_id", truckId).order("day_of_week").limit(7);
+      const { data } = await supabase.from("schedules").select("id, truck_id, day_of_week, open_time, close_time, location, notes").eq("truck_id", truckId).order("day_of_week").limit(50);
       setSchedule(data ?? []);
       showToast("Schedule saved!", false);
       setSchedModal(false);

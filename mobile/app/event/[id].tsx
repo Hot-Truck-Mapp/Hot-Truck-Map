@@ -17,7 +17,7 @@ export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const mountedRef = useRef(true);
   const [event, setEvent] = useState<Festival | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !!id); // no id → straight to not-found
 
   useEffect(() => {
     mountedRef.current = true;
@@ -25,7 +25,7 @@ export default function EventDetailScreen() {
   }, []);
 
   useEffect(() => {
-    if (!id) { setLoading(false); return; }
+    if (!id) return;
     async function load() {
       try {
         const { data } = await supabase.from('festivals').select('*').eq('id', id).maybeSingle();

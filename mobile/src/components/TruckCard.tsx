@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { T, TruckPhoto } from '@/components/ui';
+import { formatMiles } from '@shared/discovery';
 
 export type TruckListItem = {
   id: string;
@@ -20,13 +21,17 @@ export type TruckListItem = {
 type Props = {
   truck: TruckListItem;
   address?: string | null;
+  /** Miles from the user, when known (live trucks only). */
+  miles?: number | null;
+  /** A menu item that matched the search, shown as "Serves …". */
+  dish?: string | null;
   followerCount?: number;
   favorite?: boolean;
   onToggleFavorite?: () => void;
 };
 
 /** A row in the truck list — same layout as a card on the web /trucks page. */
-export function TruckCard({ truck, address, followerCount = 0, favorite, onToggleFavorite }: Props) {
+export function TruckCard({ truck, address, miles, dish, followerCount = 0, favorite, onToggleFavorite }: Props) {
   const router = useRouter();
   const hasRating = (truck.avg_rating ?? 0) > 0;
 
@@ -71,7 +76,14 @@ export function TruckCard({ truck, address, followerCount = 0, favorite, onToggl
               <Text style={styles.ratingCount}>({truck.review_count ?? 0})</Text>
             </View>
           )}
+          {miles != null && <Text style={styles.miles}>· {formatMiles(miles)}</Text>}
         </View>
+
+        {dish ? (
+          <Text style={styles.dish} numberOfLines={1}>
+            Serves <Text style={{ fontWeight: '700', color: T.n700 }}>{dish}</Text>
+          </Text>
+        ) : null}
 
         {truck.description ? <Text style={styles.desc} numberOfLines={2}>{truck.description}</Text> : null}
 
@@ -82,7 +94,7 @@ export function TruckCard({ truck, address, followerCount = 0, favorite, onToggl
               <Text style={styles.addr} numberOfLines={1}>{address}</Text>
             </View>
           ) : (
-            <Text style={styles.noAddr}>No location set</Text>
+            <Text style={styles.noAddr}>{truck.is_live ? 'No location set' : 'Not out right now'}</Text>
           )}
           {followerCount > 0 && (
             <View style={styles.followers}>
@@ -117,6 +129,8 @@ const styles = StyleSheet.create({
   rating: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   ratingValue: { fontSize: 11, fontWeight: '700', color: T.n700 },
   ratingCount: { fontSize: 11, color: T.n400 },
+  miles: { fontSize: 11, fontWeight: '700', color: T.n600 },
+  dish: { fontSize: 12, color: T.n500, marginBottom: 6 },
   desc: { fontSize: 12, color: T.n500, lineHeight: 17, marginBottom: 8 },
   footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   addrRow: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 },

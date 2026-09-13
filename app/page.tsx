@@ -1,10 +1,15 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { useDishSearch } from "@/lib/hooks/useDishSearch";
+import {
+  firstOf, formatMiles, milesBetween, sortByLiveThenDistance,
+  stopsLeftToday, toLatLng, type LatLng, type ScheduleStop,
+} from "@/lib/discovery";
 
 const MapboxMap = dynamic(() => import("@/components/map/MapboxMap"), {
   ssr: false,
@@ -30,8 +35,44 @@ type FeaturedTruck = {
   message: string;
 };
 
+const noopSubscribe = () => () => {};
+
+type TodayStop = ScheduleStop & { truck_id: string };
+
+type HomeLocation = {
+  id?: string;
+  truck_id?: string;
+  lat: number;
+  lng: number;
+  address: string | null;
+  broadcasted_at: string | null;
+};
+
+type HomeTruck = {
+  id: string;
+  name: string;
+  cuisine: string | null;
+  description: string | null;
+  profile_photo: string | null;
+  is_live: boolean;
+  avg_rating: number | null;
+  review_count: number | null;
+  dietary_tags: string[] | null;
+  // One-to-one embed: PostgREST returns an object; realtime merges write an array.
+  locations: HomeLocation | HomeLocation[] | null;
+};
+
+const TruckGlyph = ({ size, stroke }: { size: number; stroke: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+    <path d="M1 3h15v13H1z"/>
+    <path d="M16 8h4l3 3v5h-7V8z"/>
+    <circle cx="5.5" cy="18.5" r="2.5"/>
+    <circle cx="18.5" cy="18.5" r="2.5"/>
+  </svg>
+);
+
 export default function HomePage() {
-  const [trucks, setTrucks] = useState<any[]>([]);
+  const [trucks, setTrucks] = useState<HomeTruck[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [search, setSearch] = useState("");
@@ -41,16 +82,24 @@ export default function HomePage() {
   const [dietary, setDietary] = useState<string[]>([]);
   const [showFilter, setShowFilter] = useState(false);
   const [showList, setShowList] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  // false during SSR and hydration, true after — keeps the server HTML and the
+  // first client render identical.
+  const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false);
   const [featuredTruck, setFeaturedTruck] = useState<FeaturedTruck | null>(null);
   const [featuredDismissed, setFeaturedDismissed] = useState(false);
+  const [userPos, setUserPos] = useState<LatLng | null>(null);
+  const dishes = useDishSearch(search);
+  const [todayStops, setTodayStops] = useState<TodayStop[]>([]);
+  const [clock, setClock] = useState(() => Date.now());
   const mountedRef = useRef(true);
   const searchBlurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    setMounted(true);
     loadTrucks();
     loadFeaturedTruck();
+    loadTodayStops();
+    // "Open now" vs "later today" depends on the time — re-evaluate each minute.
+    const tick = setInterval(() => setClock(Date.now()), 60_000);
 
     // Real-time: merge individual truck/location updates into state rather than
     // re-fetching all trucks on every event. This prevents dozens of full-table
@@ -59,7 +108,7 @@ export default function HomePage() {
     const channel = supabase
       .channel("home-trucks-live")
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "trucks" }, (payload) => {
-        const updated = payload.new as any;
+        const updated = payload.new as Partial<HomeTruck>;
         if (!updated?.id) { loadTrucks(); return; }
         setTrucks((prev) => {
           const idx = prev.findIndex((t) => t.id === updated.id);
@@ -74,7 +123,7 @@ export default function HomePage() {
         });
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "locations" }, (payload) => {
-        const loc = payload.new as any;
+        const loc = payload.new as HomeLocation;
         if (!loc?.truck_id) return;
         setTrucks((prev) =>
           prev.map((t) =>
@@ -83,7 +132,7 @@ export default function HomePage() {
         );
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "locations" }, (payload) => {
-        const loc = payload.new as any;
+        const loc = payload.new as HomeLocation;
         if (!loc?.truck_id) return;
         setTrucks((prev) =>
           prev.map((t) =>
@@ -94,10 +143,24 @@ export default function HomePage() {
       .subscribe();
     return () => {
       mountedRef.current = false;
+      clearInterval(tick);
       if (searchBlurTimerRef.current) clearTimeout(searchBlurTimerRef.current);
       supabase.removeChannel(channel);
     };
   }, []);
+
+  async function loadTodayStops() {
+    try {
+      const { data } = await createClient()
+        .from("schedules")
+        .select("truck_id, day_of_week, open_time, close_time, location, notes")
+        .eq("day_of_week", new Date().getDay())
+        .limit(500);
+      if (mountedRef.current && data) setTodayStops(data as TodayStop[]);
+    } catch {
+      // non-critical — the "Out today" section just won't show
+    }
+  }
 
   async function loadFeaturedTruck() {
     try {
@@ -147,29 +210,52 @@ export default function HomePage() {
     }
   }
 
-  const filtered = trucks.filter((t) => {
-    if (openNow && !t.is_live) return false;
-    if (cuisine !== "All" && t.cuisine !== cuisine) return false;
-    if (
-      search.trim() !== "" &&
-      !t.name?.toLowerCase().includes(search.toLowerCase()) &&
-      !t.cuisine?.toLowerCase().includes(search.toLowerCase())
-    ) return false;
-    if (dietary.length > 0) {
-      const tags = t.dietary_tags ?? [];
-      if (!dietary.every((d) => tags.includes(d))) return false;
-    }
-    return true;
-  });
+  const query = search.trim().toLowerCase();
+  const dishFor = (t: HomeTruck): string | null => dishes[t.id] ?? null;
+  const matchesSearch = (t: HomeTruck) =>
+    !query ||
+    t.name?.toLowerCase().includes(query) ||
+    t.cuisine?.toLowerCase().includes(query) ||
+    dishFor(t) != null;
+
+  // Distance only means something for a live truck — an offline truck's
+  // stored position is where it last was, not where it is.
+  const milesTo = (t: HomeTruck): number | null => {
+    if (!userPos || !t.is_live) return null;
+    const pos = toLatLng(firstOf(t.locations));
+    return pos ? milesBetween(userPos, pos) : null;
+  };
+
+  const filtered = sortByLiveThenDistance(
+    trucks.filter((t) => {
+      if (openNow && !t.is_live) return false;
+      if (cuisine !== "All" && t.cuisine !== cuisine) return false;
+      if (!matchesSearch(t)) return false;
+      if (dietary.length > 0) {
+        const tags = t.dietary_tags ?? [];
+        if (!dietary.every((d) => tags.includes(d))) return false;
+      }
+      return true;
+    }),
+    (t) => !!t.is_live,
+    milesTo,
+  );
 
   // Search results for dropdown: search ALL trucks regardless of open/cuisine/dietary filters
-  const searchResults = search.trim()
-    ? trucks.filter(
-        (t) =>
-          t.name?.toLowerCase().includes(search.toLowerCase()) ||
-          t.cuisine?.toLowerCase().includes(search.toLowerCase())
-      )
+  const searchResults = query
+    ? sortByLiveThenDistance(trucks.filter(matchesSearch), (t) => !!t.is_live, milesTo)
     : [];
+
+  const liveCount = filtered.filter((t) => t.is_live).length;
+
+  // Today's remaining stops for trucks that aren't live yet, soonest first.
+  const outToday = useMemo(() => {
+    const byId = new Map(trucks.map((t) => [t.id, t]));
+    return stopsLeftToday(todayStops, new Date(clock))
+      .map((stop) => ({ stop, truck: byId.get(stop.truck_id) }))
+      .filter((x): x is { stop: typeof x.stop; truck: HomeTruck } => !!x.truck && !x.truck.is_live);
+  }, [trucks, todayStops, clock]);
+  const nextStopFor = (truckId: string) => outToday.find((x) => x.truck.id === truckId)?.stop ?? null;
 
   function toggleDietary(tag: string) {
     setDietary(
@@ -180,6 +266,150 @@ export default function HomePage() {
   }
 
   const activeFilterCount = dietary.length + (cuisine !== "All" ? 1 : 0);
+
+  // One list, rendered in both the phone bottom sheet and the desktop side panel.
+  function renderList(photoPx: number) {
+    return (
+      <>
+        {loading && (
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <div className="w-8 h-8 border-[3px] border-brand-red border-t-transparent rounded-full animate-spin" />
+            <p className="text-neutral-400 text-sm">Loading trucks...</p>
+          </div>
+        )}
+
+        {/* Out today — scheduled stops for trucks that haven't gone live yet */}
+        {!loading && !query && outToday.length > 0 && openNow && (
+          <div className="px-4 pt-3 pb-1">
+            <p className="text-[11px] font-black text-neutral-400 uppercase tracking-widest mb-2">Out today</p>
+            <div className="flex flex-col gap-1.5">
+              {outToday.map(({ stop, truck }, i) => (
+                <Link
+                  key={`${truck.id}-${i}`}
+                  href={"/truck/" + truck.id}
+                  className="flex items-center gap-3 rounded-xl bg-neutral-50 hover:bg-neutral-100 px-3 py-2 transition-colors"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-neutral-800 truncate">{truck.name}</p>
+                    <p className="text-xs text-neutral-500 truncate">
+                      {stop.location || "Location TBA"}
+                    </p>
+                  </div>
+                  <span className={`flex-shrink-0 text-[11px] font-bold ${stop.status === "open" ? "text-green-600" : "text-neutral-500"}`}>
+                    {stop.status === "open" ? `Until ${stop.close_time}` : `${stop.open_time}–${stop.close_time}`}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!loading && filtered.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+            <div className="w-12 h-12 bg-neutral-100 rounded-2xl flex items-center justify-center mb-3">
+              <TruckGlyph size={24} stroke="#ccc" />
+            </div>
+            <p className="font-semibold text-neutral-700 mb-1">
+              {openNow && !query ? "No trucks live right now" : "No trucks found"}
+            </p>
+            <p className="text-sm text-neutral-400">
+              {openNow ? "Turn off Open Now to see all trucks" : "Try clearing your filters"}
+            </p>
+            {openNow && (
+              <button
+                onClick={() => setOpenNow(false)}
+                className="mt-3 px-4 py-2 bg-brand-red text-white rounded-lg text-sm font-semibold"
+              >
+                Show All Trucks
+              </button>
+            )}
+          </div>
+        )}
+
+        {filtered.map((truck) => {
+          const miles = milesTo(truck);
+          const dish = dishFor(truck);
+          const nextStop = truck.is_live ? null : nextStopFor(truck.id);
+          const address = truck.is_live ? firstOf(truck.locations)?.address : null;
+          return (
+            <Link
+              key={truck.id}
+              href={"/truck/" + truck.id}
+              className="flex gap-3 px-4 py-3 border-b border-neutral-100 hover:bg-neutral-50 active:bg-neutral-50 transition-colors"
+            >
+              <div
+                className="rounded-xl bg-neutral-100 flex-shrink-0 overflow-hidden relative"
+                style={{ width: photoPx, height: photoPx }}
+              >
+                {truck.profile_photo ? (
+                  <Image src={truck.profile_photo} alt={truck.name} fill sizes={`${photoPx}px`} className="object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-neutral-200">
+                    <TruckGlyph size={Math.round(photoPx / 3)} stroke="#ccc" />
+                  </div>
+                )}
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-black text-neutral-900 text-sm uppercase tracking-wide leading-tight">
+                    {truck.name}
+                  </p>
+                  {truck.is_live && (
+                    <span className="flex-shrink-0 flex items-center gap-1 text-[10px] font-black px-2 py-0.5 bg-brand-red text-white rounded tracking-wider">
+                      <span className="relative flex h-1.5 w-1.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-300 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white" />
+                      </span>
+                      OPEN
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <p className="text-xs text-brand-red font-semibold">
+                    {truck.cuisine ?? "Food Truck"}
+                  </p>
+                  {(truck.avg_rating ?? 0) > 0 && (
+                    <div className="flex items-center gap-0.5">
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="#F5A623" stroke="#F5A623" strokeWidth="1" aria-hidden="true">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                      </svg>
+                      <span className="text-[10px] font-bold text-neutral-600">{Number(truck.avg_rating).toFixed(1)}</span>
+                    </div>
+                  )}
+                  {miles != null && (
+                    <span className="text-[11px] font-bold text-neutral-600">· {formatMiles(miles)}</span>
+                  )}
+                </div>
+                {dish && (
+                  <p className="text-xs text-neutral-500 mt-0.5 truncate">
+                    Serves <span className="font-semibold text-neutral-700">{dish}</span>
+                  </p>
+                )}
+                {address && (
+                  <div className="flex items-center gap-1 mt-1">
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#E8481C" strokeWidth="2.5" strokeLinecap="round" className="flex-shrink-0" aria-hidden="true">
+                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                      <circle cx="12" cy="10" r="3"/>
+                    </svg>
+                    <span className="text-xs text-neutral-400 truncate">{address}</span>
+                  </div>
+                )}
+                {nextStop && (
+                  <p className="text-xs text-neutral-500 mt-1 truncate">
+                    {nextStop.status === "open" ? "Scheduled now" : "Today"} · {nextStop.open_time}–{nextStop.close_time}
+                    {nextStop.location ? ` · ${nextStop.location}` : ""}
+                  </p>
+                )}
+              </div>
+            </Link>
+          );
+        })}
+
+        <div className="h-6" />
+      </>
+    );
+  }
 
   if (mounted && loadError) return (
     <div className="relative h-screen w-screen bg-neutral-900 flex flex-col items-center justify-center gap-4">
@@ -222,8 +452,8 @@ export default function HomePage() {
     <div className="relative h-screen w-screen overflow-hidden bg-neutral-900">
 
       {/* Full-screen map */}
-      <div className="absolute inset-0">
-        <MapboxMap trucks={filtered} />
+      <div className="absolute inset-0 home-map">
+        <MapboxMap trucks={filtered} onUserLocation={setUserPos} />
       </div>
 
       {/* Top bar — floats over the map */}
@@ -366,7 +596,8 @@ export default function HomePage() {
                   if (searchBlurTimerRef.current) clearTimeout(searchBlurTimerRef.current);
                   searchBlurTimerRef.current = setTimeout(() => { if (mountedRef.current) setSearchFocused(false); }, 200);
                 }}
-                placeholder="Search by name or cuisine..."
+                placeholder="Search trucks, cuisines, or dishes..."
+                aria-label="Search trucks, cuisines, or dishes"
                 suppressHydrationWarning
                 className="flex-1 px-3 py-3 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none bg-transparent"
               />
@@ -509,7 +740,10 @@ export default function HomePage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-neutral-800 truncate">{truck.name}</p>
-                          <p className="text-xs text-neutral-400">{truck.cuisine ?? "Food Truck"}</p>
+                          <p className="text-xs text-neutral-400 truncate">
+                            {dishFor(truck) ? <>Serves <span className="text-neutral-600">{dishFor(truck)}</span></> : truck.cuisine ?? "Food Truck"}
+                            {milesTo(truck) != null && <> · {formatMiles(milesTo(truck)!)}</>}
+                          </p>
                         </div>
                         {truck.is_live ? (
                           <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -543,7 +777,7 @@ export default function HomePage() {
       </div>
 
       {/* Live count pill — floats over map */}
-      {!showList && filtered.some((t) => t.is_live) && (
+      {!showList && liveCount > 0 && (
         <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
           <div className="bg-white rounded-full shadow-lg px-4 py-2 flex items-center gap-2">
             <span className="relative flex h-2 w-2">
@@ -551,8 +785,51 @@ export default function HomePage() {
               <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-red" />
             </span>
             <p className="text-sm font-semibold text-neutral-800">
-              {filtered.filter((t) => t.is_live).length} truck{filtered.filter((t) => t.is_live).length !== 1 ? "s" : ""} live now
+              {liveCount} truck{liveCount !== 1 ? "s" : ""} live now
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Nobody live — say so, and point at who's out later today instead of
+          leaving an empty map. */}
+      {!showList && !loading && liveCount === 0 && (
+        <div className="absolute bottom-20 left-3 right-3 md:left-1/2 md:right-auto md:-translate-x-1/2 md:w-[26rem] z-20">
+          <div className="bg-white rounded-2xl shadow-xl px-4 py-3">
+            <p className="text-sm font-black text-neutral-900">No trucks live right now</p>
+            {outToday.length > 0 ? (
+              <>
+                <p className="text-xs text-neutral-500 mt-0.5">
+                  {outToday.length === 1 ? "1 stop" : `${outToday.length} stops`} coming up today
+                </p>
+                <Link
+                  href={`/truck/${outToday[0].truck.id}`}
+                  className="mt-2 flex items-center gap-3 rounded-xl bg-neutral-50 hover:bg-neutral-100 px-3 py-2 transition-colors"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-neutral-800 truncate">{outToday[0].truck.name}</p>
+                    <p className="text-xs text-neutral-500 truncate">
+                      {outToday[0].stop.open_time}–{outToday[0].stop.close_time}
+                      {outToday[0].stop.location ? ` · ${outToday[0].stop.location}` : ""}
+                    </p>
+                  </div>
+                  <span className="text-xs font-bold text-brand-red flex-shrink-0">View →</span>
+                </Link>
+                {outToday.length > 1 && (
+                  <button
+                    onClick={() => setShowList(true)}
+                    className="mt-2 text-xs font-bold text-brand-red hover:underline"
+                  >
+                    See all of today&apos;s stops
+                  </button>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-neutral-500 mt-0.5">
+                <Link href="/trucks" className="font-bold text-brand-red hover:underline">Follow your favorites</Link>
+                {" "}and we&apos;ll tell you the moment they go live.
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -623,105 +900,7 @@ export default function HomePage() {
 
             {/* Scrollable list */}
             <div className="flex-1 overflow-y-auto">
-              {loading && (
-                <div className="flex flex-col items-center justify-center py-16 gap-3">
-                  <div className="w-8 h-8 border-[3px] border-brand-red border-t-transparent rounded-full animate-spin" />
-                  <p className="text-neutral-400 text-sm">Loading trucks...</p>
-                </div>
-              )}
-
-              {!loading && filtered.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-                  <div className="w-12 h-12 bg-neutral-100 rounded-2xl flex items-center justify-center mb-3">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
-                      <path d="M1 3h15v13H1z"/>
-                      <path d="M16 8h4l3 3v5h-7V8z"/>
-                      <circle cx="5.5" cy="18.5" r="2.5"/>
-                      <circle cx="18.5" cy="18.5" r="2.5"/>
-                    </svg>
-                  </div>
-                  <p className="font-semibold text-neutral-700 mb-1">No trucks found</p>
-                  <p className="text-sm text-neutral-400">
-                    {openNow ? "Turn off Open Now to see all trucks" : "Try clearing your filters"}
-                  </p>
-                  {openNow && (
-                    <button
-                      onClick={() => setOpenNow(false)}
-                      className="mt-3 px-4 py-2 bg-brand-red text-white rounded-lg text-sm font-semibold"
-                    >
-                      Show All Trucks
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {filtered.map((truck) => (
-                <Link
-                  key={truck.id}
-                  href={"/truck/" + truck.id}
-                  className="flex gap-3 px-4 py-3 border-b border-neutral-100 active:bg-neutral-50 transition-colors"
-                >
-                  {/* Photo */}
-                  <div className="w-16 h-16 rounded-xl bg-neutral-100 flex-shrink-0 overflow-hidden relative">
-                    {truck.profile_photo ? (
-                      <Image src={truck.profile_photo} alt={truck.name} fill sizes="64px" className="object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-neutral-200">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
-                          <path d="M1 3h15v13H1z"/>
-                          <path d="M16 8h4l3 3v5h-7V8z"/>
-                          <circle cx="5.5" cy="18.5" r="2.5"/>
-                          <circle cx="18.5" cy="18.5" r="2.5"/>
-                        </svg>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="font-black text-neutral-900 text-sm uppercase tracking-wide leading-tight">
-                        {truck.name}
-                      </p>
-                      {truck.is_live && (
-                        <span className="flex-shrink-0 flex items-center gap-1 text-[10px] font-black px-2 py-0.5 bg-brand-red text-white rounded tracking-wider">
-                          <span className="relative flex h-1.5 w-1.5">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-300 opacity-75" />
-                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white" />
-                          </span>
-                          OPEN
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <p className="text-xs text-brand-red font-semibold">
-                        {truck.cuisine ?? "Food Truck"}
-                      </p>
-                      {(truck.avg_rating ?? 0) > 0 && (
-                        <div className="flex items-center gap-0.5">
-                          <svg width="9" height="9" viewBox="0 0 24 24" fill="#F5A623" stroke="#F5A623" strokeWidth="1">
-                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                          </svg>
-                          <span className="text-[10px] font-bold text-neutral-600">{Number(truck.avg_rating).toFixed(1)}</span>
-                        </div>
-                      )}
-                    </div>
-                    {truck.locations?.[0]?.address && (
-                      <div className="flex items-center gap-1 mt-1">
-                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#E8481C" strokeWidth="2.5" strokeLinecap="round" className="flex-shrink-0">
-                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-                          <circle cx="12" cy="10" r="3"/>
-                        </svg>
-                        <span className="text-xs text-neutral-400 truncate">
-                          {truck.locations[0].address}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </Link>
-              ))}
-
-              <div className="h-6" />
+              {renderList(64)}
             </div>
           </div>
 
@@ -746,89 +925,7 @@ export default function HomePage() {
 
             {/* Scrollable list */}
             <div className="flex-1 overflow-y-auto">
-              {loading && (
-                <div className="flex flex-col items-center justify-center py-16 gap-3">
-                  <div className="w-8 h-8 border-[3px] border-brand-red border-t-transparent rounded-full animate-spin" />
-                  <p className="text-neutral-400 text-sm">Loading trucks...</p>
-                </div>
-              )}
-
-              {!loading && filtered.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-                  <div className="w-12 h-12 bg-neutral-100 rounded-2xl flex items-center justify-center mb-3">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
-                      <path d="M1 3h15v13H1z"/>
-                      <path d="M16 8h4l3 3v5h-7V8z"/>
-                      <circle cx="5.5" cy="18.5" r="2.5"/>
-                      <circle cx="18.5" cy="18.5" r="2.5"/>
-                    </svg>
-                  </div>
-                  <p className="font-semibold text-neutral-700 mb-1">No trucks found</p>
-                  <p className="text-sm text-neutral-400">
-                    {openNow ? "Turn off Open Now to see all trucks" : "Try clearing your filters"}
-                  </p>
-                  {openNow && (
-                    <button
-                      onClick={() => setOpenNow(false)}
-                      className="mt-3 px-4 py-2 bg-brand-red text-white rounded-lg text-sm font-semibold"
-                    >
-                      Show All Trucks
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {filtered.map((truck) => (
-                <Link
-                  key={truck.id}
-                  href={"/truck/" + truck.id}
-                  className="flex gap-3 px-4 py-3 border-b border-neutral-100 hover:bg-neutral-50 transition-colors"
-                >
-                  <div className="w-14 h-14 rounded-xl bg-neutral-100 flex-shrink-0 overflow-hidden relative">
-                    {truck.profile_photo ? (
-                      <Image src={truck.profile_photo} alt={truck.name} fill sizes="56px" className="object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-neutral-200">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round">
-                          <path d="M1 3h15v13H1z"/>
-                          <path d="M16 8h4l3 3v5h-7V8z"/>
-                          <circle cx="5.5" cy="18.5" r="2.5"/>
-                          <circle cx="18.5" cy="18.5" r="2.5"/>
-                        </svg>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="font-black text-neutral-900 text-sm uppercase tracking-wide leading-tight">{truck.name}</p>
-                      {truck.is_live && (
-                        <span className="flex-shrink-0 flex items-center gap-1 text-[10px] font-black px-2 py-0.5 bg-brand-red text-white rounded tracking-wider">
-                          <span className="relative flex h-1.5 w-1.5">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-300 opacity-75" />
-                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white" />
-                          </span>
-                          OPEN
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <p className="text-xs text-brand-red font-semibold">{truck.cuisine ?? "Food Truck"}</p>
-                      {(truck.avg_rating ?? 0) > 0 && (
-                        <div className="flex items-center gap-0.5">
-                          <svg width="9" height="9" viewBox="0 0 24 24" fill="#F5A623" stroke="#F5A623" strokeWidth="1">
-                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                          </svg>
-                          <span className="text-[10px] font-bold text-neutral-600">{Number(truck.avg_rating).toFixed(1)}</span>
-                        </div>
-                      )}
-                    </div>
-                    {truck.locations?.[0]?.address && (
-                      <p className="text-xs text-neutral-400 mt-0.5 truncate">{truck.locations[0].address}</p>
-                    )}
-                  </div>
-                </Link>
-              ))}
-              <div className="h-4" />
+              {renderList(56)}
             </div>
           </div>
         </div>

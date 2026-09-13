@@ -16,7 +16,10 @@ import { Colors } from '@/constants/colors';
 import { stateForName, type USState } from '@shared/us-states';
 import { CUISINE_TYPES } from '@shared/cuisines';
 import { T } from '@/components/ui';
-import { useAsyncData } from '@/hooks/useAsyncData';
+import { useAsyncData, useRefreshOnRefocus } from '@/hooks/useAsyncData';
+import { useDishSearch } from '@/hooks/useDishSearch';
+import { fetchStopsLeftToday } from '@/lib/schedules';
+import { formatMiles, milesBetween, sortByLiveThenDistance, toLatLng, type LatLng } from '@shared/discovery';
 
 const DIETARY = ['Vegan', 'Gluten-Free', 'Halal', 'Vegetarian'];
 
@@ -90,6 +93,12 @@ export default function MapTab() {
   const [dietary, setDietary] = useState<string[]>([]);
   const [showFilter, setShowFilter] = useState(false);
   const [featuredDismissed, setFeaturedDismissed] = useState(false);
+  const [userPos, setUserPos] = useState<LatLng | null>(null);
+  const dishes = useDishSearch(search);
+  // Who's out later today — shown over the map when nobody is live.
+  const { data: stopsData, reload: reloadStops } = useAsyncData('stops-left-today', fetchStopsLeftToday);
+  const stopsToday = stopsData ?? [];
+  useRefreshOnRefocus(reloadStops);
 
   // Resolves coordinates to a US state via Expo Location's built-in reverse
   // geocoder (no network call needed beyond the OS's own geocoding service).
@@ -114,6 +123,7 @@ export default function MapTab() {
           longitudeDelta: USER_DELTA,
         };
         setRegion(r);
+        setUserPos(toLatLng({ lat: last.coords.latitude, lng: last.coords.longitude }));
         mapRef.current?.animateToRegion(r, 400);
       }
     } catch { /* no cached fix */ }
@@ -131,6 +141,7 @@ export default function MapTab() {
         longitudeDelta: USER_DELTA,
       };
       setRegion(r);
+      setUserPos(toLatLng({ lat: loc.coords.latitude, lng: loc.coords.longitude }));
       mapRef.current?.animateToRegion(r, 400);
       resolveNearbyState(loc.coords.latitude, loc.coords.longitude, mounted);
     } catch { /* keep last-known position */ }
@@ -183,20 +194,26 @@ export default function MapTab() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([refetch(), reloadReviews()]);
+      await Promise.all([refetch(), reloadReviews(), reloadStops()]);
     } finally {
       setRefreshing(false);
     }
-  }, [refetch, reloadReviews]);
+  }, [refetch, reloadReviews, reloadStops]);
 
   const q = search.trim().toLowerCase();
+  const matchesSearch = (t: (typeof trucks)[number]) =>
+    !q || (t.name ?? '').toLowerCase().includes(q) || (t.cuisine ?? '').toLowerCase().includes(q) || !!dishes[t.id];
+  const milesTo = (t: (typeof trucks)[number]) => {
+    const pos = toLatLng(t.location);
+    return userPos && pos ? milesBetween(userPos, pos) : null;
+  };
   const filtered = trucks.filter((t) => {
     if (cuisine !== 'All' && t.cuisine !== cuisine) return false;
-    if (q && !(t.name ?? '').toLowerCase().includes(q) && !(t.cuisine ?? '').toLowerCase().includes(q)) return false;
+    if (!matchesSearch(t)) return false;
     if (dietary.length > 0 && !dietary.every((d) => (t.dietary_tags ?? []).includes(d))) return false;
     return true;
   });
-  const searchResults = q ? trucks.filter((t) => (t.name ?? '').toLowerCase().includes(q) || (t.cuisine ?? '').toLowerCase().includes(q)) : [];
+  const searchResults = q ? sortByLiveThenDistance(trucks.filter(matchesSearch), () => true, milesTo) : [];
   const activeFilterCount = dietary.length + (cuisine !== 'All' ? 1 : 0);
 
   if (loading) {
@@ -268,11 +285,11 @@ export default function MapTab() {
             onChangeText={setSearch}
             onFocus={() => setSearchFocused(true)}
             onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
-            placeholder="Search by name or cuisine..."
+            placeholder="Search trucks, cuisines, or dishes..."
             placeholderTextColor={T.n400}
             autoCorrect={false}
             returnKeyType="search"
-            accessibilityLabel="Search live food trucks"
+            accessibilityLabel="Search live food trucks by name, cuisine, or dish"
           />
           {search ? (
             <TouchableOpacity onPress={() => setSearch('')} style={styles.searchClear} accessibilityLabel="Clear search">
@@ -299,7 +316,10 @@ export default function MapTab() {
             ) : searchResults.slice(0, 6).map((t) => (
               <TouchableOpacity key={t.id} style={styles.dropdownRow} onPress={() => router.push(`/truck/${t.id}`)}>
                 <Text style={styles.dropdownName} numberOfLines={1}>{t.name}</Text>
-                <Text style={styles.dropdownCuisine}>{t.cuisine ?? 'Food Truck'}</Text>
+                <Text style={styles.dropdownCuisine} numberOfLines={1}>
+                  {dishes[t.id] ? `Serves ${dishes[t.id]}` : t.cuisine ?? 'Food Truck'}
+                  {milesTo(t) != null ? ` · ${formatMiles(milesTo(t)!)}` : ''}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -381,6 +401,45 @@ export default function MapTab() {
           mapRef={mapRef}
           showsUserLocation={locationStatus === 'granted'}
         />
+
+        {/* Nobody live — say so, and point at who's out later today instead of
+            leaving an empty map. Mirrors the card on the web home page. */}
+        {trucks.length === 0 && (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyCardTitle}>No trucks live right now</Text>
+            {stopsToday.length > 0 ? (
+              <>
+                <Text style={styles.emptyCardSub}>
+                  {stopsToday.length === 1 ? '1 stop' : `${stopsToday.length} stops`} coming up today
+                </Text>
+                {stopsToday.slice(0, 3).map((s, i) => (
+                  <TouchableOpacity
+                    key={`${s.truck.id}-${i}`}
+                    style={styles.stopRow}
+                    onPress={() => router.push(`/truck/${s.truck.id}`)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${s.truck.name}, ${s.open_time} to ${s.close_time}${s.location ? `, ${s.location}` : ''}`}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.stopName} numberOfLines={1}>{s.truck.name}</Text>
+                      <Text style={styles.stopWhere} numberOfLines={1}>
+                        {s.status === 'open' ? `Scheduled now · until ${s.close_time}` : `${s.open_time}–${s.close_time}`}
+                        {s.location ? ` · ${s.location}` : ''}
+                      </Text>
+                    </View>
+                    <Text style={styles.stopView}>View →</Text>
+                  </TouchableOpacity>
+                ))}
+              </>
+            ) : (
+              <TouchableOpacity onPress={() => router.push('/trucks')} accessibilityRole="link">
+                <Text style={styles.emptyCardSub}>
+                  <Text style={styles.emptyCardLink}>Follow your favorites</Text> and we&apos;ll tell you the moment they go live.
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </View>
 
       {/* Recent Reviews horizontal scroll */}
@@ -495,6 +554,20 @@ const styles = StyleSheet.create({
   eventsBannerText: { flex: 1, fontSize: 13, fontWeight: '700', color: Colors.text },
   eventsBannerArrow: { fontSize: 14, color: Colors.primary, fontWeight: '700' },
   mapWrapper: { flex: 1 },
+  emptyCard: {
+    position: 'absolute', left: 12, right: 12, bottom: 12, backgroundColor: '#fff', borderRadius: 16, padding: 14,
+    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 6,
+  },
+  emptyCardTitle: { fontSize: 14, fontWeight: '900', color: T.n900 },
+  emptyCardSub: { fontSize: 12, color: T.n500, marginTop: 2 },
+  emptyCardLink: { fontWeight: '700', color: Colors.primary },
+  stopRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: T.n50, borderRadius: 12,
+    paddingHorizontal: 12, paddingVertical: 9, marginTop: 8,
+  },
+  stopName: { fontSize: 14, fontWeight: '700', color: T.n800 },
+  stopWhere: { fontSize: 12, color: T.n500, marginTop: 1 },
+  stopView: { fontSize: 12, fontWeight: '700', color: Colors.primary },
 
   // Search + filters
   searchWrap: { paddingHorizontal: 16, paddingTop: 10, zIndex: 20 },

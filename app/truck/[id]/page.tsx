@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MenuItemSkeleton } from "@/components/ui/Skeleton";
+import { nextStop, parseClock, type ScheduleStop } from "@/lib/discovery";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type TruckPhoto = {
@@ -13,6 +14,11 @@ type TruckPhoto = {
   photo_url: string;
   created_at: string;
 };
+
+const WEEK = [
+  { day: 1, label: "Mon" }, { day: 2, label: "Tue" }, { day: 3, label: "Wed" }, { day: 4, label: "Thu" },
+  { day: 5, label: "Fri" }, { day: 6, label: "Sat" }, { day: 0, label: "Sun" },
+];
 
 type SpottedPost = {
   id: string;
@@ -40,6 +46,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
   const [location, setLocation] = useState<any>(null);
   const [menuItems, setMenuItems] = useState<any[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
+  const [schedule, setSchedule] = useState<ScheduleStop[]>([]);
   const [following, setFollowing] = useState(false);
   const [followerCount, setFollowerCount] = useState(0);
   const [activeTab, setActiveTab] = useState<"menu" | "reviews" | "photos" | "info">("menu");
@@ -187,6 +194,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
         { data: followers },
         { data: photoData },
         { data: spottedData },
+        { data: scheduleData },
       ] = await Promise.all([
         supabase.from("locations").select("id, lat, lng, address, broadcasted_at").eq("truck_id", id).order("broadcasted_at", { ascending: false }).limit(1).maybeSingle(),
         supabase.from("menu_items").select("id, truck_id, name, description, price, category, allergens, is_popular, is_sold_out, photo, sort_order").eq("truck_id", id).order("sort_order", { ascending: true, nullsFirst: false }).order("created_at", { ascending: true }).limit(200),
@@ -199,6 +207,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
         supabase.rpc("truck_follower_count", { p_truck_id: id }),
         supabase.from("truck_photos").select("id, photo_url, created_at").eq("truck_id", id).order("created_at", { ascending: false }).limit(100),
         supabase.from("spotted_posts").select("id, location, note, created_at").eq("truck_id", id).order("created_at", { ascending: false }).limit(5),
+        supabase.from("schedules").select("day_of_week, open_time, close_time, location, notes").eq("truck_id", id).limit(50),
       ]);
 
       if (isCancelled?.()) return;
@@ -229,6 +238,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
       setFollowing(isFollowing);
       setPhotos(photoData ?? []);
       setSpottedPosts(spottedData ?? []);
+      setSchedule(scheduleData ?? []);
     } catch {
       if (mountedRef.current) setLoadError(true);
     } finally {
@@ -476,9 +486,13 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
   const avgRating: number = truck.avg_rating ?? 0;
   const reviewCount: number = truck.review_count ?? reviews.length;
 
-  const mapsUrl = location
-    ? "https://maps.google.com/?q=" + location.lat + "," + location.lng
+  // Only while live: an offline truck's stored position is where it last was,
+  // and directions there send people to an empty curb.
+  const liveLocation = truck.is_live ? location : null;
+  const mapsUrl = liveLocation
+    ? "https://maps.google.com/?q=" + liveLocation.lat + "," + liveLocation.lng
     : null;
+  const upNext = truck.is_live ? null : nextStop(schedule);
 
   // Group menu items by category
   const categories = Array.from(new Set(menuItems.map((m) => m.category ?? "Menu")));
@@ -650,10 +664,44 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
         </div>
       </div>
 
-      {/* Today's Location */}
-      {location && (
+      {/* Not live — when and where they'll be next, instead of a stale address */}
+      {!truck.is_live && (
         <div className="mx-4 mt-4 bg-white rounded-2xl shadow-sm p-4">
-          <p className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-3">Today&rsquo;s Location</p>
+          <p className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-3">
+            {upNext ? (upNext.status === "open" ? "Scheduled now" : "Next stop") : "Not out right now"}
+          </p>
+          {upNext ? (
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E8481C" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                  <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-neutral-800">
+                  {upNext.when} · {upNext.stop.open_time}–{upNext.stop.close_time}
+                </p>
+                {upNext.stop.location && (
+                  <p className="text-xs text-neutral-500 mt-0.5 truncate">{upNext.stop.location}</p>
+                )}
+                {upNext.status === "open" && (
+                  <p className="text-xs text-neutral-400 mt-0.5">They haven&rsquo;t gone live on the map yet.</p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-neutral-500">
+              No upcoming stops posted. Follow {truck.name} to get an alert the moment they go live.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Live location */}
+      {liveLocation && (
+        <div className="mx-4 mt-4 bg-white rounded-2xl shadow-sm p-4">
+          <p className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-3">Live Now At</p>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E8481C" strokeWidth="2" strokeLinecap="round">
@@ -662,9 +710,9 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
               </svg>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-neutral-800 truncate">{location.address}</p>
+              <p className="text-sm font-semibold text-neutral-800 truncate">{liveLocation.address}</p>
               <p className="text-xs text-neutral-400 mt-0.5">
-                Updated {new Date(location.broadcasted_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                Updated {timeAgo(liveLocation.broadcasted_at)}
               </p>
             </div>
             {mapsUrl && (
@@ -1061,7 +1109,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
                 </div>
               </div>
             )}
-            {location && (
+            {liveLocation && (
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center flex-shrink-0">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E8481C" strokeWidth="2" strokeLinecap="round">
@@ -1071,10 +1119,43 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
                 </div>
                 <div>
                   <p className="text-xs text-neutral-400 font-medium">Current Location</p>
-                  <p className="text-sm font-semibold text-neutral-800">{location.address}</p>
+                  <p className="text-sm font-semibold text-neutral-800">{liveLocation.address}</p>
                 </div>
               </div>
             )}
+
+            {/* Weekly schedule — same data the app's truck screen shows */}
+            <div>
+              <p className="text-xs font-black text-neutral-400 uppercase tracking-widest mb-2">Weekly Schedule</p>
+              {schedule.length === 0 ? (
+                <p className="text-sm text-neutral-400">No schedule posted yet</p>
+              ) : (
+                <div className="flex flex-col divide-y divide-neutral-100">
+                  {WEEK.map(({ day, label }) => {
+                    const stops = schedule
+                      .filter((s) => s.day_of_week === day)
+                      .sort((a, b) => (parseClock(a.open_time) ?? 0) - (parseClock(b.open_time) ?? 0));
+                    return (
+                      <div key={day} className="flex gap-3 py-2">
+                        <span className="w-9 flex-shrink-0 text-sm font-bold text-neutral-800">{label}</span>
+                        {stops.length === 0 ? (
+                          <span className="text-sm text-neutral-300">Closed</span>
+                        ) : (
+                          <div className="flex-1 min-w-0 flex flex-col gap-1">
+                            {stops.map((s, i) => (
+                              <p key={i} className="text-sm text-neutral-700">
+                                {s.open_time}–{s.close_time}
+                                {s.location && <span className="text-neutral-400"> · {s.location}</span>}
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             {mapsUrl && (
               <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
                 className="w-full py-3 bg-brand-red text-white rounded-xl font-bold text-sm text-center">

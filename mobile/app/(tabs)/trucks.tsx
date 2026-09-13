@@ -12,15 +12,21 @@ import { useAsyncData, useRefreshOnRefocus } from '@/hooks/useAsyncData';
 import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/colors';
 import { CUISINE_TYPES } from '@shared/cuisines';
+import { firstOf, milesBetween, sortByLiveThenDistance, toLatLng } from '@shared/discovery';
+import { useDishSearch } from '@/hooks/useDishSearch';
+import { useKnownPosition } from '@/hooks/useKnownPosition';
 
 // "All" plus every cuisine a truck profile can be saved under — the same list
 // the web /trucks filter and the operator profile editor use.
 const CUISINES = ['All', ...CUISINE_TYPES];
 const DIETARY = ['Vegan', 'Gluten-Free', 'Halal', 'Vegetarian'];
 
+type TruckLocation = { id: string; address: string | null; lat: number; lng: number };
+
 type ListTruck = TruckListItem & {
   dietary_tags: string[] | null;
-  locations: { id: string; address: string | null }[] | null;
+  // One-to-one embed (locations is unique per truck): an object, not an array.
+  locations: TruckLocation | TruckLocation[] | null;
   follows_agg: { count: number }[] | null;
 };
 
@@ -29,7 +35,7 @@ const NO_FAVORITES = new Set<string>();
 async function fetchTrucks(): Promise<ListTruck[]> {
   const { data, error } = await supabase
     .from('trucks')
-    .select('id, name, cuisine, description, profile_photo, is_live, dietary_tags, avg_rating, review_count, locations(id, address), follows_agg:follows(count)')
+    .select('id, name, cuisine, description, profile_photo, is_live, dietary_tags, avg_rating, review_count, locations(id, address, lat, lng), follows_agg:follows(count)')
     .order('is_live', { ascending: false })
     .limit(200);
   if (error) throw error;
@@ -69,6 +75,8 @@ export default function TrucksTab() {
   const [dietary, setDietary] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const dishes = useDishSearch(search);
+  const userPos = useKnownPosition();
 
   async function toggleFavorite(truckId: string) {
     if (!userId) { router.push('/(auth)/login'); return; }
@@ -94,13 +102,22 @@ export default function TrucksTab() {
   }
 
   const q = search.trim().toLowerCase();
-  const filtered = trucks.filter((t) => {
-    if (openNow && !t.is_live) return false;
-    if (cuisine !== 'All' && t.cuisine !== cuisine) return false;
-    if (q && !(t.name ?? '').toLowerCase().includes(q) && !(t.cuisine ?? '').toLowerCase().includes(q)) return false;
-    if (dietary.length > 0 && !dietary.every((d) => (t.dietary_tags ?? []).includes(d))) return false;
-    return true;
-  });
+  // Live trucks only: an offline truck's stored position is where it last was.
+  const milesTo = (t: ListTruck) => {
+    const pos = t.is_live ? toLatLng(firstOf(t.locations)) : null;
+    return userPos && pos ? milesBetween(userPos, pos) : null;
+  };
+  const filtered = sortByLiveThenDistance(
+    trucks.filter((t) => {
+      if (openNow && !t.is_live) return false;
+      if (cuisine !== 'All' && t.cuisine !== cuisine) return false;
+      if (q && !(t.name ?? '').toLowerCase().includes(q) && !(t.cuisine ?? '').toLowerCase().includes(q) && !dishes[t.id]) return false;
+      if (dietary.length > 0 && !dietary.every((d) => (t.dietary_tags ?? []).includes(d))) return false;
+      return true;
+    }),
+    (t) => !!t.is_live,
+    milesTo,
+  );
   const activeFilterCount = dietary.length + (cuisine !== 'All' ? 1 : 0) + (openNow ? 1 : 0);
 
   // Top five by followers, from the list already loaded.
@@ -177,14 +194,14 @@ export default function TrucksTab() {
             <Ionicons name="search" size={17} color={T.n400} />
             <TextInput
               style={styles.search}
-              placeholder="Search by name or cuisine..."
+              placeholder="Search trucks, cuisines, or dishes..."
               placeholderTextColor={T.n400}
               value={search}
               onChangeText={setSearch}
               autoComplete="off"
               autoCorrect={false}
               returnKeyType="search"
-              accessibilityLabel="Search food trucks by name or cuisine"
+              accessibilityLabel="Search food trucks by name, cuisine, or dish"
             />
             {search ? (
               <TouchableOpacity onPress={() => setSearch('')} style={styles.clearBtn} accessibilityLabel="Clear search">
@@ -255,7 +272,9 @@ export default function TrucksTab() {
         renderItem={({ item }) => (
           <TruckCard
             truck={item}
-            address={item.locations?.[0]?.address ?? null}
+            address={item.is_live ? firstOf(item.locations)?.address ?? null : null}
+            miles={milesTo(item)}
+            dish={dishes[item.id] ?? null}
             followerCount={Number(item.follows_agg?.[0]?.count ?? 0)}
             favorite={favorites.has(item.id)}
             onToggleFavorite={() => toggleFavorite(item.id)}

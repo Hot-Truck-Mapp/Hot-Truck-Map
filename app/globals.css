@@ -25,3 +25,10 @@ body {
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);
 }
+
+/* Home map: lift Mapbox's controls, logo and attribution above the bottom tab
+   bar, which otherwise covers them. */
+.home-map .mapboxgl-ctrl-bottom-right,
+.home-map .mapboxgl-ctrl-bottom-left {
+  bottom: calc(60px + env(safe-area-inset-bottom));
+}

@@ -4,6 +4,7 @@ import { Colors } from '@/constants/colors';
 import { cityFromSlug, fetchLiveTrucks, trucksInCity } from '@/lib/cities';
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { Button, EmptyState, ErrorState, LoadingState, T, TruckPhoto, s as ui, shadow } from '@/components/ui';
+import { firstOf } from '@shared/discovery';
 
 /** Mobile twin of /trucks/[city]. */
 export default function CityScreen() {
@@ -50,7 +51,7 @@ export default function CityScreen() {
                 </View>
                 {t.cuisine ? <Text style={styles.cuisine}>{t.cuisine}</Text> : null}
                 {t.description ? <Text style={styles.desc} numberOfLines={2}>{t.description}</Text> : null}
-                {t.locations?.[0]?.address ? <Text style={styles.addr} numberOfLines={1}>{t.locations[0].address}</Text> : null}
+                {firstOf(t.locations)?.address ? <Text style={styles.addr} numberOfLines={1}>{firstOf(t.locations)!.address}</Text> : null}
               </View>
             </TouchableOpacity>
           ))}

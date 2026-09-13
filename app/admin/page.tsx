@@ -18,7 +18,7 @@ import FeaturedPanel from "@/components/admin/FeaturedPanel";
 import FestivalsPanel from "@/components/admin/FestivalsPanel";
 
 /**
- * Owner console. Access is enforced server-side, twice over: middleware.ts
+ * Owner console. Access is enforced server-side, twice over: proxy.ts
  * redirects non-admins away from /admin, and every /api/admin/* route
  * re-checks before it touches data.
  *
