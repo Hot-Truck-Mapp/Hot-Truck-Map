@@ -10,11 +10,13 @@ export type TruckWithLocation = Truck & { location?: Location };
 // "broadcast in the last N minutes" cutoff: a truck parked for a lunch service
 // doesn't move, so it doesn't re-broadcast, and a 30-minute cutoff here used to
 // drop it from the app while the website still showed it. Stale sessions are
-// cleared server-side by the hourly /api/trucks/auto-offline cron instead.
+// cleared server-side by /api/trucks/auto-offline instead, and how old a
+// position is gets shown to the customer rather than silently hiding the pin
+// — see freshnessOf() in @shared/presence.
 async function fetchLiveTrucks(): Promise<TruckWithLocation[]> {
   const { data, error } = await supabase
     .from('trucks')
-    .select('id, name, cuisine, profile_photo, is_live, avg_rating, review_count, dietary_tags, locations!inner(id, lat, lng, address, broadcasted_at)')
+    .select('id, name, cuisine, profile_photo, is_live, avg_rating, review_count, dietary_tags, wait_minutes, wait_set_at, locations!inner(id, lat, lng, address, broadcasted_at)')
     .eq('is_live', true);
   if (error) throw error;
   return (data ?? []).map((t) => ({

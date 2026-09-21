@@ -11,6 +11,11 @@ import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/colors';
 import type { Truck, MenuItem, Location, Review } from '@shared/types';
 import { nextStop } from '@shared/discovery';
+import {
+  CUSTOMER_WAIT_WINDOW_MIN, PRESENCE_WINDOW_MIN, WAIT_BUCKETS,
+  freshnessOf, reliabilityBadge, summarizePresence, waitEstimate, waitLabel,
+  type PresenceReport, type PresenceVerdict, type WaitReport,
+} from '@shared/presence';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const PHOTO_COL_SIZE = (SCREEN_WIDTH - 48 - 8) / 2; // 2 columns with padding
@@ -51,6 +56,12 @@ type TruckDetail = Truck & {
   /** The raw `schedules` rows, for working out the next stop. */
   schedule_rows?: ScheduleRow[];
   offers_catering?: boolean;
+  /** Operator-set wait time, and when they set it (it expires). */
+  wait_minutes?: number | null;
+  wait_set_at?: string | null;
+  /** Share of posted stops actually worked in the last 30 days. */
+  reliability_score?: number | null;
+  reliability_stops?: number | null;
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -157,6 +168,15 @@ export default function TruckScreen() {
   const [orderSubmitting, setOrderSubmitting] = useState(false);
 
   // Spotted
+  // Crowd signals — is the truck still there, and how long is the line. Both
+  // decay with wall-clock time, so crowdClock re-renders them every minute.
+  const [presenceReports, setPresenceReports] = useState<PresenceReport[]>([]);
+  const [waitReports, setWaitReports] = useState<WaitReport[]>([]);
+  const [crowdClock, setCrowdClock] = useState(() => Date.now());
+  const [crowdSubmitting, setCrowdSubmitting] = useState<'presence' | 'wait' | null>(null);
+  const [crowdNote, setCrowdNote] = useState<string | null>(null);
+  const [myWaitPick, setMyWaitPick] = useState<number | null>(null);
+
   const [spottedPosts, setSpottedPosts] = useState<SpottedPost[]>([]);
   const [spottedLocation, setSpottedLocation] = useState('');
   const [spottedNote, setSpottedNote] = useState('');
@@ -176,12 +196,19 @@ export default function TruckScreen() {
     return () => { mountedRef.current = false; };
   }, []);
 
+  // "Confirmed 4m ago" has to keep counting, and a wait report has to expire
+  // on screen the same moment it expires in waitEstimate().
+  useEffect(() => {
+    const tick = setInterval(() => setCrowdClock(Date.now()), 60_000);
+    return () => clearInterval(tick);
+  }, []);
+
   // Load truck data
   useEffect(() => {
     if (!id) return;
     async function load() {
       try {
-        const [truckRes, schedRes, menuRes, locationRes, spottedRes, reviewsRes] = await Promise.all([
+        const [truckRes, schedRes, menuRes, locationRes, spottedRes, reviewsRes, presenceRes, waitRes] = await Promise.all([
           // NOTE: no `schedule` column here. This used to select trucks.schedule.
           // That column does exist on the live table — but no migration in this
           // repo creates it and nothing in either app ever writes it. The
@@ -192,7 +219,7 @@ export default function TruckScreen() {
           // trucks has several such orphan columns that shadow the real source
           // of truth (schedule, location, is_open, opens_at, closes_at,
           // cuisine_type). Prefer the dedicated tables over any of them.
-          supabase.from('trucks').select('id, name, cuisine, description, profile_photo, is_live, dietary_tags, instagram, phone, avg_rating, review_count, catering_description, catering_starting_price, catering_min_guests, offers_catering').eq('id', id).maybeSingle(),
+          supabase.from('trucks').select('id, name, cuisine, description, profile_photo, is_live, dietary_tags, instagram, phone, avg_rating, review_count, catering_description, catering_starting_price, catering_min_guests, offers_catering, wait_minutes, wait_set_at, reliability_score, reliability_stops').eq('id', id).maybeSingle(),
           supabase
             .from('schedules')
             .select('id, day_of_week, open_time, close_time, location, notes')
@@ -219,6 +246,20 @@ export default function TruckScreen() {
             .eq('truck_id', id)
             .order('created_at', { ascending: false })
             .limit(20),
+          supabase
+            .from('presence_reports')
+            .select('verdict, created_at')
+            .eq('truck_id', id)
+            .gte('created_at', new Date(Date.now() - PRESENCE_WINDOW_MIN * 60_000).toISOString())
+            .order('created_at', { ascending: false })
+            .limit(200),
+          supabase
+            .from('wait_reports')
+            .select('minutes, created_at')
+            .eq('truck_id', id)
+            .gte('created_at', new Date(Date.now() - CUSTOMER_WAIT_WINDOW_MIN * 60_000).toISOString())
+            .order('created_at', { ascending: false })
+            .limit(200),
         ]);
 
         if (!mountedRef.current) return;
@@ -234,6 +275,8 @@ export default function TruckScreen() {
         }
         setSpottedPosts(spottedRes.data ?? []);
         setReviews(reviewsRes.data ?? []);
+        setPresenceReports((presenceRes.data ?? []) as PresenceReport[]);
+        setWaitReports((waitRes.data ?? []) as WaitReport[]);
 
         // Photos
         const { data: photoData } = await supabase
@@ -503,6 +546,71 @@ export default function TruckScreen() {
 
   // ── Spotted ───────────────────────────────────────────────────────────────
 
+  // ── Crowd signals ───────────────────────────────────────────────────────────
+  // Open to signed-out visitors on purpose: a confirmation tap that costs a
+  // sign-up is a tap nobody makes, and these reports are what make the map
+  // worth trusting. The API keys anonymous reporters by a salted hash of
+  // their IP and rate-limits them the same way as signed-in ones.
+  async function postCrowdReport(path: string, body: Record<string, unknown>) {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(payload?.error ?? 'Could not send your report. Please try again.');
+    return payload;
+  }
+
+  async function reportPresence(verdict: PresenceVerdict) {
+    if (crowdSubmitting) return;
+    setCrowdSubmitting('presence');
+    setCrowdNote(null);
+    // Show the tap immediately; the server's count replaces it a moment later.
+    const optimistic: PresenceReport = { verdict, created_at: new Date().toISOString() };
+    setPresenceReports((prev) => [optimistic, ...prev]);
+    try {
+      const result = await postCrowdReport('/api/presence', { truck_id: id, verdict });
+      if (!mountedRef.current) return;
+      if (result?.closed) {
+        setTruck((t) => (t ? { ...t, is_live: false } : t));
+        setCrowdNote("Thanks — we've taken this truck off the map for now.");
+      } else {
+        setCrowdNote(verdict === 'here' ? 'Thanks for confirming!' : "Thanks — we've flagged it.");
+      }
+    } catch (e) {
+      if (!mountedRef.current) return;
+      setPresenceReports((prev) => prev.filter((r) => r !== optimistic));
+      Alert.alert('Could not send', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      if (mountedRef.current) setCrowdSubmitting(null);
+    }
+  }
+
+  async function reportWait(minutes: number) {
+    if (crowdSubmitting) return;
+    setCrowdSubmitting('wait');
+    setCrowdNote(null);
+    const optimistic: WaitReport = { minutes, created_at: new Date().toISOString() };
+    setWaitReports((prev) => [optimistic, ...prev]);
+    setMyWaitPick(minutes);
+    try {
+      await postCrowdReport('/api/wait', { truck_id: id, minutes });
+      if (!mountedRef.current) return;
+      setCrowdNote('Thanks — that helps the next person.');
+    } catch (e) {
+      if (!mountedRef.current) return;
+      setWaitReports((prev) => prev.filter((r) => r !== optimistic));
+      setMyWaitPick(null);
+      Alert.alert('Could not send', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      if (mountedRef.current) setCrowdSubmitting(null);
+    }
+  }
+
   async function submitSpotted() {
     if (spottedInFlightRef.current) return;
     if (!spottedLocation.trim()) {
@@ -617,6 +725,21 @@ export default function TruckScreen() {
   // Not live: when and where they'll be next — the same card the web shows.
   const upNext = isLive ? null : nextStop(truck.schedule_rows ?? []);
 
+  // Recomputed on each crowdClock tick so freshness and the wait estimate age
+  // out on screen instead of freezing at whatever they were when it loaded.
+  const crowdNow = new Date(crowdClock);
+  const freshness = isLive && truck.location ? freshnessOf(truck.location.broadcasted_at, crowdNow) : null;
+  const presence = summarizePresence(presenceReports, crowdNow);
+  const wait = waitEstimate(
+    {
+      operatorMinutes: truck.wait_minutes ?? null,
+      operatorSetAt: truck.wait_set_at ?? null,
+      reports: waitReports,
+    },
+    crowdNow,
+  );
+  const reliability = reliabilityBadge(truck.reliability_score, truck.reliability_stops);
+
   const cartItemCount = cartCount();
   const cartTotalAmt = cartTotal();
 
@@ -654,6 +777,25 @@ export default function TruckScreen() {
                 <Text style={styles.ratingCount}>({truck.review_count ?? 0} review{(truck.review_count ?? 0) !== 1 ? 's' : ''})</Text>
               </View>
             )}
+            {/* Kept vs scheduled over the last 30 days. Hidden until a truck
+                has enough history for the number to be fair to it. */}
+            {reliability ? (
+              <View style={[
+                styles.reliability,
+                reliability.tone === 'good' ? styles.reliabilityGood
+                  : reliability.tone === 'ok' ? styles.reliabilityOk
+                  : styles.reliabilityPoor,
+              ]}>
+                <Text style={[
+                  styles.reliabilityText,
+                  reliability.tone === 'good' ? styles.reliabilityTextGood
+                    : reliability.tone === 'ok' ? styles.reliabilityTextOk
+                    : styles.reliabilityTextPoor,
+                ]}>
+                  {reliability.label}
+                </Text>
+              </View>
+            ) : null}
           </View>
 
           {truck.description ? (
@@ -664,12 +806,34 @@ export default function TruckScreen() {
           {isLive && truck.location && (
             <View style={[styles.locationBox, styles.locationRow]}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.locationLabel}>Current location</Text>
+                <View style={styles.locHeaderRow}>
+                  <Text style={styles.locationLabel}>Current location</Text>
+                  {freshness ? (
+                    <View style={[
+                      styles.freshChip,
+                      freshness.level === 'fresh' ? styles.freshChipFresh
+                        : freshness.level === 'recent' ? styles.freshChipRecent
+                        : styles.freshChipStale,
+                    ]}>
+                      <Text style={[
+                        styles.freshChipText,
+                        freshness.level === 'fresh' ? styles.freshTextFresh
+                          : freshness.level === 'recent' ? styles.freshTextRecent
+                          : styles.freshTextStale,
+                      ]}>
+                        {freshness.label}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
                 <Text style={styles.locationAddress}>{truck.location.address ?? ''}</Text>
                 {truck.location.broadcasted_at ? (
                   <Text style={styles.locationUpdated}>
                     Updated {new Date(truck.location.broadcasted_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                   </Text>
+                ) : null}
+                {freshness && freshness.caveat ? (
+                  <Text style={styles.freshCaveat}>{freshness.caveat}</Text>
                 ) : null}
               </View>
               {Number.isFinite(truck.location.lat) && Number.isFinite(truck.location.lng) && (
@@ -689,6 +853,84 @@ export default function TruckScreen() {
                   <Text style={styles.directionsText}>Directions</Text>
                 </TouchableOpacity>
               )}
+            </View>
+          )}
+
+          {/* ── Crowd checks — the part a delivery app can't copy ── */}
+          {isLive && (
+            <View style={styles.crowdBox}>
+              {presence.state === 'disputed' ? (
+                <View style={styles.disputeBanner}>
+                  <Text style={styles.disputeText}>
+                    {presence.label}. Worth calling ahead before you head over.
+                  </Text>
+                </View>
+              ) : null}
+
+              <View style={styles.crowdHeader}>
+                <Text style={styles.crowdTitle}>Are they still here?</Text>
+                <Text style={[styles.crowdMeta, presence.state === 'confirmed' && styles.crowdMetaGood]}>
+                  {presence.label}
+                </Text>
+              </View>
+              <View style={styles.crowdRow}>
+                <TouchableOpacity
+                  style={[styles.crowdBtn, styles.crowdBtnYes]}
+                  onPress={() => reportPresence('here')}
+                  disabled={crowdSubmitting !== null}
+                  accessibilityRole="button"
+                  accessibilityLabel="Confirm this truck is still here"
+                >
+                  <Text style={styles.crowdBtnYesText}>Yes, they&apos;re here</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.crowdBtn, styles.crowdBtnNo]}
+                  onPress={() => reportPresence('gone')}
+                  disabled={crowdSubmitting !== null}
+                  accessibilityRole="button"
+                  accessibilityLabel="Report that this truck has left"
+                >
+                  <Text style={styles.crowdBtnNoText}>No, they&apos;re gone</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.crowdHint}>
+                No account needed — one tap keeps the map honest for everyone.
+              </Text>
+
+              <View style={styles.crowdDivider} />
+
+              <View style={styles.crowdHeader}>
+                <Text style={styles.crowdTitle}>How long is the line?</Text>
+                {wait ? <Text style={styles.waitBadge}>{wait.label}</Text> : null}
+              </View>
+              <Text style={styles.crowdHint}>
+                {wait
+                  ? wait.source === 'operator'
+                    ? 'Set by the truck'
+                    : `From ${wait.reports} customer report${wait.reports === 1 ? '' : 's'} in the last half hour`
+                  : "Nobody's reported yet. If you're there, tell the next person."}
+              </Text>
+              <View style={styles.crowdRow}>
+                {WAIT_BUCKETS.map((bucket) => {
+                  const active = myWaitPick === bucket;
+                  return (
+                    <TouchableOpacity
+                      key={bucket}
+                      style={[styles.waitChipBtn, active && styles.waitChipBtnActive]}
+                      onPress={() => reportWait(bucket)}
+                      disabled={crowdSubmitting !== null}
+                      accessibilityRole="button"
+                      accessibilityLabel={waitLabel(bucket)}
+                    >
+                      <Text style={[styles.waitChipBtnText, active && styles.waitChipBtnTextActive]}>
+                        {waitLabel(bucket).replace(' wait', '')}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {crowdNote ? <Text style={styles.crowdThanks}>{crowdNote}</Text> : null}
             </View>
           )}
 
@@ -1083,6 +1325,49 @@ export default function TruckScreen() {
 }
 
 const styles = StyleSheet.create({
+  // ── Trust signals ──
+  locHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  freshChip: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+  freshChipFresh: { backgroundColor: '#F0FDF4' },
+  freshChipRecent: { backgroundColor: '#FFFBEB' },
+  freshChipStale: { backgroundColor: '#F5F5F4' },
+  freshChipText: { fontSize: 11, fontWeight: '700' },
+  freshTextFresh: { color: '#15803D' },
+  freshTextRecent: { color: '#B45309' },
+  freshTextStale: { color: '#78716C' },
+  freshCaveat: { fontSize: 11, fontWeight: '600', color: '#B45309', marginTop: 4 },
+
+  crowdBox: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginTop: 12, borderWidth: 1, borderColor: '#F0EFEE' },
+  crowdHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  crowdTitle: { fontSize: 14, fontWeight: '800', color: '#292524' },
+  crowdMeta: { fontSize: 11, fontWeight: '600', color: '#A8A29E' },
+  crowdMetaGood: { color: '#16A34A' },
+  crowdRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  crowdBtn: { flex: 1, paddingVertical: 11, borderRadius: 12, borderWidth: 2, alignItems: 'center' },
+  crowdBtnYes: { borderColor: '#BBF7D0', backgroundColor: '#F0FDF4' },
+  crowdBtnYesText: { fontSize: 13, fontWeight: '800', color: '#15803D' },
+  crowdBtnNo: { borderColor: '#E7E5E4', backgroundColor: '#fff' },
+  crowdBtnNoText: { fontSize: 13, fontWeight: '800', color: '#57534E' },
+  crowdHint: { fontSize: 11, color: '#A8A29E', marginTop: 8, lineHeight: 15 },
+  crowdDivider: { height: 1, backgroundColor: '#F0EFEE', marginVertical: 16 },
+  crowdThanks: { fontSize: 12, fontWeight: '700', color: '#16A34A', marginTop: 12 },
+  waitBadge: { fontSize: 11, fontWeight: '800', color: '#44403C', backgroundColor: '#F5F5F4', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, overflow: 'hidden' },
+  waitChipBtn: { flex: 1, paddingVertical: 9, borderRadius: 12, borderWidth: 2, borderColor: '#E7E5E4', backgroundColor: '#fff', alignItems: 'center' },
+  waitChipBtnActive: { borderColor: Colors.primary, backgroundColor: '#FEF2F0' },
+  waitChipBtnText: { fontSize: 12, fontWeight: '700', color: '#57534E' },
+  waitChipBtnTextActive: { color: Colors.primary },
+  disputeBanner: { backgroundColor: '#FFFBEB', borderRadius: 12, padding: 12, marginBottom: 14 },
+  disputeText: { fontSize: 12, fontWeight: '700', color: '#92400E', lineHeight: 17 },
+
+  reliability: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, marginTop: 8 },
+  reliabilityGood: { backgroundColor: '#F0FDF4' },
+  reliabilityOk: { backgroundColor: '#FFFBEB' },
+  reliabilityPoor: { backgroundColor: '#F5F5F4' },
+  reliabilityText: { fontSize: 12, fontWeight: '800' },
+  reliabilityTextGood: { color: '#15803D' },
+  reliabilityTextOk: { color: '#B45309' },
+  reliabilityTextPoor: { color: '#57534E' },
+
   container: { flex: 1, backgroundColor: Colors.background },
   scrollContent: { paddingBottom: 120 },
   loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },

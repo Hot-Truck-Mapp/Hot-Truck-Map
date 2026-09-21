@@ -7,6 +7,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MenuItemSkeleton } from "@/components/ui/Skeleton";
 import { nextStop, parseClock, type ScheduleStop } from "@/lib/discovery";
+import {
+  freshnessOf, reliabilityBadge, summarizePresence, waitEstimate,
+  CUSTOMER_WAIT_WINDOW_MIN, PRESENCE_WINDOW_MIN, WAIT_BUCKETS, waitLabel,
+  type PresenceReport, type PresenceVerdict, type WaitReport,
+} from "@/lib/presence";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type TruckPhoto = {
@@ -67,6 +72,18 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Crowd signals — is the truck still there, and how long is the line.
+  // Both decay with wall-clock time, so `crowdClock` re-renders them every
+  // minute rather than letting "confirmed 2m ago" sit on screen for an hour.
+  const [presenceReports, setPresenceReports] = useState<PresenceReport[]>([]);
+  const [waitReports, setWaitReports] = useState<WaitReport[]>([]);
+  const [crowdClock, setCrowdClock] = useState(() => Date.now());
+  const [crowdSubmitting, setCrowdSubmitting] = useState<"presence" | "wait" | null>(null);
+  const [crowdError, setCrowdError] = useState<string | null>(null);
+  const [crowdThanks, setCrowdThanks] = useState<string | null>(null);
+  const [myWaitPick, setMyWaitPick] = useState<number | null>(null);
+  const crowdThanksTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Spotted posts state
   const [spottedPosts, setSpottedPosts] = useState<SpottedPost[]>([]);
@@ -149,7 +166,15 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
       if (reviewSuccessTimerRef.current) clearTimeout(reviewSuccessTimerRef.current);
       if (spottedSuccessTimerRef.current) clearTimeout(spottedSuccessTimerRef.current);
       if (orderGateMsgTimerRef.current) clearTimeout(orderGateMsgTimerRef.current);
+      if (crowdThanksTimerRef.current) clearTimeout(crowdThanksTimerRef.current);
     };
+  }, []);
+
+  // "Confirmed 4m ago" has to keep counting, and a wait report has to expire
+  // on screen the same moment it expires in waitEstimate().
+  useEffect(() => {
+    const tick = setInterval(() => setCrowdClock(Date.now()), 60_000);
+    return () => clearInterval(tick);
   }, []);
 
   useEffect(() => {
@@ -179,7 +204,7 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
 
       const { data: truckData } = await supabase
         .from("trucks")
-        .select("id, name, cuisine, description, profile_photo, is_live, dietary_tags, instagram, phone, avg_rating, review_count, catering_description, catering_starting_price, catering_min_guests")
+        .select("id, name, cuisine, description, profile_photo, is_live, dietary_tags, instagram, phone, avg_rating, review_count, catering_description, catering_starting_price, catering_min_guests, wait_minutes, wait_set_at, reliability_score, reliability_stops")
         .eq("id", id)
         .maybeSingle();
 
@@ -195,6 +220,8 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
         { data: photoData },
         { data: spottedData },
         { data: scheduleData },
+        { data: presenceData },
+        { data: waitData },
       ] = await Promise.all([
         supabase.from("locations").select("id, lat, lng, address, broadcasted_at").eq("truck_id", id).order("broadcasted_at", { ascending: false }).limit(1).maybeSingle(),
         supabase.from("menu_items").select("id, truck_id, name, description, price, category, allergens, is_popular, is_sold_out, photo, sort_order").eq("truck_id", id).order("sort_order", { ascending: true, nullsFirst: false }).order("created_at", { ascending: true }).limit(200),
@@ -208,6 +235,14 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
         supabase.from("truck_photos").select("id, photo_url, created_at").eq("truck_id", id).order("created_at", { ascending: false }).limit(100),
         supabase.from("spotted_posts").select("id, location, note, created_at").eq("truck_id", id).order("created_at", { ascending: false }).limit(5),
         supabase.from("schedules").select("day_of_week, open_time, close_time, location, notes").eq("truck_id", id).limit(50),
+        // Both windows are filtered again in lib/presence when they're read,
+        // so the query only has to be no narrower than the display window.
+        supabase.from("presence_reports").select("verdict, created_at").eq("truck_id", id)
+          .gte("created_at", new Date(Date.now() - PRESENCE_WINDOW_MIN * 60_000).toISOString())
+          .order("created_at", { ascending: false }).limit(200),
+        supabase.from("wait_reports").select("minutes, created_at").eq("truck_id", id)
+          .gte("created_at", new Date(Date.now() - CUSTOMER_WAIT_WINDOW_MIN * 60_000).toISOString())
+          .order("created_at", { ascending: false }).limit(200),
       ]);
 
       if (isCancelled?.()) return;
@@ -239,6 +274,8 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
       setPhotos(photoData ?? []);
       setSpottedPosts(spottedData ?? []);
       setSchedule(scheduleData ?? []);
+      setPresenceReports((presenceData ?? []) as PresenceReport[]);
+      setWaitReports((waitData ?? []) as WaitReport[]);
     } catch {
       if (mountedRef.current) setLoadError(true);
     } finally {
@@ -374,6 +411,82 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
     }
   }
 
+  // ── Crowd signals ───────────────────────────────────────────────────────────
+  // Deliberately open to signed-out visitors. A confirmation tap that costs a
+  // sign-up is a tap nobody makes, and these are the reports that make the map
+  // trustworthy. The API keys anonymous reporters by a salted hash of their IP
+  // and rate-limits them the same way as signed-in ones.
+  async function postCrowdReport(path: string, body: Record<string, unknown>) {
+    const supabase = createClient();
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+    } catch { /* signed out — the report still counts, keyed by IP */ }
+
+    const res = await fetch(path, { method: "POST", headers, body: JSON.stringify(body) });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(payload?.error ?? "Could not send your report. Please try again.");
+    return payload;
+  }
+
+  function flashThanks(message: string) {
+    if (crowdThanksTimerRef.current) clearTimeout(crowdThanksTimerRef.current);
+    setCrowdThanks(message);
+    crowdThanksTimerRef.current = setTimeout(() => {
+      if (mountedRef.current) setCrowdThanks(null);
+    }, 4000);
+  }
+
+  async function reportPresence(verdict: PresenceVerdict) {
+    if (crowdSubmitting) return;
+    setCrowdSubmitting("presence");
+    setCrowdError(null);
+    // Show the visitor's own tap immediately; the server's count replaces it
+    // a moment later. Waiting on the round-trip makes a one-tap control feel
+    // like a form submission.
+    const optimistic: PresenceReport = { verdict, created_at: new Date().toISOString() };
+    setPresenceReports((prev) => [optimistic, ...prev]);
+    try {
+      const result = await postCrowdReport("/api/presence", { truck_id: id, verdict });
+      if (!mountedRef.current) return;
+      if (result?.closed) {
+        // Enough people reported an empty curb that the pin came down.
+        setTruck((t: any) => (t ? { ...t, is_live: false } : t));
+        flashThanks("Thanks — we've taken this truck off the map for now.");
+      } else {
+        flashThanks(verdict === "here" ? "Thanks for confirming!" : "Thanks — we've flagged it.");
+      }
+    } catch (err: any) {
+      if (!mountedRef.current) return;
+      setPresenceReports((prev) => prev.filter((r) => r !== optimistic));
+      setCrowdError(err?.message ?? "Could not send your report.");
+    } finally {
+      if (mountedRef.current) setCrowdSubmitting(null);
+    }
+  }
+
+  async function reportWait(minutes: number) {
+    if (crowdSubmitting) return;
+    setCrowdSubmitting("wait");
+    setCrowdError(null);
+    const optimistic: WaitReport = { minutes, created_at: new Date().toISOString() };
+    setWaitReports((prev) => [optimistic, ...prev]);
+    setMyWaitPick(minutes);
+    try {
+      await postCrowdReport("/api/wait", { truck_id: id, minutes });
+      if (!mountedRef.current) return;
+      flashThanks("Thanks — that helps the next person.");
+    } catch (err: any) {
+      if (!mountedRef.current) return;
+      setWaitReports((prev) => prev.filter((r) => r !== optimistic));
+      setMyWaitPick(null);
+      setCrowdError(err?.message ?? "Could not send your report.");
+    } finally {
+      if (mountedRef.current) setCrowdSubmitting(null);
+    }
+  }
+
   async function submitSpotted() {
     if (!userId) { router.push("/account"); return; }
     if (!spottedLocation.trim()) return;
@@ -493,6 +606,21 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
     ? "https://maps.google.com/?q=" + liveLocation.lat + "," + liveLocation.lng
     : null;
   const upNext = truck.is_live ? null : nextStop(schedule);
+
+  // Recomputed on every crowdClock tick so freshness and the wait estimate age
+  // out on screen instead of freezing at whatever they were on page load.
+  const crowdNow = new Date(crowdClock);
+  const freshness = liveLocation ? freshnessOf(liveLocation.broadcasted_at, crowdNow) : null;
+  const presence = summarizePresence(presenceReports, crowdNow);
+  const wait = waitEstimate(
+    {
+      operatorMinutes: truck.wait_minutes ?? null,
+      operatorSetAt: truck.wait_set_at ?? null,
+      reports: waitReports,
+    },
+    crowdNow,
+  );
+  const reliability = reliabilityBadge(truck.reliability_score, truck.reliability_stops);
 
   // Group menu items by category
   const categories = Array.from(new Set(menuItems.map((m) => m.category ?? "Menu")));
@@ -637,6 +765,24 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
           )}
         </div>
 
+        {/* Reliability — kept · scheduled over the last 30 days. Absent until a
+            truck has enough history for the number to be fair. */}
+        {reliability && (
+          <div
+            className={`inline-flex items-center gap-1.5 mb-3 px-2.5 py-1 rounded-full text-xs font-bold ${
+              reliability.tone === "good" ? "bg-green-50 text-green-700"
+                : reliability.tone === "ok" ? "bg-amber-50 text-amber-700"
+                : "bg-neutral-100 text-neutral-600"
+            }`}
+            title={`Based on ${truck.reliability_stops} scheduled stops in the last 30 days`}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+            {reliability.label}
+          </div>
+        )}
+
         {truck.description && (
           <p className="text-neutral-600 text-sm leading-relaxed mb-4">{truck.description}</p>
         )}
@@ -698,10 +844,31 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
         </div>
       )}
 
-      {/* Live location */}
+      {/* Live location — the one claim the whole product rests on, so it says
+          how old the position is, what other customers just reported, and how
+          long the line is, instead of only an address. */}
       {liveLocation && (
         <div className="mx-4 mt-4 bg-white rounded-2xl shadow-sm p-4">
-          <p className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-3">Live Now At</p>
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <p className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Live Now At</p>
+            {freshness && (
+              <span
+                className={`flex items-center gap-1.5 text-[11px] font-bold px-2 py-1 rounded-full ${
+                  freshness.level === "fresh" ? "bg-green-50 text-green-700"
+                    : freshness.level === "recent" ? "bg-amber-50 text-amber-700"
+                    : "bg-neutral-100 text-neutral-500"
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${
+                  freshness.level === "fresh" ? "bg-green-500"
+                    : freshness.level === "recent" ? "bg-amber-500"
+                    : "bg-neutral-400"
+                }`} />
+                {freshness.label}
+              </span>
+            )}
+          </div>
+
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E8481C" strokeWidth="2" strokeLinecap="round">
@@ -722,6 +889,108 @@ export default function TruckPage({ params }: { params: Promise<{ id: string }> 
               </a>
             )}
           </div>
+
+          {/* Say it plainly when the position is old enough to be wrong. */}
+          {freshness && freshness.caveat && (
+            <p className={`text-xs mt-2 font-medium ${freshness.level === "stale" ? "text-amber-700" : "text-neutral-500"}`}>
+              {freshness.caveat}
+            </p>
+          )}
+
+          {presence.state === "disputed" && (
+            <div className="flex items-start gap-2 mt-3 bg-amber-50 rounded-xl px-3 py-2.5">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="2.2" strokeLinecap="round" className="flex-shrink-0 mt-0.5">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <p className="text-xs text-amber-800 font-semibold leading-snug">
+                {presence.label}. Worth calling ahead before you head over.
+              </p>
+            </div>
+          )}
+
+          {/* ── Still here? ── */}
+          <div className="mt-4 pt-4 border-t border-neutral-100">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-sm font-bold text-neutral-800">Are they still here?</p>
+              <span className={`text-[11px] font-semibold ${presence.state === "confirmed" ? "text-green-600" : "text-neutral-400"}`}>
+                {presence.label}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => reportPresence("here")}
+                disabled={crowdSubmitting !== null}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-green-200 bg-green-50 text-green-700 text-sm font-bold transition-all active:scale-95 hover:border-green-400 disabled:opacity-50"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                Yes, they&rsquo;re here
+              </button>
+              <button
+                onClick={() => reportPresence("gone")}
+                disabled={crowdSubmitting !== null}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-neutral-200 bg-white text-neutral-600 text-sm font-bold transition-all active:scale-95 hover:border-neutral-400 disabled:opacity-50"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+                No, they&rsquo;re gone
+              </button>
+            </div>
+            <p className="text-[11px] text-neutral-400 mt-2">
+              No account needed — one tap keeps the map honest for everyone.
+            </p>
+          </div>
+
+          {/* ── How long is the line? ── */}
+          <div className="mt-4 pt-4 border-t border-neutral-100">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-sm font-bold text-neutral-800">How long is the line?</p>
+              {wait && (
+                <span className="flex items-center gap-1.5 text-[11px] font-bold px-2 py-1 rounded-full bg-neutral-100 text-neutral-700">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                  </svg>
+                  {wait.label}
+                </span>
+              )}
+            </div>
+            {wait ? (
+              <p className="text-[11px] text-neutral-400 mb-2">
+                {wait.source === "operator"
+                  ? "Set by the truck"
+                  : `From ${wait.reports} customer report${wait.reports === 1 ? "" : "s"} in the last half hour`}
+              </p>
+            ) : (
+              <p className="text-[11px] text-neutral-400 mb-2">
+                Nobody&rsquo;s reported yet. If you&rsquo;re there, tell the next person.
+              </p>
+            )}
+            <div className="flex gap-2">
+              {WAIT_BUCKETS.map((bucket) => (
+                <button
+                  key={bucket}
+                  onClick={() => reportWait(bucket)}
+                  disabled={crowdSubmitting !== null}
+                  className={`flex-1 py-2 rounded-xl border-2 text-xs font-bold transition-all active:scale-95 disabled:opacity-50 ${
+                    myWaitPick === bucket
+                      ? "border-brand-red bg-red-50 text-brand-red"
+                      : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-400"
+                  }`}
+                >
+                  {waitLabel(bucket).replace(" wait", "")}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {crowdError && (
+            <p className="text-xs text-red-500 font-semibold mt-3">{crowdError}</p>
+          )}
+          {crowdThanks && !crowdError && (
+            <p className="text-xs text-green-600 font-semibold mt-3">{crowdThanks}</p>
+          )}
         </div>
       )}
 

@@ -6,7 +6,11 @@
     },
     {
       "path": "/api/trucks/auto-offline",
-      "schedule": "0 * * * *"
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/trucks/reliability",
+      "schedule": "20 8 * * *"
     }
   ]
 }

@@ -13,6 +13,10 @@ import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/colors';
 import { CUISINE_TYPES } from '@shared/cuisines';
 import { firstOf, milesBetween, sortByLiveThenDistance, toLatLng } from '@shared/discovery';
+import {
+  CUSTOMER_WAIT_WINDOW_MIN, PRESENCE_WINDOW_MIN, summarizePresence, waitEstimate,
+  type PresenceReport, type WaitReport,
+} from '@shared/presence';
 import { useDishSearch } from '@/hooks/useDishSearch';
 import { useKnownPosition } from '@/hooks/useKnownPosition';
 
@@ -21,13 +25,21 @@ import { useKnownPosition } from '@/hooks/useKnownPosition';
 const CUISINES = ['All', ...CUISINE_TYPES];
 const DIETARY = ['Vegan', 'Gluten-Free', 'Halal', 'Vegetarian'];
 
-type TruckLocation = { id: string; address: string | null; lat: number; lng: number };
+type TruckLocation = { id: string; address: string | null; lat: number; lng: number; broadcasted_at: string | null };
 
 type ListTruck = TruckListItem & {
   dietary_tags: string[] | null;
+  wait_minutes: number | null;
+  wait_set_at: string | null;
   // One-to-one embed (locations is unique per truck): an object, not an array.
   locations: TruckLocation | TruckLocation[] | null;
   follows_agg: { count: number }[] | null;
+};
+
+/** Customer reports for the trucks that are live right now, keyed by truck. */
+type CrowdSignals = {
+  wait: Record<string, WaitReport[]>;
+  presence: Record<string, PresenceReport[]>;
 };
 
 const NO_FAVORITES = new Set<string>();
@@ -35,11 +47,35 @@ const NO_FAVORITES = new Set<string>();
 async function fetchTrucks(): Promise<ListTruck[]> {
   const { data, error } = await supabase
     .from('trucks')
-    .select('id, name, cuisine, description, profile_photo, is_live, dietary_tags, avg_rating, review_count, locations(id, address, lat, lng), follows_agg:follows(count)')
+    .select('id, name, cuisine, description, profile_photo, is_live, dietary_tags, avg_rating, review_count, wait_minutes, wait_set_at, locations(id, address, lat, lng, broadcasted_at), follows_agg:follows(count)')
     .order('is_live', { ascending: false })
     .limit(200);
   if (error) throw error;
   return (data ?? []) as unknown as ListTruck[];
+}
+
+/**
+ * Wait and presence reports for whatever is live. Fetched separately from the
+ * trucks list so it can refresh on its own cadence — these are advisory
+ * signals, not worth re-pulling 200 truck rows for.
+ */
+async function fetchCrowdSignals(): Promise<CrowdSignals> {
+  const [waits, presence] = await Promise.all([
+    supabase.from('wait_reports').select('truck_id, minutes, created_at')
+      .gte('created_at', new Date(Date.now() - CUSTOMER_WAIT_WINDOW_MIN * 60_000).toISOString())
+      .limit(500),
+    supabase.from('presence_reports').select('truck_id, verdict, created_at')
+      .gte('created_at', new Date(Date.now() - PRESENCE_WINDOW_MIN * 60_000).toISOString())
+      .limit(500),
+  ]);
+  const out: CrowdSignals = { wait: {}, presence: {} };
+  for (const row of waits.data ?? []) {
+    (out.wait[row.truck_id] ??= []).push({ minutes: row.minutes, created_at: row.created_at });
+  }
+  for (const row of presence.data ?? []) {
+    (out.presence[row.truck_id] ??= []).push({ verdict: row.verdict, created_at: row.created_at });
+  }
+  return out;
 }
 
 async function fetchFavorites(userId: string): Promise<Set<string>> {
@@ -65,6 +101,8 @@ export default function TrucksTab() {
   const inFlightFav = useRef<Set<string>>(new Set());
   const trucksQ = useAsyncData('trucks', fetchTrucks);
   const trucks = trucksQ.data ?? [];
+  const crowdQ = useAsyncData('crowd-signals', fetchCrowdSignals);
+  const crowd = crowdQ.data ?? { wait: {}, presence: {} };
   const favsQ = useAsyncData(userId ? `favorites:${userId}` : null, () => fetchFavorites(userId!));
   const favorites = (userId && favsQ.data) || NO_FAVORITES;
   // A follow/unfollow on a truck page or in Account should show here on return.
@@ -275,6 +313,17 @@ export default function TrucksTab() {
             address={item.is_live ? firstOf(item.locations)?.address ?? null : null}
             miles={milesTo(item)}
             dish={dishes[item.id] ?? null}
+            broadcastedAt={item.is_live ? firstOf(item.locations)?.broadcasted_at ?? null : null}
+            waitChip={
+              item.is_live
+                ? waitEstimate({
+                    operatorMinutes: item.wait_minutes,
+                    operatorSetAt: item.wait_set_at,
+                    reports: crowd.wait[item.id],
+                  })?.chip ?? null
+                : null
+            }
+            disputed={!!item.is_live && summarizePresence(crowd.presence[item.id] ?? []).state === 'disputed'}
             followerCount={Number(item.follows_agg?.[0]?.count ?? 0)}
             favorite={favorites.has(item.id)}
             onToggleFavorite={() => toggleFavorite(item.id)}

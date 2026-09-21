@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { CUISINE_TYPES } from "@/lib/cuisines";
+import { OPERATOR_WAIT_TTL_MIN, WAIT_BUCKETS, minutesSince, waitLabel } from "@/lib/presence";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
@@ -121,6 +122,17 @@ export default function Dashboard() {
   const lastBroadcastPosRef             = useRef<{ lat: number; lng: number } | null>(null);
   // One follower notification per live session, not one per GPS refresh.
   const hasNotifiedFollowersRef         = useRef(false);
+  // One live_sessions row per live session, likewise.
+  const hasOpenedSessionRef             = useRef(false);
+  const heartbeatRef                    = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Wait time the operator sets by hand — they can see the line.
+  const [waitMinutes, setWaitMinutes]   = useState<number | null>(null);
+  const [waitSetAt, setWaitSetAt]       = useState<string | null>(null);
+  const [waitSaving, setWaitSaving]     = useState(false);
+  // An operator-set wait expires on the clock, so the control has to re-render
+  // on the clock too — otherwise it keeps claiming "showing: no line" long
+  // after the listing stopped showing it.
+  const [waitClock, setWaitClock]       = useState(() => Date.now());
 
   // Analytics
   const [analyticsLoaded, setAnalyticsLoaded]   = useState(false);
@@ -162,6 +174,10 @@ export default function Dashboard() {
       clearInterval(locationIntervalRef.current);
       locationIntervalRef.current = null;
     }
+    if (heartbeatRef.current) {
+      clearInterval(heartbeatRef.current);
+      heartbeatRef.current = null;
+    }
   }, []);
 
   // ── Initial load ────────────────────────────────────────────────────────────
@@ -198,7 +214,7 @@ export default function Dashboard() {
       }
 
       const truckCols =
-        "id, name, description, cuisine, phone, instagram, profile_photo, is_live, dietary_tags";
+        "id, name, description, cuisine, phone, instagram, profile_photo, is_live, dietary_tags, wait_minutes, wait_set_at";
       let { data: truck } = await supabase
         .from("trucks").select(truckCols).eq("owner_id", user.id).maybeSingle();
 
@@ -249,8 +265,16 @@ export default function Dashboard() {
           profile_photo: truck.profile_photo ?? "",
           dietary_tags:  truck.dietary_tags  ?? [],
         });
+        setWaitMinutes(truck.wait_minutes ?? null);
+        setWaitSetAt(truck.wait_set_at ?? null);
         if (truck.is_live) {
           setLiveStatus("live");
+          // Already live when the page loaded: the session was opened when
+          // they went live, so don't open a second one, and pick the
+          // heartbeat back up so the map keeps seeing a current position.
+          hasOpenedSessionRef.current = true;
+          hasNotifiedFollowersRef.current = true;
+          startHeartbeat();
           // Re-hydrate the live address so the "You're Live!" card shows the location
           const { data: loc } = await supabase
             .from("locations").select("address").eq("truck_id", truck.id).order("broadcasted_at", { ascending: false }).limit(1).maybeSingle();
@@ -695,6 +719,12 @@ export default function Dashboard() {
     setLiveStatus("live");
     setIsLive(true);
 
+    // Both paths into "live" come through here — the GPS watcher and the
+    // manual address form — so the session log and the heartbeat start here
+    // rather than in either one of them.
+    void openLiveSession();
+    startHeartbeat();
+
     // Tell followers, once per live session.
     //
     // The mobile app has always done this; the web dashboard never did, so a
@@ -733,6 +763,126 @@ export default function Dashboard() {
   }
 
   // Stop watching GPS and clear the auto-refresh interval
+  // ── Liveness heartbeat ──────────────────────────────────────────────────────
+  //
+  // The GPS watcher only re-broadcasts when the truck moves 50m, so a truck
+  // parked for a four-hour lunch used to look, from the outside, exactly like
+  // a truck whose phone died three hours ago: one stale `broadcasted_at` and
+  // an is_live flag nobody had cleared. Customers can now see how old a
+  // position is, which only means something if a truck that IS there keeps
+  // saying so. This is that signal — a timestamp touch, no geocoding, no
+  // follower notification, no change to the stored address.
+  const HEARTBEAT_MS = 5 * 60 * 1000;
+
+  async function sendHeartbeat() {
+    if (!truckId) return;
+    try {
+      const supabase = createClient();
+      // Confirm the truck is still live before touching the timestamp: the
+      // auto-offline cron or enough "they're gone" reports can end a session
+      // out from under this tab, and a heartbeat would otherwise keep
+      // resurrecting a truck that the map has already given up on.
+      const { data: current } = await supabase
+        .from("trucks").select("is_live").eq("id", truckId).maybeSingle();
+      if (!current) return;
+      if (!current.is_live) {
+        stopHeartbeat();
+        stopLocationTracking();
+        if (!mountedRef.current) return;
+        setIsLive(false);
+        setLiveStatus("idle");
+        setLiveAddress(null);
+        hasNotifiedFollowersRef.current = false;
+        hasOpenedSessionRef.current = false;
+        showToast("You were taken off the map — tap Go Live again when you're serving.");
+        return;
+      }
+      await supabase
+        .from("locations")
+        .update({ broadcasted_at: new Date().toISOString() })
+        .eq("truck_id", truckId);
+    } catch {
+      // A missed heartbeat is not worth interrupting the operator over; the
+      // next one is five minutes away and the staleness window is hours.
+    }
+  }
+
+  function startHeartbeat() {
+    if (heartbeatRef.current) return;
+    heartbeatRef.current = setInterval(() => { void sendHeartbeat(); }, HEARTBEAT_MS);
+  }
+
+  function stopHeartbeat() {
+    if (heartbeatRef.current) {
+      clearInterval(heartbeatRef.current);
+      heartbeatRef.current = null;
+    }
+  }
+
+  /**
+   * Open a live session, unless one is already open.
+   *
+   * `locations` is an upsert with one row per truck, so before this table
+   * there was no record that a truck ever worked a given day — which is why
+   * nothing could say whether a truck keeps its posted schedule. The check
+   * for an existing open row keeps a reload, or a second tab, from splitting
+   * one service into two sessions.
+   */
+  async function openLiveSession() {
+    if (!truckId || hasOpenedSessionRef.current) return;
+    hasOpenedSessionRef.current = true;
+    try {
+      const supabase = createClient();
+      const { data: open } = await supabase
+        .from("live_sessions").select("id").eq("truck_id", truckId).is("ended_at", null).limit(1).maybeSingle();
+      if (open) return;
+      await supabase.from("live_sessions").insert({ truck_id: truckId });
+    } catch {
+      // Reliability loses one sample; the truck is still live, which is what
+      // the operator and their customers actually care about right now.
+    }
+  }
+
+  async function closeLiveSession() {
+    if (!truckId) return;
+    try {
+      const supabase = createClient();
+      await supabase
+        .from("live_sessions")
+        .update({ ended_at: new Date().toISOString(), ended_by: "operator" })
+        .eq("truck_id", truckId)
+        .is("ended_at", null);
+    } catch { /* the cron closes anything left open */ }
+  }
+
+  /**
+   * Operator-set wait time. Expires on its own — see OPERATOR_WAIT_TTL_MIN.
+   * `silent` is for the clear that happens as part of going offline, where a
+   * "wait time cleared" toast on top of the offline transition is just noise.
+   */
+  async function saveWaitTime(minutes: number | null, silent = false) {
+    if (!truckId || waitSaving) return;
+    setWaitSaving(true);
+    const stamp = minutes == null ? null : new Date().toISOString();
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("trucks")
+        .update({ wait_minutes: minutes, wait_set_at: stamp })
+        .eq("id", truckId)
+        .eq("owner_id", userId ?? "");
+      if (error) { showToast("Could not update the wait time: " + error.message); return; }
+      if (!mountedRef.current) return;
+      setWaitMinutes(minutes);
+      setWaitSetAt(stamp);
+      if (!silent) showToast(minutes == null ? "Wait time cleared." : `Wait time set to ${waitLabel(minutes)}.`, false);
+    } catch {
+      showToast("Could not update the wait time — check your connection.");
+    } finally {
+      if (mountedRef.current) setWaitSaving(false);
+    }
+  }
+
   function stopLocationTracking() {
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
@@ -820,14 +970,20 @@ export default function Dashboard() {
   async function goOffline() {
     if (!truckId) return;
     stopLocationTracking();
+    stopHeartbeat();
     try {
       const supabase = createClient();
       const { error } = await supabase.from("trucks").update({ is_live: false }).eq("id", truckId).eq("owner_id", userId ?? "");
       if (error) { showToast("Could not go offline: " + error.message); return; }
+      await closeLiveSession();
+      // A wait time set for a service that just ended must not follow the
+      // truck into the next one.
+      if (waitMinutes != null) void saveWaitTime(null, true);
       setLiveStatus("idle"); setIsLive(false); setLiveAddress(null);
       setManualAddr(""); setShowManual(false);
       // Next Go Live is a new session, so followers get told again.
       hasNotifiedFollowersRef.current = false;
+      hasOpenedSessionRef.current = false;
       lastBroadcastPosRef.current = null;
     } catch {
       showToast("Could not go offline — check your connection and try again");
@@ -836,6 +992,12 @@ export default function Dashboard() {
 
   // Clean up GPS watch when component unmounts
   useEffect(() => () => stopLocationTracking(), []);
+
+  useEffect(() => {
+    if (liveStatus !== "live") return;
+    const tick = setInterval(() => setWaitClock(Date.now()), 60_000);
+    return () => clearInterval(tick);
+  }, [liveStatus]);
 
   // ── Analytics ───────────────────────────────────────────────────────────────
   async function loadAnalytics(id: string, r: AnalyticsRange) {
@@ -1057,6 +1219,9 @@ export default function Dashboard() {
   }
 
   // ── Render ───────────────────────────────────────────────────────────────────
+  const waitAge = minutesSince(waitSetAt, new Date(waitClock));
+  const waitFresh = waitMinutes != null && waitAge != null && waitAge <= OPERATOR_WAIT_TTL_MIN;
+
   if (loading) return (
     <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center gap-3">
       <div className="w-10 h-10 rounded-full border-4 border-brand-red border-t-transparent animate-spin" />
@@ -1487,6 +1652,47 @@ export default function Dashboard() {
                     {liveAddress && <span className="text-xs opacity-80 text-center px-6">{liveAddress}</span>}
                     <span className="text-[10px] opacity-60 text-center px-6">📍 Location updates automatically</span>
                   </div>
+                  {/* ── Line length ──
+                      Customers can report this themselves, but the person at
+                      the window is the one who actually knows. An operator's
+                      number outranks the crowd's while it's fresh, then
+                      expires rather than sitting on the map all afternoon. */}
+                  <div className="w-full max-w-sm bg-white border border-neutral-200 rounded-2xl p-4">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <p className="text-sm font-black text-neutral-800">How long is your line?</p>
+                      {waitMinutes != null && waitFresh && (
+                        <button
+                          onClick={() => saveWaitTime(null)}
+                          disabled={waitSaving}
+                          className="text-[11px] font-bold text-neutral-400 hover:text-neutral-700 disabled:opacity-50"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-neutral-400 mb-3">
+                      {waitMinutes != null && waitFresh
+                        ? `Showing "${waitLabel(waitMinutes)}" on your listing — expires ${OPERATOR_WAIT_TTL_MIN} min after you set it.`
+                        : "Shown on your pin and your profile. Takes one tap, and helps people choose you over a 40-minute delivery."}
+                    </p>
+                    <div className="flex gap-2">
+                      {WAIT_BUCKETS.map((bucket) => (
+                        <button
+                          key={bucket}
+                          onClick={() => saveWaitTime(bucket)}
+                          disabled={waitSaving}
+                          className={`flex-1 py-2 rounded-xl border-2 text-xs font-bold transition-all active:scale-95 disabled:opacity-50 ${
+                            waitMinutes === bucket && waitFresh
+                              ? "border-brand-red bg-red-50 text-brand-red"
+                              : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-400"
+                          }`}
+                        >
+                          {waitLabel(bucket).replace(" wait", "")}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <button onClick={goOffline}
                     className="px-6 py-3 rounded-full border-2 border-neutral-300 text-neutral-600 font-semibold text-sm">
                     Go Offline

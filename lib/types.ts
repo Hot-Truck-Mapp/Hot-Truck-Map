@@ -11,6 +11,13 @@ export type Truck = {
   avg_rating: number | null;
   review_count: number | null;
   dietary_tags?: string[] | null;
+  /** Operator-set wait time (0/10/20/30) and when they set it — it expires. */
+  wait_minutes?: number | null;
+  wait_set_at?: string | null;
+  /** Share of posted stops actually worked over the last 30 days, and the
+   *  sample size behind it. See /api/trucks/reliability. */
+  reliability_score?: number | null;
+  reliability_stops?: number | null;
   created_at?: string;
 };
 

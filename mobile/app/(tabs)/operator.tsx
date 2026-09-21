@@ -13,6 +13,7 @@ import { useRefreshOnRefocus } from '@/hooks/useAsyncData';
 import { Colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { T, shadow, type IconName } from '@/components/ui';
+import { OPERATOR_WAIT_TTL_MIN, WAIT_BUCKETS, minutesSince, waitLabel } from '@shared/presence';
 
 // Transient steps only — whether the truck is live comes from its row (truck.is_live).
 type Phase = 'idle' | 'locating' | 'going-offline';
@@ -58,6 +59,11 @@ export default function OperatorTab() {
   const broadcastingRef = useRef(false);
   // One follower notification per live session, not one per GPS refresh.
   const notifiedRef = useRef(false);
+  // One live_sessions row per live session, likewise.
+  const sessionOpenedRef = useRef(false);
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [waitSaving, setWaitSaving] = useState(false);
+  const [waitClock, setWaitClock] = useState(() => Date.now());
 
   useEffect(() => {
     mountedRef.current = true;
@@ -65,6 +71,8 @@ export default function OperatorTab() {
       mountedRef.current = false;
       watchRef.current?.remove();
       watchRef.current = null;
+      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+      heartbeatRef.current = null;
     };
   }, []);
 
@@ -104,10 +112,132 @@ export default function OperatorTab() {
 
   const isLive = !!truck?.is_live;
 
+  // Already live when this screen mounted: the session was opened when they
+  // went live, so don't open a second one — just pick the heartbeat back up
+  // so the map keeps seeing a current position.
+  useEffect(() => {
+    if (!isLive) return;
+    sessionOpenedRef.current = true;
+    notifiedRef.current = true;
+    startHeartbeat();
+    return () => stopHeartbeat();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLive, truckId]);
+
+  // An operator-set wait expires on the clock, so the control has to re-render
+  // on the clock too.
+  useEffect(() => {
+    if (!isLive) return;
+    const tick = setInterval(() => setWaitClock(Date.now()), 60_000);
+    return () => clearInterval(tick);
+  }, [isLive]);
+
+  const waitMinutes = truck?.wait_minutes ?? null;
+  const waitAge = minutesSince(truck?.wait_set_at ?? null, new Date(waitClock));
+  const waitFresh = waitMinutes != null && waitAge != null && waitAge <= OPERATOR_WAIT_TTL_MIN;
+
   const missing: string[] = [];
   if (truck && !truck.description) missing.push('a short description');
   if (truck && !truck.phone) missing.push('a phone number');
   if (truck && menuCount === 0) missing.push('at least one menu item');
+
+  // ── Liveness heartbeat ──────────────────────────────────────────────────────
+  //
+  // The watcher only re-broadcasts after 50 m of movement, so a truck parked
+  // for a four-hour service looks, from the outside, identical to one whose
+  // phone died three hours ago. Customers can now see how old a truck's
+  // position is, so a truck that IS there has to keep saying so. Touches the
+  // timestamp only — no geocoding, no notification, no change of address.
+  const HEARTBEAT_MS = 5 * 60 * 1000;
+
+  async function sendHeartbeat() {
+    const id = truck?.id;
+    if (!id) return;
+    try {
+      // The auto-offline cron, or enough "they're gone" reports, can end a
+      // session out from under this screen. Heartbeating regardless would
+      // keep resurrecting a truck the map has already given up on.
+      const { data: current } = await supabase.from('trucks').select('is_live').eq('id', id).maybeSingle();
+      if (!current) return;
+      if (!current.is_live) {
+        stopHeartbeat();
+        watchRef.current?.remove();
+        watchRef.current = null;
+        if (!mountedRef.current) return;
+        setTruck((t) => (t ? { ...t, is_live: false } : t));
+        setAddress(null);
+        notifiedRef.current = false;
+        sessionOpenedRef.current = false;
+        Alert.alert('You were taken off the map', "Tap Go Live again when you're serving.");
+        return;
+      }
+      await supabase.from('locations').update({ broadcasted_at: new Date().toISOString() }).eq('truck_id', id);
+    } catch {
+      // The next beat is five minutes out and the staleness window is hours.
+    }
+  }
+
+  function startHeartbeat() {
+    if (heartbeatRef.current) return;
+    heartbeatRef.current = setInterval(() => { void sendHeartbeat(); }, HEARTBEAT_MS);
+  }
+
+  function stopHeartbeat() {
+    if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+    heartbeatRef.current = null;
+  }
+
+  /**
+   * Open a live session unless one is already running. `locations` keeps one
+   * row per truck, so without this log there is no record that a truck ever
+   * worked a given day — and no way to tell whether it keeps its schedule.
+   */
+  async function openLiveSession() {
+    const id = truck?.id;
+    if (!id || sessionOpenedRef.current) return;
+    sessionOpenedRef.current = true;
+    try {
+      const { data: open } = await supabase
+        .from('live_sessions').select('id').eq('truck_id', id).is('ended_at', null).limit(1).maybeSingle();
+      if (open) return;
+      await supabase.from('live_sessions').insert({ truck_id: id });
+    } catch { /* reliability loses one sample; the truck is still live */ }
+  }
+
+  async function closeLiveSession() {
+    const id = truck?.id;
+    if (!id) return;
+    try {
+      await supabase
+        .from('live_sessions')
+        .update({ ended_at: new Date().toISOString(), ended_by: 'operator' })
+        .eq('truck_id', id)
+        .is('ended_at', null);
+    } catch { /* the cron closes anything left open */ }
+  }
+
+  /** Operator-set wait time — expires on its own after OPERATOR_WAIT_TTL_MIN. */
+  async function saveWaitTime(minutes: number | null) {
+    if (!truck || !session?.user || waitSaving) return;
+    setWaitSaving(true);
+    const stamp = minutes == null ? null : new Date().toISOString();
+    try {
+      const { error } = await supabase
+        .from('trucks')
+        .update({ wait_minutes: minutes, wait_set_at: stamp })
+        .eq('id', truck.id)
+        .eq('owner_id', session.user.id);
+      if (error) throw new Error(error.message);
+      if (!mountedRef.current) return;
+      setTruck((t) => (t ? { ...t, wait_minutes: minutes, wait_set_at: stamp } : t));
+    } catch (e) {
+      if (mountedRef.current) {
+        Alert.alert('Error', e instanceof Error ? e.message : 'Could not update the wait time.');
+      }
+    } finally {
+      if (mountedRef.current) setWaitSaving(false);
+    }
+  }
 
   async function broadcastLocation(lat: number, lng: number, addr: string) {
     if (!truck || !session?.user) return;
@@ -126,6 +256,10 @@ export default function OperatorTab() {
     setAddress(addr);
     setTruck((t) => (t ? { ...t, is_live: true } : t));
     setPhase('idle');
+    // Both routes into "live" — the GPS button and the manual address form —
+    // land here, so the session log and the heartbeat start here too.
+    void openLiveSession();
+    startHeartbeat();
     if (!notifiedRef.current) {
       notifiedRef.current = true;
       authedFetch('/api/notify-followers', {
@@ -223,6 +357,7 @@ export default function OperatorTab() {
     setPhase('going-offline');
     watchRef.current?.remove();
     watchRef.current = null;
+    stopHeartbeat();
     try {
       const { error } = await supabase.from('trucks').update({ is_live: false }).eq('id', truck.id).eq('owner_id', session.user.id);
       if (error) throw new Error('Failed to go offline — please try again.');
@@ -232,7 +367,12 @@ export default function OperatorTab() {
       setAddress(null);
       setManualAddress('');
       setShowManual(false);
+      await closeLiveSession();
+      // A wait time set for a service that just ended must not follow the
+      // truck into the next one.
+      if (truck.wait_minutes != null) void saveWaitTime(null);
       notifiedRef.current = false; // next Go Live is a new session
+      sessionOpenedRef.current = false;
       lastPosRef.current = null;
     } catch (e) {
       if (mountedRef.current) {
@@ -466,6 +606,44 @@ export default function OperatorTab() {
                 {address ? <Text style={styles.circleAddr} numberOfLines={3}>{address}</Text> : null}
                 <Text style={styles.circleSmall}>📍 Location updates automatically</Text>
               </View>
+              {/* Line length — customers can report it, but the person at the
+                  window is the one who knows. Their number outranks the
+                  crowd's while it's fresh, then expires. */}
+              <View style={styles.waitCard}>
+                <View style={styles.waitHeader}>
+                  <Text style={styles.waitTitle}>How long is your line?</Text>
+                  {waitMinutes != null && waitFresh ? (
+                    <TouchableOpacity onPress={() => saveWaitTime(null)} disabled={waitSaving} hitSlop={8}>
+                      <Text style={styles.waitClear}>Clear</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+                <Text style={styles.waitHint}>
+                  {waitMinutes != null && waitFresh
+                    ? `Showing "${waitLabel(waitMinutes)}" on your listing — expires ${OPERATOR_WAIT_TTL_MIN} min after you set it.`
+                    : 'Shown on your pin and your profile. One tap, and it helps people pick you over a 40-minute delivery.'}
+                </Text>
+                <View style={styles.waitRow}>
+                  {WAIT_BUCKETS.map((bucket) => {
+                    const active = waitMinutes === bucket && waitFresh;
+                    return (
+                      <TouchableOpacity
+                        key={bucket}
+                        style={[styles.waitChip, active && styles.waitChipActive]}
+                        onPress={() => saveWaitTime(bucket)}
+                        disabled={waitSaving}
+                        accessibilityRole="button"
+                        accessibilityLabel={waitLabel(bucket)}
+                      >
+                        <Text style={[styles.waitChipText, active && styles.waitChipTextActive]}>
+                          {waitLabel(bucket).replace(' wait', '')}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
               <TouchableOpacity style={styles.offline} onPress={goOffline} disabled={phase === 'going-offline'}>
                 <Text style={styles.offlineText}>{phase === 'going-offline' ? 'Going Offline…' : 'Go Offline'}</Text>
               </TouchableOpacity>
@@ -501,6 +679,17 @@ export default function OperatorTab() {
 }
 
 const styles = StyleSheet.create({
+  waitCard: { width: '100%', backgroundColor: '#fff', borderWidth: 1, borderColor: T.n200, borderRadius: 16, padding: 16, marginTop: 16 },
+  waitHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  waitTitle: { fontSize: 14, fontWeight: '900', color: T.n800 },
+  waitClear: { fontSize: 11, fontWeight: '700', color: T.n400 },
+  waitHint: { fontSize: 11, color: T.n400, marginTop: 4, marginBottom: 12, lineHeight: 15 },
+  waitRow: { flexDirection: 'row', gap: 8 },
+  waitChip: { flex: 1, paddingVertical: 9, borderRadius: 12, borderWidth: 2, borderColor: T.n200, backgroundColor: '#fff', alignItems: 'center' },
+  waitChipActive: { borderColor: Colors.primary, backgroundColor: '#FEF2F0' },
+  waitChipText: { fontSize: 12, fontWeight: '700', color: T.n600 },
+  waitChipTextActive: { color: Colors.primary },
+
   container: { flex: 1, backgroundColor: T.n50 },
   centered: { justifyContent: 'center', alignItems: 'center', padding: 32 },
   scroll: { padding: 16, paddingBottom: 48, gap: 16 },

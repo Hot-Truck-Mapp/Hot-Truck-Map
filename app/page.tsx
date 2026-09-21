@@ -10,6 +10,11 @@ import {
   firstOf, formatMiles, milesBetween, sortByLiveThenDistance,
   stopsLeftToday, toLatLng, type LatLng, type ScheduleStop,
 } from "@/lib/discovery";
+import {
+  CUSTOMER_WAIT_WINDOW_MIN, PRESENCE_WINDOW_MIN,
+  freshnessOf, summarizePresence, waitEstimate,
+  type Freshness, type PresenceReport, type WaitReport,
+} from "@/lib/presence";
 
 const MapboxMap = dynamic(() => import("@/components/map/MapboxMap"), {
   ssr: false,
@@ -58,6 +63,8 @@ type HomeTruck = {
   avg_rating: number | null;
   review_count: number | null;
   dietary_tags: string[] | null;
+  wait_minutes: number | null;
+  wait_set_at: string | null;
   // One-to-one embed: PostgREST returns an object; realtime merges write an array.
   locations: HomeLocation | HomeLocation[] | null;
 };
@@ -90,6 +97,9 @@ export default function HomePage() {
   const [userPos, setUserPos] = useState<LatLng | null>(null);
   const dishes = useDishSearch(search);
   const [todayStops, setTodayStops] = useState<TodayStop[]>([]);
+  // Customer reports for the trucks currently on the map, keyed by truck.
+  const [waitRows, setWaitRows] = useState<Record<string, WaitReport[]>>({});
+  const [presenceRows, setPresenceRows] = useState<Record<string, PresenceReport[]>>({});
   const [clock, setClock] = useState(() => Date.now());
   const mountedRef = useRef(true);
   const searchBlurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -195,7 +205,7 @@ export default function HomePage() {
       const { data } = await supabase
         .from("trucks")
         // Fetch only the most recent location per truck via inner relation
-        .select("id, name, cuisine, description, profile_photo, is_live, avg_rating, review_count, dietary_tags, locations(id, lat, lng, address, broadcasted_at)")
+        .select("id, name, cuisine, description, profile_photo, is_live, avg_rating, review_count, dietary_tags, wait_minutes, wait_set_at, locations(id, lat, lng, address, broadcasted_at)")
         .order("is_live", { ascending: false })
         .order("broadcasted_at", { referencedTable: "locations", ascending: false })
         .limit(200);
@@ -208,6 +218,83 @@ export default function HomePage() {
     } finally {
       if (mountedRef.current) setLoading(false);
     }
+  }
+
+  // Customer reports for whatever is live right now. Refetched on a slow
+  // interval rather than realtime: these are advisory signals, and a map with
+  // two dozen live pins shouldn't hold two dozen subscriptions open for them.
+  const liveIdKey = useMemo(
+    () => trucks.filter((t) => t.is_live).map((t) => t.id).sort().join(","),
+    [trucks],
+  );
+
+  useEffect(() => {
+    const ids = liveIdKey ? liveIdKey.split(",") : [];
+    let cancelled = false;
+
+    async function loadCrowdSignals() {
+      if (ids.length === 0) {
+        setWaitRows({});
+        setPresenceRows({});
+        return;
+      }
+      try {
+        const supabase = createClient();
+        const [{ data: waits }, { data: presence }] = await Promise.all([
+          supabase.from("wait_reports").select("truck_id, minutes, created_at")
+            .in("truck_id", ids)
+            .gte("created_at", new Date(Date.now() - CUSTOMER_WAIT_WINDOW_MIN * 60_000).toISOString())
+            .limit(500),
+          supabase.from("presence_reports").select("truck_id, verdict, created_at")
+            .in("truck_id", ids)
+            .gte("created_at", new Date(Date.now() - PRESENCE_WINDOW_MIN * 60_000).toISOString())
+            .limit(500),
+        ]);
+        if (cancelled || !mountedRef.current) return;
+
+        const byWait: Record<string, WaitReport[]> = {};
+        for (const row of waits ?? []) {
+          (byWait[row.truck_id] ??= []).push({ minutes: row.minutes, created_at: row.created_at });
+        }
+        const byPresence: Record<string, PresenceReport[]> = {};
+        for (const row of presence ?? []) {
+          (byPresence[row.truck_id] ??= []).push({ verdict: row.verdict, created_at: row.created_at });
+        }
+        setWaitRows(byWait);
+        setPresenceRows(byPresence);
+      } catch {
+        // Advisory only — the map is still useful without them.
+      }
+    }
+
+    loadCrowdSignals();
+    if (ids.length === 0) return () => { cancelled = true; };
+    const timer = setInterval(loadCrowdSignals, 180_000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [liveIdKey]);
+
+  /**
+   * How current a live truck's position is, and what the crowd says about it.
+   * Recomputed on the same minute tick as the "open now" filter so a chip
+   * never claims "confirmed 2m ago" twenty minutes later.
+   */
+  function signalsFor(truck: HomeTruck): {
+    freshness: Freshness | null;
+    waitChip: string | null;
+    disputed: boolean;
+  } {
+    if (!truck.is_live) return { freshness: null, waitChip: null, disputed: false };
+    const now = new Date(clock);
+    const estimate = waitEstimate(
+      { operatorMinutes: truck.wait_minutes, operatorSetAt: truck.wait_set_at, reports: waitRows[truck.id] },
+      now,
+    );
+    const presence = summarizePresence(presenceRows[truck.id] ?? [], now);
+    return {
+      freshness: freshnessOf(firstOf(truck.locations)?.broadcasted_at, now),
+      waitChip: estimate?.chip ?? null,
+      disputed: presence.state === "disputed",
+    };
   }
 
   const query = search.trim().toLowerCase();
@@ -247,6 +334,19 @@ export default function HomePage() {
     : [];
 
   const liveCount = filtered.filter((t) => t.is_live).length;
+
+  // Same signals the list shows, flattened to plain strings for the map popup.
+  const mapSignals = useMemo(() => {
+    const out: Record<string, { level: string; label: string; wait: string | null; disputed: boolean }> = {};
+    for (const truck of filtered) {
+      if (!truck.is_live) continue;
+      const { freshness, waitChip, disputed } = signalsFor(truck);
+      if (!freshness) continue;
+      out[truck.id] = { level: freshness.level, label: freshness.label, wait: waitChip, disputed };
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, waitRows, presenceRows, clock]);
 
   // Today's remaining stops for trucks that aren't live yet, soonest first.
   const outToday = useMemo(() => {
@@ -331,6 +431,8 @@ export default function HomePage() {
           const dish = dishFor(truck);
           const nextStop = truck.is_live ? null : nextStopFor(truck.id);
           const address = truck.is_live ? firstOf(truck.locations)?.address : null;
+          // "OPEN" on its own is a claim. These say how well it's backed up.
+          const { freshness, waitChip, disputed } = signalsFor(truck);
           return (
             <Link
               key={truck.id}
@@ -401,6 +503,29 @@ export default function HomePage() {
                     {nextStop.location ? ` · ${nextStop.location}` : ""}
                   </p>
                 )}
+                {(freshness || waitChip || disputed) && (
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                    {freshness && (
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                        freshness.level === "fresh" ? "bg-green-50 text-green-700"
+                          : freshness.level === "recent" ? "bg-amber-50 text-amber-700"
+                          : "bg-neutral-100 text-neutral-500"
+                      }`}>
+                        {freshness.label}
+                      </span>
+                    )}
+                    {waitChip && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600">
+                        {waitChip}
+                      </span>
+                    )}
+                    {disputed && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                        Reported gone
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </Link>
           );
@@ -453,7 +578,7 @@ export default function HomePage() {
 
       {/* Full-screen map */}
       <div className="absolute inset-0 home-map">
-        <MapboxMap trucks={filtered} onUserLocation={setUserPos} />
+        <MapboxMap trucks={filtered} signals={mapSignals} onUserLocation={setUserPos} />
       </div>
 
       {/* Top bar — floats over the map */}

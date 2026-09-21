@@ -20,6 +20,11 @@ import { useAsyncData, useRefreshOnRefocus } from '@/hooks/useAsyncData';
 import { useDishSearch } from '@/hooks/useDishSearch';
 import { fetchStopsLeftToday } from '@/lib/schedules';
 import { formatMiles, milesBetween, sortByLiveThenDistance, toLatLng, type LatLng } from '@shared/discovery';
+import {
+  CUSTOMER_WAIT_WINDOW_MIN, PRESENCE_WINDOW_MIN, summarizePresence, waitEstimate,
+  type PresenceReport, type WaitReport,
+} from '@shared/presence';
+import type { MapSignal } from '@/components/map/TruckMap';
 
 const DIETARY = ['Vegan', 'Gluten-Free', 'Halal', 'Vegetarian'];
 
@@ -76,6 +81,31 @@ const USER_DELTA = 0.05; // ~3-mile radius around the user
 
 type LocationStatus = 'requesting' | 'granted' | 'skipped' | 'denied';
 
+/**
+ * Wait and presence reports for the trucks that are live. Kept separate from
+ * the truck query so it can refresh on its own cadence — these are advisory
+ * signals, not worth re-pulling the whole live set for.
+ */
+async function fetchCrowdSignals(): Promise<{ wait: Record<string, WaitReport[]>; presence: Record<string, PresenceReport[]> }> {
+  const [waits, presence] = await Promise.all([
+    supabase.from('wait_reports').select('truck_id, minutes, created_at')
+      .gte('created_at', new Date(Date.now() - CUSTOMER_WAIT_WINDOW_MIN * 60_000).toISOString())
+      .limit(500),
+    supabase.from('presence_reports').select('truck_id, verdict, created_at')
+      .gte('created_at', new Date(Date.now() - PRESENCE_WINDOW_MIN * 60_000).toISOString())
+      .limit(500),
+  ]);
+  const wait: Record<string, WaitReport[]> = {};
+  const seen: Record<string, PresenceReport[]> = {};
+  for (const row of waits.data ?? []) {
+    (wait[row.truck_id] ??= []).push({ minutes: row.minutes, created_at: row.created_at });
+  }
+  for (const row of presence.data ?? []) {
+    (seen[row.truck_id] ??= []).push({ verdict: row.verdict, created_at: row.created_at });
+  }
+  return { wait, presence: seen };
+}
+
 export default function MapTab() {
   const router = useRouter();
   const { trucks, loading, refetch } = useLiveTrucks();
@@ -86,6 +116,7 @@ export default function MapTab() {
   const { data: reviewsData, reload: reloadReviews } = useAsyncData('recent-reviews', fetchRecentReviews);
   const recentReviews = reviewsData ?? [];
   const featured = useAsyncData('featured-truck', fetchFeaturedTruck).data ?? null;
+  const crowd = useAsyncData('crowd-signals-map', fetchCrowdSignals).data ?? { wait: {}, presence: {} };
   const mapRef = useRef<MapView>(null);
   const [search, setSearch] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
@@ -400,6 +431,17 @@ export default function MapTab() {
           initialRegion={region ?? US_REGION}
           mapRef={mapRef}
           showsUserLocation={locationStatus === 'granted'}
+          signals={filtered.reduce<Record<string, MapSignal>>((acc, t) => {
+            acc[t.id] = {
+              wait: waitEstimate({
+                operatorMinutes: t.wait_minutes,
+                operatorSetAt: t.wait_set_at,
+                reports: crowd.wait[t.id],
+              })?.chip ?? null,
+              disputed: summarizePresence(crowd.presence[t.id] ?? []).state === 'disputed',
+            };
+            return acc;
+          }, {})}
         />
 
         {/* Nobody live — say so, and point at who's out later today instead of

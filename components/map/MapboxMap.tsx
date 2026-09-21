@@ -30,8 +30,21 @@ type MapTruck = {
   location?: { lat: number; lng: number } | null;
 };
 
+/**
+ * Per-truck trust signals, precomputed by the page so this component stays a
+ * dumb renderer: how old the GPS ping is, the current wait, and whether
+ * customers are reporting an empty curb.
+ */
+export type MapSignal = {
+  level: string;
+  label: string;
+  wait: string | null;
+  disputed: boolean;
+};
+
 type Props = {
   trucks: MapTruck[];
+  signals?: Record<string, MapSignal>;
   /** Called with the visitor's position whenever it's known or changes. */
   onUserLocation?: (pos: LatLng) => void;
 };
@@ -69,7 +82,7 @@ async function reverseGeocodeToState(
   }
 }
 
-export default function MapboxMap({ trucks, onUserLocation }: Props) {
+export default function MapboxMap({ trucks, signals, onUserLocation }: Props) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const onUserLocationRef = useRef(onUserLocation);
   useEffect(() => { onUserLocationRef.current = onUserLocation; }, [onUserLocation]);
@@ -181,6 +194,12 @@ export default function MapboxMap({ trucks, onUserLocation }: Props) {
       if (!pos) return;
       const { lat, lng } = pos;
 
+      const signal = signals?.[truck.id];
+      // A pin for a truck that hasn't pinged in over an hour and a half, or
+      // that customers say has left, should not look as confident as one that
+      // reported its position two minutes ago.
+      const unsure = signal ? signal.level === "stale" || signal.level === "unknown" || signal.disputed : false;
+
       const el = document.createElement("div");
       el.style.cssText = `
         width: 44px; height: 44px; cursor: pointer;
@@ -188,10 +207,10 @@ export default function MapboxMap({ trucks, onUserLocation }: Props) {
       `;
       el.innerHTML = `
         <div style="
-          background: #E8481C; border: 3px solid white;
+          background: ${unsure ? "#C7A08F" : "#E8481C"}; border: 3px solid white;
           border-radius: 50% 50% 50% 0; width: 36px; height: 36px;
           transform: rotate(-45deg);
-          box-shadow: 0 4px 14px rgba(232,72,28,0.45);
+          box-shadow: 0 4px 14px ${unsure ? "rgba(120,100,90,0.35)" : "rgba(232,72,28,0.45)"};
           display: flex; align-items: center; justify-content: center;
         ">
           <svg style="transform: rotate(45deg);" width="16" height="16"
@@ -214,12 +233,32 @@ export default function MapboxMap({ trucks, onUserLocation }: Props) {
             <span style="color:#aaa">(${esc(String(truck.review_count ?? 0))})</span>
            </p>`
         : "";
+      // The pin's whole job is to answer "is it worth walking over" — so the
+      // popup carries the freshness of the position and the length of the
+      // line, not just the name.
+      const freshColor = signal?.level === "fresh" ? "#16a34a"
+        : signal?.level === "recent" ? "#b45309"
+        : "#78716c";
+      const freshHtml = signal
+        ? `<p style="color:${freshColor};font-size:11px;font-weight:700;margin:0 0 4px">● ${esc(signal.label)}</p>`
+        : truck.is_live
+          ? '<p style="color:#16a34a;font-size:11px;font-weight:700;margin:0 0 4px">● OPEN NOW</p>'
+          : "";
+      const waitHtml = signal?.wait
+        ? `<p style="color:#555;font-size:11px;font-weight:600;margin:0 0 6px">🕐 ${esc(signal.wait)}</p>`
+        : "";
+      const disputedHtml = signal?.disputed
+        ? '<p style="color:#b45309;background:#fffbeb;border-radius:6px;padding:4px 6px;font-size:11px;font-weight:700;margin:0 0 6px">Customers report they\u2019ve left</p>'
+        : "";
+
       const popup = new mapboxgl.Popup({ offset: 28, closeButton: false }).setHTML(
-        `<div style="font-family:sans-serif;padding:4px 2px;min-width:140px">
+        `<div style="font-family:sans-serif;padding:4px 2px;min-width:150px">
           <p style="font-weight:800;margin:0 0 2px;font-size:14px;text-transform:uppercase;letter-spacing:0.02em">${esc(truck.name ?? "")}</p>
           <p style="color:#E8481C;margin:0 0 4px;font-size:12px;font-weight:600">${esc(truck.cuisine ?? "Food Truck")}</p>
           ${ratingHtml}
-          ${truck.is_live ? '<p style="color:#16a34a;font-size:11px;font-weight:700;margin:0 0 6px">● OPEN NOW</p>' : ""}
+          ${freshHtml}
+          ${waitHtml}
+          ${disputedHtml}
           <a href="/truck/${esc(truck.id)}" style="display:block;background:#E8481C;color:white;text-align:center;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700;text-decoration:none;">View Profile</a>
         </div>`
       );
@@ -231,7 +270,7 @@ export default function MapboxMap({ trucks, onUserLocation }: Props) {
 
       markers.current.push(marker);
     });
-  }, [trucks, mapReady]);
+  }, [trucks, signals, mapReady]);
 
   if (!process.env.NEXT_PUBLIC_MAPBOX_TOKEN) {
     return (

@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import Image from "next/image";
 import Link from "next/link";
 import { firstOf } from "@/lib/discovery";
+import { freshnessOf } from "@/lib/presence";
 
 type Props = {
   params: Promise<{ city: string }>;
@@ -161,6 +162,22 @@ export default async function CityPage({ params }: Props) {
                     {firstOf<{ address: string | null }>(truck.locations)!.address}
                   </p>
                 )}
+                {/* A "LIVE" badge is a claim; this is the evidence behind it.
+                    Rendered per request, same as the truck list above it. */}
+                {(() => {
+                  const fresh = freshnessOf(
+                    firstOf<{ broadcasted_at: string | null }>(truck.locations)?.broadcasted_at
+                  );
+                  return (
+                    <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mt-1.5 ${
+                      fresh.level === "fresh" ? "bg-green-50 text-green-700"
+                        : fresh.level === "recent" ? "bg-amber-50 text-amber-700"
+                        : "bg-neutral-100 text-neutral-500"
+                    }`}>
+                      {fresh.label}
+                    </span>
+                  );
+                })()}
               </div>
             </Link>
           ))

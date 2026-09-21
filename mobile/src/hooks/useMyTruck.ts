@@ -18,11 +18,14 @@ export type MyTruck = {
   catering_description: string | null;
   catering_starting_price: number | null;
   catering_min_guests: number | null;
+  wait_minutes: number | null;
+  wait_set_at: string | null;
 };
 
 const TRUCK_COLS =
   'id, name, description, cuisine, phone, instagram, profile_photo, is_live, dietary_tags, ' +
-  'offers_catering, catering_description, catering_starting_price, catering_min_guests';
+  'offers_catering, catering_description, catering_starting_price, catering_min_guests, ' +
+  'wait_minutes, wait_set_at';
 
 /**
  * The operator's truck, or null if this account doesn't own one.

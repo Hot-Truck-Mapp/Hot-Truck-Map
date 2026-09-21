@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { T, TruckPhoto } from '@/components/ui';
 import { formatMiles } from '@shared/discovery';
+import { freshnessOf } from '@shared/presence';
 
 export type TruckListItem = {
   id: string;
@@ -25,15 +26,36 @@ type Props = {
   miles?: number | null;
   /** A menu item that matched the search, shown as "Serves …". */
   dish?: string | null;
+  /** When the truck last pinged its position — "OPEN" without this is a claim
+   *  with nothing behind it, so live rows show how old the position is. */
+  broadcastedAt?: string | null;
+  /** Current wait, already reduced to a chip by the caller. */
+  waitChip?: string | null;
+  /** Enough customers reported an empty curb to be worth flagging. */
+  disputed?: boolean;
   followerCount?: number;
   favorite?: boolean;
   onToggleFavorite?: () => void;
 };
 
 /** A row in the truck list — same layout as a card on the web /trucks page. */
-export function TruckCard({ truck, address, miles, dish, followerCount = 0, favorite, onToggleFavorite }: Props) {
+export function TruckCard({
+  truck, address, miles, dish, broadcastedAt, waitChip, disputed,
+  followerCount = 0, favorite, onToggleFavorite,
+}: Props) {
   const router = useRouter();
   const hasRating = (truck.avg_rating ?? 0) > 0;
+  const freshness = truck.is_live ? freshnessOf(broadcastedAt) : null;
+  const freshStyle = freshness
+    ? freshness.level === 'fresh' ? styles.chipFresh
+      : freshness.level === 'recent' ? styles.chipRecent
+      : styles.chipStale
+    : styles.chipStale;
+  const freshTextStyle = freshness
+    ? freshness.level === 'fresh' ? styles.chipFreshText
+      : freshness.level === 'recent' ? styles.chipRecentText
+      : styles.chipStaleText
+    : styles.chipStaleText;
 
   return (
     <TouchableOpacity
@@ -104,6 +126,26 @@ export function TruckCard({ truck, address, miles, dish, followerCount = 0, favo
           )}
         </View>
 
+        {(freshness || waitChip || disputed) && (
+          <View style={styles.signals}>
+            {freshness && (
+              <View style={[styles.chip, freshStyle]}>
+                <Text style={[styles.chipText, freshTextStyle]}>{freshness.label}</Text>
+              </View>
+            )}
+            {waitChip ? (
+              <View style={[styles.chip, styles.chipNeutral]}>
+                <Text style={[styles.chipText, styles.chipNeutralText]}>{waitChip}</Text>
+              </View>
+            ) : null}
+            {disputed ? (
+              <View style={[styles.chip, styles.chipDisputed]}>
+                <Text style={[styles.chipText, styles.chipDisputedText]}>Reported gone</Text>
+              </View>
+            ) : null}
+          </View>
+        )}
+
         {!!(truck.instagram || truck.phone) && (
           <View style={styles.contact}>
             {truck.instagram ? <Text style={styles.contactText}>@{truck.instagram}</Text> : null}
@@ -138,6 +180,19 @@ const styles = StyleSheet.create({
   noAddr: { fontSize: 12, color: T.n300 },
   followers: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   followerText: { fontSize: 12, color: T.n400 },
+  signals: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 8 },
+  chip: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
+  chipText: { fontSize: 10, fontWeight: '700' },
+  chipFresh: { backgroundColor: '#F0FDF4' },
+  chipFreshText: { color: '#15803D' },
+  chipRecent: { backgroundColor: '#FFFBEB' },
+  chipRecentText: { color: '#B45309' },
+  chipStale: { backgroundColor: T.n100 },
+  chipStaleText: { color: T.n500 },
+  chipNeutral: { backgroundColor: T.n100 },
+  chipNeutralText: { color: T.n600 },
+  chipDisputed: { backgroundColor: '#FEF3C7' },
+  chipDisputedText: { color: '#92400E' },
   contact: { flexDirection: 'row', gap: 12, marginTop: 6 },
   contactText: { fontSize: 11, color: T.n400 },
 });
