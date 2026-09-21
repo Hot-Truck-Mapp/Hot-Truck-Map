@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { sendEmail, operatorSignupEmail, ADMIN_INBOX } from "@/lib/email";
 import { isRateLimited } from "@/lib/rateLimit";
+import { alertNewOperator } from "@/lib/admin-alerts";
 
 export const runtime = "nodejs";
 
@@ -164,26 +164,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ── Notify admin inbox (best-effort) ──────────────────────────────────
-    if (!(await isRateLimited(`signup-op:user:${userId}`, 1, 24 * 60 * 60_000))) {
-      try {
-        const { subject, html, text } = operatorSignupEmail({
-          truckName: safeTruckName,
-          cuisine: safeCuisine,
-          email: data.user.email || email,
-          userId,
-        });
-        await sendEmail({
-          to: ADMIN_INBOX,
-          subject,
-          html,
-          text,
-          replyTo: data.user.email || email,
-        });
-      } catch (err) {
-        console.error("[signup/operator] admin notify failed:", err);
-      }
-    }
+    // ── Tell the owner: email + push to their devices (best-effort) ───────
+    await alertNewOperator({
+      userId,
+      email: data.user.email || email,
+      truckName: safeTruckName,
+      cuisine: safeCuisine,
+    });
 
     return NextResponse.json({ ok: true });
   } catch (err) {

@@ -70,7 +70,7 @@ export function operatorSignupEmail(opts: {
   const text =
     `New food truck signup\n\n` +
     rows.map(([k, v]) => `${k}: ${v}`).join("\n") +
-    `\n\nReview in Supabase: https://supabase.com/dashboard/project/_/auth/users`;
+    `\n\nSee it in the admin console: https://hottruckmap.com/admin`;
 
   const html = `<!doctype html>
 <html><body style="margin:0;padding:24px;background:#f5f5f5;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#171717;">
@@ -95,7 +95,8 @@ export function operatorSignupEmail(opts: {
           )
           .join("")}
       </table>
-      <p style="margin:24px 0 0;font-size:12px;color:#a3a3a3;">Note: the operator still needs to confirm their email before they can sign in.</p>
+      <p style="margin:24px 0 0;"><a href="https://hottruckmap.com/admin" style="display:inline-block;background:#E8481C;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:10px 18px;border-radius:999px;">Open admin console</a></p>
+      <p style="margin:16px 0 0;font-size:12px;color:#a3a3a3;">Note: the operator still needs to confirm their email before they can sign in.</p>
     </td></tr>
   </table>
 </body></html>`;
