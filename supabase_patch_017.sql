@@ -127,7 +127,13 @@ ORDER BY count(*) DESC, tablename;
 -- spatial_ref_sys (rls_enabled = false) is PostGIS's reference table of
 -- coordinate systems. It is owned by the extension, contains no data of
 -- yours, and cannot have RLS enabled without superuser. Supabase's linter
--- flags it on every project that has PostGIS. Leave it.
+-- flags it on every project that has PostGIS.
+--
+-- SUPERSEDED BY PATCH 022. "Leave it" was wrong in one respect: the table
+-- was also granted INSERT/UPDATE/DELETE to anon, so anyone holding the
+-- public anon key could empty it. The data is worthless, but it was an
+-- unauthenticated write endpoint. Patch 022 revokes those grants and drops
+-- PostGIS, which was installed only for an empty orphan column.
 --
 -- Follows, Items, Locations, Menus, Orders, Reviews, Trucks, Users — the
 -- capitalised set — have RLS on and zero policies, which means nothing can
