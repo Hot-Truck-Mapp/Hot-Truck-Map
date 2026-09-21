@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { identifyReporter, UUID_RE } from "@/lib/reporter";
 import {
+  FRESH_MINUTES,
+  GONE_CLOSE_WINDOW_MIN,
   GONE_REPORTS_TO_CLOSE,
   PRESENCE_WINDOW_MIN,
+  minutesSince,
   summarizePresence,
   type PresenceReport,
 } from "@/lib/presence";
@@ -49,10 +52,12 @@ export async function POST(req: NextRequest) {
   const db = getAdminClient();
   const reporter = await identifyReporter(req);
 
-  // Only a live truck has a presence to confirm or dispute.
+  // Only a live truck has a presence to confirm or dispute. The last GPS ping
+  // comes along for the ride — it is what decides whether the crowd is allowed
+  // to overrule the truck below.
   const { data: truck } = await db
     .from("trucks")
-    .select("id, is_live")
+    .select("id, is_live, locations(broadcasted_at)")
     .eq("id", truck_id)
     .maybeSingle();
   if (!truck) {
@@ -104,19 +109,41 @@ export async function POST(req: NextRequest) {
   const reports = (rows ?? []) as (PresenceReport & { reporter_key: string })[];
   const summary = summarizePresence(reports);
 
-  // Count people, not taps: the rate limit already caps one report per
-  // reporter per 10 minutes, but over a 90-minute window one person could
-  // otherwise file nine "gone"s and clear the map on their own.
+  // ── Should the pin come down? ────────────────────────────────────────────
+  //
+  // Everything above this line is advisory and reversible. This is the one
+  // destructive path, so it answers to a stricter standard than the banner.
+
+  // Signed-in reporters only, counted as people rather than taps. The rate
+  // limit already caps one report per reporter per 10 minutes, but a reporter
+  // key is a salted IP hash, and anyone can cycle IPs faster than they can
+  // cycle accounts. Anonymous reports still drive the disputed banner.
+  const closeWindowStart = Date.now() - GONE_CLOSE_WINDOW_MIN * 60_000;
   const goneReporters = new Set(
-    reports.filter((r) => r.verdict === "gone").map((r) => r.reporter_key)
+    reports
+      .filter((r) =>
+        r.verdict === "gone" &&
+        r.reporter_key.startsWith("user:") &&
+        new Date(r.created_at).getTime() >= closeWindowStart)
+      .map((r) => r.reporter_key)
   ).size;
+
   const hereVetoStart = Date.now() - HERE_VETO_MINUTES * 60_000;
   const recentHere = reports.some(
     (r) => r.verdict === "here" && new Date(r.created_at).getTime() >= hereVetoStart
   );
 
+  // A truck whose phone pinged minutes ago is almost certainly where it says
+  // it is, and the reporters are at the wrong corner or looking at a different
+  // truck. The operator's own live signal outranks the crowd; the banner still
+  // warns, and the auto-offline cron still closes the session on its schedule.
+  const pingAge = minutesSince(
+    (Array.isArray(truck.locations) ? truck.locations[0] : truck.locations)?.broadcasted_at,
+  );
+  const heartbeatFresh = pingAge != null && pingAge <= FRESH_MINUTES;
+
   let closed = false;
-  if (goneReporters >= GONE_REPORTS_TO_CLOSE && !recentHere) {
+  if (goneReporters >= GONE_REPORTS_TO_CLOSE && !recentHere && !heartbeatFresh) {
     const { error: offlineErr } = await db
       .from("trucks")
       .update({ is_live: false })

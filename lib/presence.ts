@@ -74,12 +74,30 @@ export function freshnessOf(broadcastedAt: string | null | undefined, now: Date 
 export const PRESENCE_WINDOW_MIN = 90;
 export const GONE_REPORTS_REQUIRED = 2;
 /**
- * Distinct reporters needed before "they're gone" actually pulls the truck off
- * the map, rather than only flagging it as disputed. Higher than the display
- * threshold on purpose: showing a warning is cheap and reversible, taking a
- * working truck's pin down during its lunch rush is neither.
+ * Distinct SIGNED-IN reporters needed before "they're gone" actually pulls the
+ * truck off the map, rather than only flagging it as disputed.
+ *
+ * Anonymous reports are counted for the disputed banner but never toward
+ * closing, and the count is deliberately not the main defence. A reporter key
+ * is a salted hash of an IP, and an IP is not an identity: a phone in airplane
+ * mode picks up a fresh CGNAT address in seconds, so "three distinct
+ * reporters" is about two minutes of work for one person with a grudge. Three
+ * accounts is a real bar; three IPs is not. Shared NAT cuts the other way too
+ * — an office park full of genuine customers can collapse to a single key,
+ * which is exactly the venue where trucks work.
+ *
+ * Showing a warning is cheap and reversible. Taking a working truck's pin down
+ * during its lunch rush is neither, so the destructive path gets the stricter
+ * identity, a shorter window, and the heartbeat veto in /api/presence.
  */
 export const GONE_REPORTS_TO_CLOSE = 3;
+
+/**
+ * How recent those reports must be to close a truck. Shorter than the display
+ * window: "gone" an hour ago and quiet since is not evidence a truck is absent
+ * now — it may well have come back.
+ */
+export const GONE_CLOSE_WINDOW_MIN = 30;
 
 export type PresenceVerdict = "here" | "gone";
 export type PresenceReport = { verdict: PresenceVerdict; created_at: string };

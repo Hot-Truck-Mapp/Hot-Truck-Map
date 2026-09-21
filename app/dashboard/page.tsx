@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { CUISINE_TYPES } from "@/lib/cuisines";
 import { OPERATOR_WAIT_TTL_MIN, WAIT_BUCKETS, minutesSince, waitLabel } from "@/lib/presence";
+import { milesBetween } from "@/lib/discovery";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
@@ -773,6 +774,8 @@ export default function Dashboard() {
   // saying so. This is that signal — a timestamp touch, no geocoding, no
   // follower notification, no change to the stored address.
   const HEARTBEAT_MS = 5 * 60 * 1000;
+  /** Past this from the stored pin, the heartbeat defers to the GPS watcher. */
+  const HEARTBEAT_DRIFT_MILES = 0.1;
 
   async function sendHeartbeat() {
     if (!truckId) return;
@@ -797,6 +800,20 @@ export default function Dashboard() {
         showToast("You were taken off the map — tap Go Live again when you're serving.");
         return;
       }
+      // Confirm the position with GPS rather than asserting it. Bumping the
+      // timestamp on a timer alone would let a truck that drove off with the
+      // tab still open keep publishing a fresh-looking address it had left —
+      // the freshness chip has to mean "GPS agreed", not "a tab is open".
+      const fix = await currentPosition();
+      if (!fix) return;
+
+      // Moved since the last broadcast? That is the watcher's job, because it
+      // re-geocodes the address too. Confirming the old address against a
+      // position somewhere else is exactly the lie this guard exists to stop.
+      const { data: stored } = await supabase
+        .from("locations").select("lat, lng").eq("truck_id", truckId).maybeSingle();
+      if (stored && milesBetween({ lat: stored.lat, lng: stored.lng }, fix) > HEARTBEAT_DRIFT_MILES) return;
+
       await supabase
         .from("locations")
         .update({ broadcasted_at: new Date().toISOString() })
@@ -805,6 +822,18 @@ export default function Dashboard() {
       // A missed heartbeat is not worth interrupting the operator over; the
       // next one is five minutes away and the staleness window is hours.
     }
+  }
+
+  /** One GPS fix, or null. Never rejects — a refusal just means no heartbeat. */
+  function currentPosition(): Promise<{ lat: number; lng: number } | null> {
+    return new Promise((resolve) => {
+      if (typeof navigator === "undefined" || !navigator.geolocation) return resolve(null);
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => resolve(null),
+        { enableHighAccuracy: false, timeout: 10_000, maximumAge: 120_000 },
+      );
+    });
   }
 
   function startHeartbeat() {

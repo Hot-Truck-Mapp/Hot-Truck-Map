@@ -149,6 +149,8 @@ export default function OperatorTab() {
   // position is, so a truck that IS there has to keep saying so. Touches the
   // timestamp only — no geocoding, no notification, no change of address.
   const HEARTBEAT_MS = 5 * 60 * 1000;
+  /** Past this from the stored pin, the heartbeat defers to the GPS watcher. */
+  const HEARTBEAT_DRIFT_M = 160;
 
   async function sendHeartbeat() {
     const id = truck?.id;
@@ -171,6 +173,25 @@ export default function OperatorTab() {
         Alert.alert('You were taken off the map', "Tap Go Live again when you're serving.");
         return;
       }
+      // Confirm the position with GPS rather than asserting it. Bumping the
+      // timestamp on a timer alone would let a truck that drove off with the
+      // app still running keep publishing a fresh-looking address it had left
+      // — the freshness chip has to mean "GPS agreed", not "the app is open".
+      let fix: { lat: number; lng: number } | null = null;
+      try {
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        fix = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      } catch {
+        return; // permission revoked, or no fix — let freshness decay honestly
+      }
+
+      // Moved since the last broadcast? That is the watcher's job, because it
+      // re-geocodes the address too. Confirming the old address against a
+      // position somewhere else is exactly the lie this guard exists to stop.
+      const { data: stored } = await supabase
+        .from('locations').select('lat, lng').eq('truck_id', id).maybeSingle();
+      if (stored && metresBetween(stored.lat, stored.lng, fix.lat, fix.lng) > HEARTBEAT_DRIFT_M) return;
+
       await supabase.from('locations').update({ broadcasted_at: new Date().toISOString() }).eq('truck_id', id);
     } catch {
       // The next beat is five minutes out and the staleness window is hours.
