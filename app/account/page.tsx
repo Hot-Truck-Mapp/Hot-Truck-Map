@@ -304,12 +304,24 @@ export default function AccountPage() {
               <path d="M19 12H5M12 5l-7 7 7 7"/>
             </svg>
           </Link>
-          <button
-            onClick={signOut}
-            className="text-xs font-semibold text-neutral-400 hover:text-white border border-neutral-700 px-3 py-1.5 rounded-lg transition-colors"
-          >
-            Sign Out
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Cosmetic only — /admin still re-checks on the server (proxy.ts),
+                so this just saves the owner from typing the URL by hand. */}
+            {user?.email?.toLowerCase() === "info@hottruckmap.com" && (
+              <Link
+                href="/admin"
+                className="text-xs font-semibold text-neutral-400 hover:text-white border border-neutral-700 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                Admin Console
+              </Link>
+            )}
+            <button
+              onClick={signOut}
+              className="text-xs font-semibold text-neutral-400 hover:text-white border border-neutral-700 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              Sign Out
+            </button>
+          </div>
         </div>
 
         {/* Avatar */}
