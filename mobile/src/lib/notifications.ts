@@ -2,7 +2,7 @@ import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
-import { Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import { supabase } from './supabase';
 
 const PUSH_TOKEN_KEY = 'expo_push_token_v1';
@@ -106,6 +106,52 @@ export async function registerStoredTokenAfterLogin(): Promise<void> {
     if (!token) return;
     await registerTokenWithServer(token);
   } catch { /* ignore */ }
+}
+
+type NotificationRouter = { push: (href: any) => void };
+
+// Website paths a push's `data.url` can point at that the app has no screen
+// for — open these in the system browser instead of trying to route to them.
+const WEB_ONLY_PATHS = new Set(['/admin']);
+
+function resolveNotificationUrl(url: string): { type: 'app' | 'web'; path: string } {
+  if (WEB_ONLY_PATHS.has(url)) return { type: 'web', path: url };
+  if (url === '/orders') return { type: 'app', path: '/(tabs)/orders' };
+  return { type: 'app', path: '/(tabs)' };
+}
+
+function handleNotificationUrl(router: NotificationRouter, url: unknown): void {
+  if (typeof url !== 'string' || !url) return;
+  const target = resolveNotificationUrl(url);
+  if (target.type === 'web') {
+    const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+    if (apiUrl) Linking.openURL(`${apiUrl}${target.path}`).catch(() => {});
+    return;
+  }
+  router.push(target.path);
+}
+
+/**
+ * Routes to wherever a tapped push notification's `url` payload points
+ * (mapping known website paths to their app screen, and opening web-only
+ * paths like /admin in the system browser since the app has no such screen).
+ * Also handles the app being launched cold by a notification tap. Call once
+ * from the root layout; returns a cleanup function.
+ */
+export function addNotificationResponseListener(router: NotificationRouter): () => void {
+  Notifications.getLastNotificationResponseAsync()
+    .then((response) => {
+      if (!response) return;
+      handleNotificationUrl(router, response.notification.request.content.data?.url);
+      Notifications.clearLastNotificationResponseAsync().catch(() => {});
+    })
+    .catch(() => {});
+
+  const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+    handleNotificationUrl(router, response.notification.request.content.data?.url);
+  });
+
+  return () => subscription.remove();
 }
 
 // Call this on sign-out so the token is not delivered to the wrong user on

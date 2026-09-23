@@ -19,7 +19,12 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
-import { setupNotifications, registerStoredTokenAfterLogin, clearPushToken } from '@/lib/notifications';
+import {
+  setupNotifications,
+  registerStoredTokenAfterLogin,
+  clearPushToken,
+  addNotificationResponseListener,
+} from '@/lib/notifications';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -80,8 +85,14 @@ function AuthGuard() {
 }
 
 export default function RootLayout() {
+  const router = useRouter();
+
   useEffect(() => {
     setupNotifications().catch(() => { /* ignore — push notifications are non-critical */ });
+
+    // Route to wherever a tapped push notification points (and handle the
+    // app being launched cold by a tap).
+    const removeNotificationListener = addNotificationResponseListener(router);
 
     // Register any cached push token that wasn't sent on first launch because
     // the user wasn't signed in yet.
@@ -99,6 +110,7 @@ export default function RootLayout() {
     const t = setTimeout(() => SplashScreen.hideAsync(), 5000);
     return () => {
       subscription.unsubscribe();
+      removeNotificationListener();
       clearTimeout(t);
     };
   }, []);
